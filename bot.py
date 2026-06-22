@@ -14,7 +14,7 @@ bot = commands.Bot(command_prefix=['K ', 'k ', 'K', 'k'], intents=intents)
 bot.remove_command('help')
 
 coin_cooldowns = {}
-nhansinh_cooldowns = {} # Thêm biến lưu thời gian chờ của Nhân Sinh
+nhansinh_cooldowns = {} 
 
 # --- CÁC HÀM XỬ LÝ SỔ TAY LEVEL ---
 def load_data():
@@ -81,38 +81,136 @@ SCENARIOS = {
 
 
 # =====================================================================
-# GIAO DIỆN NHÂN SINH (PAGINATION)
+# GIAO DIỆN GAME NHÂN SINH (CÓ LỰA CHỌN TƯƠNG TÁC)
 # =====================================================================
 
-class NhanSinhView(discord.ui.View):
-    def __init__(self, author, embeds):
+class NhanSinhGameView(discord.ui.View):
+    def __init__(self, author, stats):
         super().__init__(timeout=180)
         self.author = author
-        self.embeds = embeds
-        self.current_page = 0
-        self.update_buttons()
+        self.stats = stats
+        self.phase = 1
+        self.tien_an = 0
+        self.logs = []
+        
+        # Tạo cốt truyện khởi đầu
+        if self.stats["may_man"] >= 8:
+            self.logs.append("👶 **Tuổi 0:** Bạn sinh ra ngậm thìa vàng, bố làm giám đốc, sống trong nhung lụa từ bé.")
+        elif self.stats["may_man"] >= 4:
+            self.logs.append("👶 **Tuổi 0:** Bạn sinh ra trong một gia đình êm ấm, đủ ăn đủ mặc.")
+        else:
+            self.logs.append("👶 **Tuổi 0:** Bố mẹ ôm nợ bỏ trốn, bạn phải tự thân vận động từ khi còn nhỏ xíu.")
 
-    def update_buttons(self):
-        self.btn_prev.disabled = self.current_page == 0
-        self.btn_next.disabled = self.current_page == len(self.embeds) - 1
+        self.btn_a = discord.ui.Button(label="A. Chăm chỉ học", style=discord.ButtonStyle.primary, custom_id="btn_a")
+        self.btn_a.callback = self.choice_a
+        self.btn_b = discord.ui.Button(label="B. Chơi bời làm đẹp", style=discord.ButtonStyle.secondary, custom_id="btn_b")
+        self.btn_b.callback = self.choice_b
 
-    @discord.ui.button(label="◀ Ký ức trước", style=discord.ButtonStyle.secondary)
-    async def btn_prev(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page -= 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
-
-    @discord.ui.button(label="Tiếp tục sống ▶", style=discord.ButtonStyle.primary)
-    async def btn_next(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page += 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
+        self.add_item(self.btn_a)
+        self.add_item(self.btn_b)
 
     async def interaction_check(self, interaction: discord.Interaction):
         if interaction.user != self.author:
-            await interaction.response.send_message("Cuộc đời của ai người nấy tự lo đi!", ephemeral=True)
+            await interaction.response.send_message("Nhân quả của ai người nấy gánh, đừng bấm lung tung!", ephemeral=True)
             return False
         return True
+
+    async def choice_a(self, interaction: discord.Interaction):
+        await self.process_choice(interaction, "A")
+
+    async def choice_b(self, interaction: discord.Interaction):
+        await self.process_choice(interaction, "B")
+
+    async def process_choice(self, interaction: discord.Interaction, choice: str):
+        if self.phase == 1:
+            if choice == "A":
+                self.stats["tri_tue"] += 3
+                self.stats["nhan_sac"] -= 1
+                self.logs.append("🎒 **Tuổi 15:** Bạn cày cuốc học ngày đêm. Mắt cận 5 độ, nhan sắc tụt dốc nhưng đỗ thủ khoa trường chuyên!")
+            else:
+                self.stats["nhan_sac"] += 3
+                self.stats["tri_tue"] -= 1
+                self.logs.append("✨ **Tuổi 15:** Bạn dành thanh xuân để ăn diện, làm hotboy/hotgirl của trường. Học lực lẹt đẹt nhưng khối người theo đuổi.")
+            self.phase = 2
+
+        elif self.phase == 2:
+            if choice == "A":
+                if self.stats["may_man"] + self.stats["tri_tue"] >= 13:
+                    self.tien_an += 5000
+                    self.logs.append("🚀 **Tuổi 25:** Bạn liều lĩnh khởi nghiệp! Nhờ trí tuệ và may mắn, công ty lên sàn chứng khoán, bạn giàu to!")
+                else:
+                    self.tien_an -= 3000
+                    self.logs.append("📉 **Tuổi 25:** Khởi nghiệp thất bại. Bạn phá sản, ôm một khoản nợ khổng lồ từ thời trẻ.")
+            else:
+                self.tien_an += 1500
+                self.logs.append("💼 **Tuổi 25:** Bạn an phận làm nhân viên văn phòng. Lương không cao nhưng ổn định, cuối tháng có tiền nhậu.")
+            self.phase = 3
+
+        elif self.phase == 3:
+            if choice == "A":
+                if self.stats["may_man"] > 6:
+                    self.tien_an += 12000
+                    self.logs.append("🎰 **Tuổi 35:** Chơi lớn tất tay vào coin! Thần tài gõ cửa, bạn chốt lời trên đỉnh, thành đại gia ngầm!")
+                else:
+                    self.tien_an -= 8000
+                    self.logs.append("🚨 **Tuổi 35:** Bị lừa dự án đa cấp. Bán nhà, vay nặng lãi rồi mất trắng. Giang hồ ngày nào cũng tới tạt sơn!")
+            else:
+                self.tien_an += 3000
+                self.logs.append("🏦 **Tuổi 35:** Bạn từ chối cám dỗ, đem tiền mua vàng và gửi tiết kiệm. Sống thảnh thơi nhàn hạ.")
+            self.phase = 4
+
+        await self.update_ui(interaction)
+
+    async def update_ui(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="🌀 MÔ PHỎNG NHÂN SINH 🌀", description=f"Ký chủ: {self.author.mention}", color=discord.Color.purple())
+
+        stats_text = f"Trí tuệ: **{self.stats['tri_tue']}** | Nhan sắc: **{self.stats['nhan_sac']}** | May mắn: **{self.stats['may_man']}**"
+        embed.add_field(name="📊 Chỉ số linh hồn", value=stats_text, inline=False)
+
+        story = "\n\n".join(self.logs)
+        embed.add_field(name="📜 Hành trình cuộc đời", value=story, inline=False)
+
+        if self.phase == 1:
+            embed.add_field(name="❓ Ngã rẽ tuổi học trò (15 tuổi)", value="Kỳ thi chuyển cấp quan trọng sắp tới, bạn sẽ:\n\n**A.** Cắm đầu vào học, bỏ bê ngoại hình.\n**B.** Chăm chút nhan sắc, đi chơi tán gái/trai.", inline=False)
+            self.btn_a.label = "A. Chăm chỉ học"
+            self.btn_b.label = "B. Chơi bời làm đẹp"
+        elif self.phase == 2:
+            embed.add_field(name="❓ Quyết định tuổi 25", value="Vừa tốt nghiệp xong, đường đời vẫy gọi:\n\n**A.** Vay vốn khởi nghiệp, liều ăn nhiều.\n**B.** Xin làm nhân viên quèn, an phận thủ thường.", inline=False)
+            self.btn_a.label = "A. Khởi nghiệp"
+            self.btn_b.label = "B. Làm văn phòng"
+        elif self.phase == 3:
+            embed.add_field(name="❓ Cám dỗ tuổi 35", value="Một người bạn rủ đầu tư lợi nhuận 500%/tháng. Bạn làm gì?\n\n**A.** All-in tất tay! Muốn giàu phải liều.\n**B.** Lừa đảo chắc luôn, mang tiền gửi ngân hàng.", inline=False)
+            self.btn_a.label = "A. All-in tất tay"
+            self.btn_b.label = "B. Gửi tiết kiệm an toàn"
+        elif self.phase == 4:
+            self.btn_a.disabled = True
+            self.btn_b.disabled = True
+            self.clear_items() 
+
+            # TÍNH TOÁN KẾT QUẢ CUỐI CÙNG
+            total_reward = self.tien_an + (self.stats['tri_tue'] + self.stats['nhan_sac'] + self.stats['may_man']) * 50
+            
+            data = load_data()
+            user_id = str(self.author.id)
+            if user_id not in data: data[user_id] = {"xp": 0, "level": 1, "money": 0}
+            
+            # Lưu ý: Được phép nợ
+            data[user_id]["money"] += total_reward
+            save_data(data)
+
+            if total_reward < 0:
+                embed.add_field(name="🪦 Nhắm mắt xuôi tay", value=f"Sống lay lắt qua ngày, cuối đời bệnh tật không tiền chữa.\n❌ **BÁO NHÀ!** Bạn để lại khoản nợ: **{total_reward} 💰**\n*(Hệ thống đã trừ nợ vào sổ, đi cày `k daily` mà trả nhé!)*", inline=False)
+            elif total_reward >= 10000:
+                embed.add_field(name="🪦 Nhắm mắt xuôi tay", value=f"Hưởng thọ trong biệt thự dát vàng. Tang lễ 3 ngày 3 đêm.\n👑 **ĐẠI PHÚ HÀO!** Di sản kiếp sau: **+{total_reward} 💰**", inline=False)
+            else:
+                embed.add_field(name="🪦 Nhắm mắt xuôi tay", value=f"Cuộc đời bình dị, thanh thản ra đi bên con cháu.\n💼 **DƯ DẢ!** Di sản kiếp sau: **+{total_reward} 💰**", inline=False)
+
+            embed.add_field(name="💳 Tài sản hiện tại", value=f"**{data[user_id]['money']} 💰**", inline=False)
+
+        if interaction.response.is_done():
+            await interaction.message.edit(embed=embed, view=self)
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
 
 
 # =====================================================================
@@ -180,8 +278,8 @@ class BushButton(discord.ui.Button):
         scenario = random.choice(SCENARIOS[category])
         thuong_phat = scenario["tien"]
         
-        if thuong_phat < 0: data[user_id]["money"] = max(0, data[user_id]["money"] - abs(thuong_phat))
-        else: data[user_id]["money"] += thuong_phat
+        # FIX LỖI "NỢ BỊ MẤT": Cho phép cộng dồn kể cả khi tiền đang âm
+        data[user_id]["money"] += thuong_phat
             
         actual_change = data[user_id]["money"] - old_money
         new_session_profit = view.session_profit + actual_change
@@ -311,7 +409,7 @@ async def help(ctx):
     bang_help.add_field(name="🪙 `k coin <số tiền/all>`", value="Cờ bạc tung xu hồi hộp (Chờ 3s).", inline=False)
     bang_help.add_field(name="🌲 `k thamhiem`", value="Mở cửa hàng vũ khí & đi thám hiểm rừng rậm nhặt tiền.", inline=False)
     bang_help.add_field(name="⛺ `k phai`", value="Phái đi thám hiểm (Treo máy AFK kiếm tiền).", inline=False)
-    bang_help.add_field(name="🌀 `k nhansinh`", value="Mô phỏng nhân sinh luân hồi (Phí vé: 100 💰). Coi chừng kiếp sau gánh nợ!", inline=False)
+    bang_help.add_field(name="🌀 `k nhansinh`", value="Game Tương Tác Nhân Sinh (Phí vé: 100 💰). Coi chừng kiếp sau gánh nợ!", inline=False)
     bang_help.add_field(name="💸 `k give @người-nhận <số tiền>`", value="Chuyển khoản.", inline=False)
     await ctx.send(embed=bang_help)
 
@@ -354,7 +452,7 @@ async def thamhiem(ctx):
     view = ShopView(ctx.author, session_profit=0)
     await ctx.send(embed=shop_embed, view=view)
 
-# --- MÔ PHỎNG NHÂN SINH ---
+# --- MÔ PHỎNG NHÂN SINH TƯƠNG TÁC ---
 @bot.command()
 async def nhansinh(ctx):
     data = load_data()
@@ -362,7 +460,6 @@ async def nhansinh(ctx):
     phi = 100
     now = datetime.now()
 
-    # Kiểm tra thời gian chờ 5 giây
     if user_id in nhansinh_cooldowns and (now - nhansinh_cooldowns[user_id]).total_seconds() < 5:
         giay_con_lai = int(5 - (now - nhansinh_cooldowns[user_id]).total_seconds())
         await ctx.send(f"⏳ Linh hồn bạn vừa mới luân hồi, cần nghỉ ngơi! Đợi **{giay_con_lai} giây** nữa mới được đầu thai tiếp.")
@@ -370,97 +467,29 @@ async def nhansinh(ctx):
 
     if user_id not in data: data[user_id] = {"xp": 0, "level": 1, "money": 0}
     if data[user_id].get("money", 0) < phi:
-        await ctx.send(f"Phí cấp thẻ lên Tàu Astral luân hồi là **{phi} 💰**. Nợ nần hay nghèo rớt mồng tơi thì không có cửa đi đầu thai đâu!")
+        await ctx.send(f"Phí mua vé luân hồi đi đầu thai là **{phi} 💰**. Nợ nần hay nghèo rớt mồng tơi thì không có cửa đi đầu thai đâu!")
         return
 
-    # Trừ phí vé và đặt lại thời gian chờ
     data[user_id]["money"] -= phi
     nhansinh_cooldowns[user_id] = now
-
-    # Tạo chỉ số ngẫu nhiên
-    gia_the = random.randint(1, 10)
-    tri_tue = random.randint(1, 10)
-    nhan_sac = random.randint(1, 10)
-    may_man = random.randint(1, 10)
-
-    # PAGE 1: KHỞI ĐẦU (0 - 15 TUỔI)
-    tuoi_0 = random.choice(["Sinh ra ngậm thìa vàng ở Belobog khu Tầng Trên, có quản gia chăm bẵm.", "Sinh ra là thiếu gia tài phiệt, ngày thôi nôi bố mẹ tặng luôn một tinh cầu."]) if gia_the >= 8 else random.choice(["Sinh ra trong gia đình bình thường, sống êm ấm qua ngày.", "Tuổi thơ êm đềm ở một làng quê hẻo lánh."]) if gia_the >= 4 else random.choice(["Sinh ra dưới gầm cầu, tuổi thơ cơ cực đi nhặt ve chai.", "Ký ức đầu đời là bị bỏ rơi trước cửa Ngân Hàng Bắc Quốc."])
-    tuoi_10 = "Được cử đi du học nước ngoài từ nhỏ, học đánh đàn piano." if gia_the >= 8 else "Hay trốn mẹ ra quán net chơi điện tử bị đánh đòn." if tri_tue < 5 else "Là lớp trưởng gương mẫu, học đều các môn."
-    tuoi_15 = "Dậy thì thành công, nhan sắc nở rộ làm bao người xao xuyến." if nhan_sac >= 8 else "Mặt mọc đầy mụn, thân hình cò hương, đi học hay bị trêu chọc." if nhan_sac <= 3 else "Phát triển bình thường, không có gì nổi bật."
-
-    # PAGE 2: THANH XUÂN (16 - 25 TUỔI)
-    tuoi_18 = "Đậu thủ khoa kỳ thi Học Viện Giáo Viện, được vinh danh toàn cõi." if tri_tue >= 8 else "Vừa đủ điểm đậu vào một trường đại học tầm trung." if tri_tue >= 5 else "Trượt đại học, cất bước đi làm công nhân vệ sinh."
-    tuoi_22 = "Bắt đầu làm KOL Tóp Tóp, nổi tiếng nhờ gương mặt không góc chết." if nhan_sac >= 8 else "Cắm mặt vào code rụng hết cả tóc, lấy được cái bằng xuất sắc nhưng ế chỏng vó." if tri_tue >= 7 else "Tốt nghiệp với tấm bằng trung bình, rải CV 50 công ty không ai nhận."
-    tuoi_25 = "Trúng tuyển làm nhân viên chính thức của Công ty Hành Tinh Hòa Bình (IPC)." if may_man >= 8 else "Khởi nghiệp bán trà đá vỉa hè, thu nhập bấp bênh." if tri_tue < 5 else "Làm nhân viên văn phòng 9-to-5, ngày nào cũng chạy deadline sấp mặt."
-
-    # PAGE 3: LẬP NGHIỆP & BIẾN CỐ (26 - 40 TUỔI)
-    tuoi_28 = "Đầu tư vào cổ phiếu IPC trúng mánh, tài sản nhân 10 lần!" if may_man >= 8 else "Dính bẫy gacha, nạp sạch tiền tiết kiệm để quay Nón Ánh Sáng nhưng toàn rớt đồ 3 sao." if may_man <= 3 else "Kết hôn với thanh mai trúc mã, mua được căn chung cư trả góp."
-    tuoi_35 = "Được thăng chức làm Giám Đốc Khu Vực, thâu tóm nhiều bất động sản." if tri_tue >= 8 else "Công việc ổn định, bắt đầu có bụng bia và đau mỏi vai gáy." if tri_tue >= 5 else "Tin bạn thân hùn vốn mở quán cafe chó mèo, dẹp tiệm sau 3 tháng."
-    
-    if may_man <= 2:
-        tuoi_40 = "🚨 Lòng tham trỗi dậy, bạn vay nóng tín dụng đen đu đỉnh coin. Thị trường sập, bạn vỡ nợ, giang hồ siết nhà!"
-        tien_thuong = random.randint(-50000, -20000) 
-    elif gia_the >= 8 and tri_tue <= 4:
-        tuoi_40 = "🚨 Phá gia chi tử! Bạn ăn chơi trác táng, đốt sạch gia tài bố mẹ để lại vào sòng bài tại Penacony."
-        tien_thuong = random.randint(-10000, -5000) 
-    elif tri_tue >= 8 and may_man >= 8:
-        tuoi_40 = "🌟 Sáng lập kỳ lân công nghệ mới. Tập đoàn được định giá hàng tỷ USD. Bạn lọt top Forbes!"
-        tien_thuong = random.randint(20000, 50000) 
-    else:
-        tuoi_40 = "Vẫn tiếp tục guồng quay cuộc sống, đi làm rước con, tằn tiện chi tiêu qua ngày."
-        tien_thuong = random.randint(500, 3000) 
-
-    # PAGE 4: TRUNG NIÊN (41 - 60 TUỔI)
-    tuoi_50 = "Chuyển nhượng công ty, xách vali lên đi du lịch vòng quanh Teyvat." if tien_thuong > 10000 else "Trốn chui trốn lủi vì chủ nợ tìm đến tận nhà đòi mạng." if tien_thuong < 0 else "Được con cái mua tặng cái máy massage lưng, cuộc sống bình lặng."
-    tuoi_60 = "Nằm võng uống trà chiều, thỉnh thoảng đi đánh golf cùng giới thượng lưu." if tien_thuong > 10000 else "Còng lưng đi nhặt ve chai trả nợ lãi ngày." if tien_thuong < 0 else "Tổ chức tiệc mừng thọ 60 tuổi, quây quần bên cháu chắt."
-
-    # PAGE 5: TỔNG KẾT
-    if tien_thuong < 0:
-        cuoi_doi = "Oanh liệt một thời, cuối đời làm bạn với vỉa hè và đống giấy nợ bủa vây."
-        ket_qua_chot = f"❌ **BÁO NHÀ!** Bạn để lại khoản nợ khổng lồ: **{tien_thuong} 💰**\n*(Lưu ý: Hệ thống đã trừ thẳng vào số dư của bạn. Đời này ăn chơi, kiếp sau đi làm `k daily` mà trả nợ nha!)*"
-    elif tien_thuong > 10000:
-        cuoi_doi = "Hưởng thọ trong biệt thự dát vàng. Bạn mỉm cười nhắm mắt, viên mãn trọn kiếp người."
-        ket_qua_chot = f"👑 **ĐẠI PHÚ HÀO!** Con cháu nhận được gia tài: **+{tien_thuong} 💰**"
-    else:
-        cuoi_doi = "Sinh lão bệnh tử là lẽ thường. Bạn nhắm mắt xuôi tay trên chiếc giường quen thuộc."
-        ket_qua_chot = f"💼 **DƯ DẢ!** Di chúc để lại cho kiếp sau: **+{tien_thuong} 💰**"
-
-    # ÁP DỤNG TIỀN / NỢ CHO NGƯỜI CHƠI (Cho phép âm tiền)
-    data[user_id]["money"] += tien_thuong
     save_data(data)
 
-    embeds = []
-    e1 = discord.Embed(title="[Trang 1/5] Khởi Đầu Nhân Sinh 🌱", description=f"Ký chủ: {ctx.author.mention}", color=discord.Color.purple())
-    e1.add_field(name="📊 Chỉ số linh hồn", value=f"Gia thế: **{gia_the}/10** | Trí tuệ: **{tri_tue}/10**\nNhan sắc: **{nhan_sac}/10** | May mắn: **{may_man}/10**", inline=False)
-    e1.add_field(name="👶 Tuổi 0", value=tuoi_0, inline=False)
-    e1.add_field(name="🏃 Tuổi 10", value=tuoi_10, inline=False)
-    e1.add_field(name="🏫 Tuổi 15", value=tuoi_15, inline=False)
-    embeds.append(e1)
+    stats = {
+        "tri_tue": random.randint(1, 10),
+        "nhan_sac": random.randint(1, 10),
+        "may_man": random.randint(1, 10)
+    }
 
-    e2 = discord.Embed(title="[Trang 2/5] Thời Thanh Xuân 🎓", description=f"Ký chủ: {ctx.author.mention}", color=discord.Color.blue())
-    e2.add_field(name="🎓 Tuổi 18", value=tuoi_18, inline=False)
-    e2.add_field(name="💼 Tuổi 22", value=tuoi_22, inline=False)
-    e2.add_field(name="🏢 Tuổi 25", value=tuoi_25, inline=False)
-    embeds.append(e2)
+    view = NhanSinhGameView(ctx.author, stats)
+    
+    embed = discord.Embed(title="🌀 MÔ PHỎNG NHÂN SINH 🌀", description=f"Ký chủ: {ctx.author.mention}", color=discord.Color.purple())
+    embed.add_field(name="📊 Chỉ số ban đầu", value=f"Trí tuệ: **{stats['tri_tue']}** | Nhan sắc: **{stats['nhan_sac']}** | May mắn: **{stats['may_man']}**", inline=False)
+    
+    story = "\n\n".join(view.logs)
+    embed.add_field(name="📜 Hành trình cuộc đời", value=story, inline=False)
+    embed.add_field(name="❓ Ngã rẽ tuổi học trò (15 tuổi)", value="Kỳ thi chuyển cấp quan trọng sắp tới, bạn sẽ:\n\n**A.** Cắm đầu vào học, bỏ bê ngoại hình.\n**B.** Chăm chút nhan sắc, đi chơi tán gái/trai.", inline=False)
 
-    e3 = discord.Embed(title="[Trang 3/5] Lập Nghiệp & Biến Cố 🌪️", description=f"Ký chủ: {ctx.author.mention}", color=discord.Color.orange())
-    e3.add_field(name="💍 Tuổi 28", value=tuoi_28, inline=False)
-    e3.add_field(name="👔 Tuổi 35", value=tuoi_35, inline=False)
-    e3.add_field(name="⚠️ Tuổi 40", value=tuoi_40, inline=False)
-    embeds.append(e3)
-
-    e4 = discord.Embed(title="[Trang 4/5] Tuổi Xế Chiều ☕", description=f"Ký chủ: {ctx.author.mention}", color=discord.Color.dark_gray())
-    e4.add_field(name="🩺 Tuổi 50", value=tuoi_50, inline=False)
-    e4.add_field(name="🦯 Tuổi 60", value=tuoi_60, inline=False)
-    embeds.append(e4)
-
-    e5 = discord.Embed(title="[Trang 5/5] Về Cát Bụi 🪦", description=f"Ký chủ: {ctx.author.mention}", color=discord.Color.red())
-    e5.add_field(name="🪦 Cuối đời", value=cuoi_doi, inline=False)
-    e5.add_field(name="💸 TỔNG KẾT LUÂN HỒI", value=f"{ket_qua_chot}\n\n💳 Số dư thực tế hiện tại của bạn: **{data[user_id]['money']} 💰**", inline=False)
-    embeds.append(e5)
-
-    view = NhanSinhView(ctx.author, embeds)
-    await ctx.send(embed=embeds[0], view=view)
+    await ctx.send(embed=embed, view=view)
 
 
 @bot.command()
