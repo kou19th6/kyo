@@ -8,9 +8,8 @@ import random
 intents = discord.Intents.default()
 intents.message_content = True
 
-# --- ĐÃ ĐỔI PREFIX THÀNH Ky ---
-# Bot sẽ nhận diện được cả: 'Ky rank', 'ky rank', 'Kyrank', 'kyrank'
-bot = commands.Bot(command_prefix=['Ky ', 'ky ', 'Ky', 'ky'], intents=intents)
+bot = commands.Bot(command_prefix=['K ', 'k ', 'K', 'k'], intents=intents)
+bot.remove_command('help')
 
 # --- CÁC HÀM XỬ LÝ SỔ TAY LEVEL ---
 def load_data():
@@ -23,7 +22,6 @@ def save_data(data):
     with open('users.json', 'w') as f:
         json.dump(data, f, indent=4)
 
-# --- CÁC HÀM CẤT GIỮ CẤU HÌNH SERVER ---
 def load_config():
     if not os.path.exists('config.json'):
         return {}
@@ -33,6 +31,138 @@ def load_config():
 def save_config(config):
     with open('config.json', 'w') as f:
         json.dump(config, f, indent=4)
+
+# --- LỆNH: BẢNG HƯỚNG DẪN (HELP) ---
+@bot.command()
+async def help(ctx):
+    bang_help = discord.Embed(
+        title="📚 BẢNG LỆNH CỦA BOT 📚",
+        description="Dưới đây là danh sách các lệnh bạn có thể sử dụng. Nhớ thêm chữ **k** ở đằng trước nhé.",
+        color=discord.Color.blue()
+    )
+    bang_help.add_field(name="✨ `k rank`", value="Xem hồ sơ: Cấp độ, XP và số TIỀN 💰 hiện tại.", inline=False)
+    bang_help.add_field(name="🏆 `k top`", value="Xem bảng xếp hạng Top 10 đại gia giàu nhất server.", inline=False)
+    bang_help.add_field(name="🪙 `k coin <số tiền>` hoặc `k coin all`", value="Chơi tung đồng xu sấp ngửa. Thắng ăn cả, ngã về 0!", inline=False)
+    bang_help.add_field(name="💸 `k give @người-nhận <số tiền>`", value="Chuyển tiền của bạn cho một người khác.", inline=False)
+    bang_help.add_field(name="⚙️ `k setkenh #tên-kênh`", value="(Quản trị viên) Cài đặt kênh thông báo lên cấp.", inline=False)
+    
+    bang_help.set_footer(text="Hãy chăm chỉ chat để leo rank và kiếm tiền nhé! :))")
+    
+    await ctx.send(embed=bang_help)
+
+# --- LỆNH: BẢNG XẾP HẠNG ĐẠI GIA (TOP) ---
+@bot.command()
+async def top(ctx):
+    data = load_data()
+    
+    # Tạo danh sách lưu trữ tài sản của mọi người
+    danh_sach_dai_gia = []
+    for user_id, thong_tin in data.items():
+        tien = thong_tin.get("money", 0)
+        danh_sach_dai_gia.append((user_id, tien))
+        
+    # Sắp xếp danh sách giảm dần theo số tiền
+    danh_sach_dai_gia.sort(key=lambda x: x[1], reverse=True)
+    
+    # Lấy 10 người đứng đầu
+    top_10 = danh_sach_dai_gia[:10]
+    
+    bang_xep_hang = discord.Embed(
+        title="🏆 BẢNG XẾP HẠNG TÀI PHÚ 🏆",
+        description="Top 10 đại gia nắm giữ nhiều tài sản nhất!",
+        color=discord.Color.gold()
+    )
+    
+    thu_hang = 1
+    for user_id, tien in top_10:
+        # Tìm tên người chơi dựa vào ID
+        user = bot.get_user(int(user_id))
+        ten_nguoi_choi = user.name if user else f"Người chơi ẩn ({user_id})"
+        
+        # Trang trí huy chương cho top 3
+        if thu_hang == 1:
+            icon = "🥇"
+        elif thu_hang == 2:
+            icon = "🥈"
+        elif thu_hang == 3:
+            icon = "🥉"
+        else:
+            icon = f"#{thu_hang}"
+            
+        bang_xep_hang.add_field(name=f"{icon} {ten_nguoi_choi}", value=f"**{tien} 💰**", inline=False)
+        thu_hang += 1
+        
+    await ctx.send(embed=bang_xep_hang)
+
+# --- LỆNH: CHƠI ĐỒNG XU (SẤP NGỬA) ---
+@bot.command()
+async def coin(ctx, amount: str):
+    data = load_data()
+    user_id = str(ctx.author.id)
+
+    if user_id not in data or data[user_id].get("money", 0) <= 0:
+        await ctx.send("Bạn không có đồng nào trong túi để cược cả. Hãy chat thêm để kiếm tiền nhé!")
+        return
+
+    tien_hien_tai = data[user_id]["money"]
+
+    if amount.lower() == "all":
+        bet = tien_hien_tai
+    else:
+        try:
+            bet = int(amount)
+        except ValueError:
+            await ctx.send("Số tiền cược không hợp lệ! Vui lòng nhập một số hoặc chữ `all`.")
+            return
+
+    if bet <= 0:
+        await ctx.send("Số tiền cược phải lớn hơn 0!")
+        return
+
+    if bet > tien_hien_tai:
+        await ctx.send(f"Bạn không đủ tiền để cược! Bạn chỉ có **{tien_hien_tai} 💰** trong túi.")
+        return
+
+    ket_qua = random.choice(["thắng", "thua"])
+
+    if ket_qua == "thắng":
+        data[user_id]["money"] += bet
+        save_data(data)
+        await ctx.send(f"🪙 Đồng xu lật mặt **NGỬA**! Chúc mừng {ctx.author.mention} đã thắng và nhận được **{bet} 💰**! (Số dư: **{data[user_id]['money']} 💰**)")
+    else:
+        data[user_id]["money"] -= bet
+        save_data(data)
+        await ctx.send(f"🪙 Đồng xu lật mặt **SẤP**! Rất tiếc, {ctx.author.mention} đã thua mất **{bet} 💰**. (Số dư: **{data[user_id]['money']} 💰**)")
+
+# --- LỆNH: CHUYỂN TIỀN (GIVE) ---
+@bot.command()
+async def give(ctx, member: discord.Member, amount: int):
+    data = load_data()
+    nguoi_gui = str(ctx.author.id)
+    nguoi_nhan = str(member.id)
+
+    if amount <= 0:
+        await ctx.send("Số tiền chuyển phải lớn hơn 0!")
+        return
+
+    if nguoi_gui not in data or data[nguoi_gui].get("money", 0) < amount:
+        await ctx.send("Bạn không có đủ tiền để chuyển số lượng này!")
+        return
+
+    if nguoi_gui == nguoi_nhan:
+        await ctx.send("Bạn không thể tự chuyển tiền cho chính mình được =))")
+        return
+
+    if nguoi_nhan not in data:
+        data[nguoi_nhan] = {"xp": 0, "level": 1, "money": 0}
+    if "money" not in data[nguoi_nhan]:
+        data[nguoi_nhan]["money"] = 0
+
+    data[nguoi_gui]["money"] -= amount
+    data[nguoi_nhan]["money"] += amount
+    save_data(data)
+
+    await ctx.send(f"💸 Giao dịch thành công! {ctx.author.mention} đã chuyển **{amount} 💰** cho {member.mention}.")
 
 # --- LỆNH: TỰ CHỌN KÊNH THÔNG BÁO ---
 @bot.command()
@@ -46,19 +176,27 @@ async def setkenh(ctx, kenh: discord.TextChannel):
     
     await ctx.send(f'✅ Tuyệt vời! Từ giờ bot sẽ gửi thông báo lên cấp vào kênh {kenh.mention}!')
 
-# --- LỆNH: KIỂM TRA RANK ---
+# --- LỆNH: KIỂM TRA RANK VÀ TIỀN ---
 @bot.command()
 async def rank(ctx):
     data = load_data()
     user_id = str(ctx.author.id)
     
     if user_id in data:
-        xp = data[user_id]["xp"]
-        level = data[user_id]["level"]
+        xp = data[user_id].get("xp", 0)
+        level = data[user_id].get("level", 1)
+        tien = data[user_id].get("money", 0) 
         xp_tiep_theo = level * 100
-        await ctx.send(f'📊 {ctx.author.name}, bạn đang ở **Cấp {level}** với **{xp}/{xp_tiep_theo} XP**.')
+        
+        khung_rank = discord.Embed(title=f"Hồ sơ của {ctx.author.name}", color=discord.Color.green())
+        khung_rank.set_thumbnail(url=ctx.author.display_avatar.url)
+        khung_rank.add_field(name="Cấp độ", value=f"**{level}**", inline=True)
+        khung_rank.add_field(name="Kinh nghiệm", value=f"**{xp}/{xp_tiep_theo} XP**", inline=True)
+        khung_rank.add_field(name="Tài sản", value=f"**{tien} 💰**", inline=False)
+        
+        await ctx.send(embed=khung_rank)
     else:
-        await ctx.send("Bạn chưa có điểm kinh nghiệm nào. Hãy chăm chỉ tương tác nhé!")
+        await ctx.send("Bạn chưa có dữ liệu. Hãy chăm chỉ chat để mở khóa hồ sơ nhé!")
 
 # --- SỰ KIỆN: KHI CÓ NGƯỜI CHAT ---
 @bot.event
@@ -70,7 +208,10 @@ async def on_message(message):
     user_id = str(message.author.id)
 
     if user_id not in data:
-        data[user_id] = {"xp": 0, "level": 1}
+        data[user_id] = {"xp": 0, "level": 1, "money": 0}
+
+    if "money" not in data[user_id]:
+        data[user_id]["money"] = 0
 
     data[user_id]["xp"] += random.randint(5, 15)
     
@@ -82,12 +223,15 @@ async def on_message(message):
         data[user_id]["level"] += 1
         data[user_id]["xp"] = 0 
         
+        tien_thuong = data[user_id]["level"] * 500
+        data[user_id]["money"] += tien_thuong
+        
         config = load_config()
         server_id = str(message.guild.id)
         
         thong_bao = discord.Embed(
             title="🎉 LÊN CẤP THÀNH CÔNG! 🎉",
-            description=f'Chúc mừng {message.author.mention} đã chăm chỉ tương tác và vươn lên **Cấp {data[user_id]["level"]}**!',
+            description=f'Chúc mừng {message.author.mention} đã vươn lên **Cấp {data[user_id]["level"]}**!\n\n🎁 Phần thưởng của bạn là: **{tien_thuong} 💰**',
             color=discord.Color.gold()
         )
         thong_bao.set_thumbnail(url=message.author.display_avatar.url)
@@ -108,7 +252,7 @@ async def on_message(message):
 # --- KHỞI ĐỘNG ---
 @bot.event
 async def on_ready():
-    print(f'Bot {bot.user} đã sẵn sàng với lệnh gọi mới!')
+    print(f'Bot {bot.user} đã sẵn sàng với Bảng Xếp Hạng Đại Gia!')
 
 keep_alive() 
 
