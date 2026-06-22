@@ -13,7 +13,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix=['K ', 'k ', 'K', 'k'], intents=intents)
 bot.remove_command('help')
 
-# Biến lưu trữ thời gian chờ 3 giây của lệnh coin
+# Biến lưu trữ thời gian chờ của lệnh coin (3 giây)
 coin_cooldowns = {}
 
 # --- CÁC HÀM XỬ LÝ SỔ TAY LEVEL ---
@@ -45,10 +45,11 @@ async def help(ctx):
         description="Dưới đây là danh sách các lệnh bạn có thể sử dụng. Nhớ thêm chữ **k** ở đằng trước nhé.",
         color=discord.Color.blue()
     )
-    bang_help.add_field(name="✨ `k rank`", value="Xem hồ sơ: Cấp độ, XP và số TIỀN 💰 hiện tại.", inline=False)
+    bang_help.add_field(name="✨ `k rank`", value="Xem hồ sơ: Cấp độ, XP và số Mora 💰 hiện tại.", inline=False)
     bang_help.add_field(name="🏆 `k top`", value="Xem bảng xếp hạng Top 10 đại gia giàu nhất server.", inline=False)
     bang_help.add_field(name="📅 `k daily`", value="Hoàn thành ủy thác hằng ngày để nhận lương.", inline=False)
     bang_help.add_field(name="🪙 `k coin <số tiền>` hoặc `k coin all`", value="Tung đồng xu sấp ngửa. Hồi hộp tới giây cuối cùng!", inline=False)
+    bang_help.add_field(name="🌲 `k sansoi <1/2/3>`", value="Vào rừng Lang Lãnh săn sói (Phí: 200 💰). Coi chừng bị vả bay màu!", inline=False)
     bang_help.add_field(name="💸 `k give @người-nhận <số tiền>`", value="Chuyển tiền của bạn cho một người khác.", inline=False)
     bang_help.add_field(name="⚙️ `k setkenh #tên-kênh`", value="(Quản trị viên) Cài đặt kênh thông báo lên cấp.", inline=False)
     
@@ -69,7 +70,6 @@ async def daily(ctx):
 
     now = datetime.now()
 
-    # Kiểm tra cooldown daily
     last_daily_str = data[user_id].get("last_daily")
     if last_daily_str:
         last_daily = datetime.strptime(last_daily_str, "%Y-%m-%d %H:%M:%S")
@@ -134,7 +134,6 @@ async def coin(ctx, amount: str):
     user_id = str(ctx.author.id)
     now = datetime.now()
 
-    # Kiểm tra thời gian chờ 3 giây
     if user_id in coin_cooldowns:
         thoi_gian_truoc = coin_cooldowns[user_id]
         if (now - thoi_gian_truoc).total_seconds() < 3:
@@ -170,7 +169,6 @@ async def coin(ctx, amount: str):
 
     coin_cooldowns[user_id] = now
 
-    # HIỆU ỨNG TUNG XU 3 GIÂY
     msg = await ctx.send(f"🪙 {ctx.author.mention} đã ném **{bet} 💰** vào không trung...")
     await asyncio.sleep(1.0) 
     
@@ -181,7 +179,6 @@ async def coin(ctx, amount: str):
     await asyncio.sleep(1.0) 
 
     ket_qua = random.choice(["thắng", "thua"])
-
     data = load_data() 
 
     if ket_qua == "thắng":
@@ -190,6 +187,59 @@ async def coin(ctx, amount: str):
         await msg.edit(content=f"🪙 **KẾT QUẢ: MẶT NGỬA!**\n🎉 Chúc mừng {ctx.author.mention}! Cờ bạc đãi tay mới, bạn đã thắng lớn và thu về **{bet * 2} 💰**! (Số dư: **{data[user_id]['money']} 💰**)")
     else:
         await msg.edit(content=f"🪙 **KẾT QUẢ: MẶT SẤP!**\n💀 Rất tiếc {ctx.author.mention}... Ra đê mà ở nhé! Bạn đã bay màu mất **{bet} 💰**. (Số dư: **{data[user_id]['money']} 💰**)")
+
+# --- LỆNH: MINIGAME SĂN SÓI LANG LÃNH ---
+@bot.command()
+async def sansoi(ctx, lua_chon: int = None):
+    data = load_data()
+    user_id = str(ctx.author.id)
+
+    phi_san = 200 # Phí mua vũ khí đi săn
+
+    if user_id not in data or data[user_id].get("money", 0) < phi_san:
+        await ctx.send(f"Bạn cần ít nhất **{phi_san} 💰** để mua vũ khí trước khi vào rừng Lang Lãnh!")
+        return
+
+    # Nếu người chơi chưa nhập số từ 1-3
+    if lua_chon not in [1, 2, 3]:
+        huong_dan = discord.Embed(
+            title="🌲 TIẾN VÀO LANG LÃNH 🌲",
+            description=f"Sương mù dày đặc... Bạn nghe thấy tiếng gầm gừ phát ra từ 3 lùm cây phía trước: `1`, `2`, `3`.\n\nHãy chọn một lùm cây để khám phá bằng lệnh: `k sansoi <số>` (Ví dụ: `k sansoi 2`)\n*⚠️ Phí tiến vào: {phi_san} 💰*",
+            color=discord.Color.dark_teal()
+        )
+        await ctx.send(embed=huong_dan)
+        return
+
+    # Trừ tiền phí đi săn
+    data[user_id]["money"] -= phi_san
+    save_data(data)
+
+    msg = await ctx.send(f"🗡️ {ctx.author.mention} nắm chặt vũ khí, rón rén vạch lùm cây số **{lua_chon}** ra...")
+    await asyncio.sleep(1.5)
+    await msg.edit(content=f"🗡️ {ctx.author.mention} nắm chặt vũ khí, rón rén vạch lùm cây số **{lua_chon}** ra...\n👀 Sương mù tản đi, một bóng đen to lớn xuất hiện...")
+    await asyncio.sleep(2.0)
+
+    # Tỉ lệ ra kết quả
+    ket_qua = random.choices(
+        ["soi", "razor", "kho_bau"], 
+        weights=[40, 40, 20], 
+        k=1
+    )[0]
+
+    data = load_data() 
+
+    if ket_qua == "soi":
+        await msg.edit(content=f"🐺 **GAOOOO! SÓI BẮC PHONG (ANDRIUS)!**\nChúa tể Lang Lãnh tát bạn bay màu khỏi khu rừng!\n💀 {ctx.author.mention} rớt mất **{phi_san} 💰** tiền vũ khí. (Số dư: **{data[user_id]['money']} 💰**)")
+    elif ket_qua == "razor":
+        thuong = 250 
+        data[user_id]["money"] += thuong
+        await msg.edit(content=f"🍖 **ỦA AI ĐÓ?** Hóa ra là cậu bé sói **Razor** đang ăn nướng thịt.\n😅 Razor chia cho bạn một ít Thịt Rừng nướng, bạn đem bán được **{thuong} 💰**. (Số dư: **{data[user_id]['money']} 💰**)")
+    elif ket_qua == "kho_bau":
+        thuong = 800 
+        data[user_id]["money"] += thuong
+        await msg.edit(content=f"✨ **TUYỆT VỜI! KHO BÁU SIÊU CẤP!**\nKhông có con sói nào cả! Bạn nhặt được túi Mora siêu to khổng lồ mà Mona đánh rơi!\n🎉 {ctx.author.mention} hốt trọn **{thuong} 💰**! (Số dư: **{data[user_id]['money']} 💰**)")
+
+    save_data(data)
 
 # --- LỆNH: CHUYỂN TIỀN (GIVE) ---
 @bot.command()
@@ -309,7 +359,7 @@ async def on_message(message):
 # --- KHỞI ĐỘNG ---
 @bot.event
 async def on_ready():
-    print(f'Bot {bot.user} đã sẵn sàng!')
+    print(f'Bot {bot.user} đã sẵn sàng phục vụ!')
 
 keep_alive() 
 
