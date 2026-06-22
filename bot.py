@@ -23,7 +23,7 @@ dang_choi_nhansinh = []
 # KẾT NỐI KÉT SẮT MONGODB (ĐÁM MÂY)
 # =====================================================================
 # ⚠️ NHỚ: Thay thế <username> và <password> bằng tài khoản MongoDB của bạn
-MONGO_URI = "mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority"
+MONGO_URI = "mongodb+srv://jakinat101084_db_user:<Lam17722>@cluster0.y6jqmz8.mongodb.net/?appName=Cluster0"
 
 mongo_client = pymongo.MongoClient(MONGO_URI)
 db = mongo_client["DiscordBotDB"]
