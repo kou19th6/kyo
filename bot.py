@@ -233,7 +233,7 @@ EVENTS_P5 = [
     }
 ]
 
-# (Phần Code Khu Rừng và Giao diện giữ nguyên, vì đã chạy ổn định)
+# (Phần Code Khu Rừng và Giao diện)
 WEAPON_ODDS = {
     "gay_go": {"price": 50, "name": "🪵 Gậy Gỗ Mục", "terrible": 25, "bad": 40, "neutral": 15, "good": 15, "great": 5, "jackpot": 0},
     "sung_cao_su": {"price": 100, "name": "🪀 Súng Cao Su", "terrible": 20, "bad": 35, "neutral": 20, "good": 20, "great": 5, "jackpot": 0},
@@ -743,7 +743,7 @@ async def help(ctx):
     if bot.user.avatar: embed.set_thumbnail(url=bot.user.avatar.url)
 
     embed.add_field(name="💳 CƠ BẢN", value="`k rank` • Xem hồ sơ\n`k top` • Bảng xếp hạng\n`k daily` • Nhận lương\n`k lixi` • Bốc phong bao đỏ\n`k give @user <tiền>` • Chuyển khoản", inline=False)
-    embed.add_field(name="🎮 CÁ CƯỢC (MAX 500K)", value="`k coin <tiền/all>` • Xóc xu\n`k taixiu <tài/xỉu> <tiền>` • Lắc xí ngầu\n`k duathu <heo/cho/ngua/chuot> <tiền>` • Đua thú ảo\n`k ott <bua/bao/keo> <tiền>` • Oẳn tù tì với bot\n`k soloott @user <tiền>` • Thách đấu người khác", inline=False)
+    embed.add_field(name="🎮 CÁ CƯỢC (MAX 500K)", value="`k coin <tiền/all>` • Xóc xu\n`k taixiu <tài/xỉu> <tiền>` • Lắc xí ngầu\n`k duathu <heo/cho/ngua/chuot> <tiền>` • Đua thú ảo\n`k ott <bua/bao/keo> <tiền>` • Oẳn tù tì với bot\n`k soloott @user <tiền>` • Thách đấu người khác\n`k nohu <tiền>` • Quay máy xèng nổ hũ", inline=False)
     embed.add_field(name="🌲 NHẬP VAI", value="`k thamhiem` • Đi rừng\n`k phai` • Treo máy AFK\n`k nhansinh` • Mô phỏng cuộc đời", inline=False)
     
     if ctx.author.guild_permissions.administrator:
@@ -1090,6 +1090,61 @@ async def soloott(ctx, member: discord.Member, amount: str):
     view = SoloOTTAccept(ctx.author, member, bet)
     embed = discord.Embed(title="🔥 THÁCH ĐẬU OẲN TÙ TÌ", description=f"{ctx.author.mention} vừa cầm **{bet:,} 💰** đập bàn, thách đấu solo với {member.mention}!\n\nNhanh tay bấm **Nhận Kèo** trong vòng 60 giây nếu dám chơi!", color=discord.Color.red())
     await ctx.send(embed=embed, view=view)
+
+@bot.command(aliases=['slot', 'nohu', 'slots'])
+async def mayxeng(ctx, amount: str):
+    user_data, bet = await check_gamble_conditions(ctx, amount)
+    if not user_data: return
+
+    user_id = str(ctx.author.id)
+    user_data["money"] -= bet
+    save_user(user_id)
+    gamble_cooldowns[user_id] = datetime.now()
+
+    items = ["🍒", "🍋", "🍉", "🔔", "💎", "👑"]
+    
+    # Quay kết quả thật trước để bot biết đường chốt
+    s1, s2, s3 = random.choice(items), random.choice(items), random.choice(items)
+    
+    embed = discord.Embed(title="🎰 MÁY XÈNG CASINO 🎰", color=discord.Color.gold())
+    msg = await ctx.send(embed=embed)
+    
+    # --- HIỆU ỨNG QUAY 10 GIÂY ---
+    # Giai đoạn 1: Cả 3 ô cùng quay (4 nhịp)
+    for _ in range(4):
+        embed.description = f"**[ {random.choice(items)} | {random.choice(items)} | {random.choice(items)} ]**\n\n🔄 Máy đang quay tít mù..."
+        await msg.edit(embed=embed)
+        await asyncio.sleep(1.2)
+        
+    # Giai đoạn 2: Ô số 1 chốt, 2 ô kia vẫn quay (2 nhịp)
+    for _ in range(2):
+        embed.description = f"**[ {s1} | {random.choice(items)} | {random.choice(items)} ]**\n\n🔄 Đã chốt ô đầu tiên..."
+        await msg.edit(embed=embed)
+        await asyncio.sleep(1.2)
+        
+    # Giai đoạn 3: Ô 1, 2 chốt, ô cuối cùng quay (2 nhịp - Hồi hộp nhất!)
+    for _ in range(2):
+        embed.description = f"**[ {s1} | {s2} | {random.choice(items)} ]**\n\n🔄 Nín thở chờ ô cuối..."
+        await msg.edit(embed=embed)
+        await asyncio.sleep(1.2)
+        
+    # --- CHỐT KẾT QUẢ ---
+    if s1 == s2 == s3:
+        if s1 == "👑": win_amt = bet * 50
+        elif s1 == "💎": win_amt = bet * 20
+        else: win_amt = bet * 10
+        res = f"🔥 **JACKPOT!!! ĐẠI NỔ HŨ!** Trúng 3 ô {s1}\nBạn húp trọn **{win_amt:,} 💰**!"
+        user_data["money"] += win_amt
+    elif s1 == s2 or s2 == s3 or s1 == s3:
+        win_amt = bet * 2
+        res = f"🎉 **THẮNG NHỎ!** Trúng 2 ô giống nhau.\nBạn nhận được **{win_amt:,} 💰**."
+        user_data["money"] += win_amt
+    else:
+        res = f"💀 **TOANG!** Cờ bạc là bác thằng bần.\nMất sạch **{bet:,} 💰**."
+        
+    save_user(user_id)
+    embed.description = f"**[ {s1} | {s2} | {s3} ]**\n\n{res}\n💳 Số dư: **{user_data['money']:,} 💰**"
+    await msg.edit(embed=embed)
 
 
 @bot.command()
