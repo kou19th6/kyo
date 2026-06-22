@@ -4,12 +4,17 @@ from keep_alive import keep_alive
 import json 
 import os
 import random 
+import asyncio 
+from datetime import datetime, timedelta 
 
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix=['K ', 'k ', 'K', 'k'], intents=intents)
 bot.remove_command('help')
+
+# Biến lưu trữ thời gian chờ 3 giây của lệnh coin
+coin_cooldowns = {}
 
 # --- CÁC HÀM XỬ LÝ SỔ TAY LEVEL ---
 def load_data():
@@ -42,7 +47,8 @@ async def help(ctx):
     )
     bang_help.add_field(name="✨ `k rank`", value="Xem hồ sơ: Cấp độ, XP và số TIỀN 💰 hiện tại.", inline=False)
     bang_help.add_field(name="🏆 `k top`", value="Xem bảng xếp hạng Top 10 đại gia giàu nhất server.", inline=False)
-    bang_help.add_field(name="🪙 `k coin <số tiền>` hoặc `k coin all`", value="Chơi tung đồng xu sấp ngửa. Thắng ăn cả, ngã về 0!", inline=False)
+    bang_help.add_field(name="📅 `k daily`", value="Hoàn thành ủy thác hằng ngày để nhận lương.", inline=False)
+    bang_help.add_field(name="🪙 `k coin <số tiền>` hoặc `k coin all`", value="Tung đồng xu sấp ngửa. Hồi hộp tới giây cuối cùng!", inline=False)
     bang_help.add_field(name="💸 `k give @người-nhận <số tiền>`", value="Chuyển tiền của bạn cho một người khác.", inline=False)
     bang_help.add_field(name="⚙️ `k setkenh #tên-kênh`", value="(Quản trị viên) Cài đặt kênh thông báo lên cấp.", inline=False)
     
@@ -50,21 +56,50 @@ async def help(ctx):
     
     await ctx.send(embed=bang_help)
 
+# --- LỆNH: ỦY THÁC HẰNG NGÀY (DAILY) ---
+@bot.command()
+async def daily(ctx):
+    data = load_data()
+    user_id = str(ctx.author.id)
+
+    if user_id not in data:
+        data[user_id] = {"xp": 0, "level": 1, "money": 0}
+    if "money" not in data[user_id]:
+        data[user_id]["money"] = 0
+
+    now = datetime.now()
+
+    # Kiểm tra cooldown daily
+    last_daily_str = data[user_id].get("last_daily")
+    if last_daily_str:
+        last_daily = datetime.strptime(last_daily_str, "%Y-%m-%d %H:%M:%S")
+        if now - last_daily < timedelta(days=1):
+            time_left = timedelta(days=1) - (now - last_daily)
+            hours, remainder = divmod(int(time_left.total_seconds()), 3600)
+            minutes, seconds = divmod(remainder, 60)
+            
+            await ctx.send(f"⏳ Bạn đã nhận ủy thác hôm nay rồi! Hãy quay lại sau **{hours} giờ {minutes} phút** nữa nhé.")
+            return
+
+    thuong_daily = 1000
+    data[user_id]["money"] += thuong_daily
+    data[user_id]["last_daily"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    
+    save_data(data)
+    
+    await ctx.send(f"🎁 Ủy thác hoàn tất! {ctx.author.mention} nhận được **{thuong_daily} 💰**. (Số dư: **{data[user_id]['money']} 💰**)")
+
 # --- LỆNH: BẢNG XẾP HẠNG ĐẠI GIA (TOP) ---
 @bot.command()
 async def top(ctx):
     data = load_data()
     
-    # Tạo danh sách lưu trữ tài sản của mọi người
     danh_sach_dai_gia = []
     for user_id, thong_tin in data.items():
         tien = thong_tin.get("money", 0)
         danh_sach_dai_gia.append((user_id, tien))
         
-    # Sắp xếp danh sách giảm dần theo số tiền
     danh_sach_dai_gia.sort(key=lambda x: x[1], reverse=True)
-    
-    # Lấy 10 người đứng đầu
     top_10 = danh_sach_dai_gia[:10]
     
     bang_xep_hang = discord.Embed(
@@ -75,11 +110,9 @@ async def top(ctx):
     
     thu_hang = 1
     for user_id, tien in top_10:
-        # Tìm tên người chơi dựa vào ID
         user = bot.get_user(int(user_id))
         ten_nguoi_choi = user.name if user else f"Người chơi ẩn ({user_id})"
         
-        # Trang trí huy chương cho top 3
         if thu_hang == 1:
             icon = "🥇"
         elif thu_hang == 2:
@@ -99,9 +132,18 @@ async def top(ctx):
 async def coin(ctx, amount: str):
     data = load_data()
     user_id = str(ctx.author.id)
+    now = datetime.now()
+
+    # Kiểm tra thời gian chờ 3 giây
+    if user_id in coin_cooldowns:
+        thoi_gian_truoc = coin_cooldowns[user_id]
+        if (now - thoi_gian_truoc).total_seconds() < 3:
+            giay_con_lai = int(3 - (now - thoi_gian_truoc).total_seconds())
+            await ctx.send(f"⏳ Khí huyết đang sục sôi, hãy bình tĩnh lại! Bạn cần chờ **{giay_con_lai} giây** nữa mới được tung xu tiếp.")
+            return
 
     if user_id not in data or data[user_id].get("money", 0) <= 0:
-        await ctx.send("Bạn không có đồng nào trong túi để cược cả. Hãy chat thêm để kiếm tiền nhé!")
+        await ctx.send("Bạn không có đồng nào trong túi để cược cả. Hãy làm ủy thác hằng ngày để kiếm tiền nhé!")
         return
 
     tien_hien_tai = data[user_id]["money"]
@@ -123,16 +165,31 @@ async def coin(ctx, amount: str):
         await ctx.send(f"Bạn không đủ tiền để cược! Bạn chỉ có **{tien_hien_tai} 💰** trong túi.")
         return
 
+    data[user_id]["money"] -= bet
+    save_data(data)
+
+    coin_cooldowns[user_id] = now
+
+    # HIỆU ỨNG TUNG XU 3 GIÂY
+    msg = await ctx.send(f"🪙 {ctx.author.mention} đã ném **{bet} 💰** vào không trung...")
+    await asyncio.sleep(1.0) 
+    
+    await msg.edit(content=f"🪙 {ctx.author.mention} đã ném **{bet} 💰** vào không trung...\n🔄 Đồng xu đang xoay tít trên không...")
+    await asyncio.sleep(1.0) 
+    
+    await msg.edit(content=f"🪙 {ctx.author.mention} đã ném **{bet} 💰** vào không trung...\n🔄 Đồng xu đang xoay tít trên không...\n💥 Keng! Đồng xu rơi xuống đất và đang lăn...")
+    await asyncio.sleep(1.0) 
+
     ket_qua = random.choice(["thắng", "thua"])
 
+    data = load_data() 
+
     if ket_qua == "thắng":
-        data[user_id]["money"] += bet
+        data[user_id]["money"] += (bet * 2)
         save_data(data)
-        await ctx.send(f"🪙 Đồng xu lật mặt **NGỬA**! Chúc mừng {ctx.author.mention} đã thắng và nhận được **{bet} 💰**! (Số dư: **{data[user_id]['money']} 💰**)")
+        await msg.edit(content=f"🪙 **KẾT QUẢ: MẶT NGỬA!**\n🎉 Chúc mừng {ctx.author.mention}! Cờ bạc đãi tay mới, bạn đã thắng lớn và thu về **{bet * 2} 💰**! (Số dư: **{data[user_id]['money']} 💰**)")
     else:
-        data[user_id]["money"] -= bet
-        save_data(data)
-        await ctx.send(f"🪙 Đồng xu lật mặt **SẤP**! Rất tiếc, {ctx.author.mention} đã thua mất **{bet} 💰**. (Số dư: **{data[user_id]['money']} 💰**)")
+        await msg.edit(content=f"🪙 **KẾT QUẢ: MẶT SẤP!**\n💀 Rất tiếc {ctx.author.mention}... Ra đê mà ở nhé! Bạn đã bay màu mất **{bet} 💰**. (Số dư: **{data[user_id]['money']} 💰**)")
 
 # --- LỆNH: CHUYỂN TIỀN (GIVE) ---
 @bot.command()
@@ -221,7 +278,7 @@ async def on_message(message):
 
     if xp_hien_tai >= xp_can_thiet:
         data[user_id]["level"] += 1
-        data[user_id]["xp"] = 0 
+        data[user_id]["xp"] -= xp_can_thiet 
         
         tien_thuong = data[user_id]["level"] * 500
         data[user_id]["money"] += tien_thuong
@@ -252,7 +309,7 @@ async def on_message(message):
 # --- KHỞI ĐỘNG ---
 @bot.event
 async def on_ready():
-    print(f'Bot {bot.user} đã sẵn sàng với Bảng Xếp Hạng Đại Gia!')
+    print(f'Bot {bot.user} đã sẵn sàng!')
 
 keep_alive() 
 
