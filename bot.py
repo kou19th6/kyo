@@ -348,8 +348,8 @@ class NhanSinhGameView(discord.ui.View):
 # =====================================================================
 
 class BushButton(discord.ui.Button):
-    def __init__(self, label, style, custom_id):
-        super().__init__(label=label, style=style, custom_id=custom_id)
+    def __init__(self, label, style, custom_id, emoji):
+        super().__init__(label=label, style=style, custom_id=custom_id, emoji=emoji)
 
     async def callback(self, interaction: discord.Interaction):
         view = self.view
@@ -932,7 +932,7 @@ async def duathu(ctx, choice: str, amount: str):
     save_user(user_id)
     await msg.edit(content=get_track() + res_txt + f"\n💳 Số dư: **{user_data['money']:,} 💰**")
 
-@bot.command(aliases=['ott', 'oantuti'])
+@bot.command(aliases=['ott'])
 async def oantuti(ctx, choice: str, amount: str):
     valid_choices = {"bua": "🪨", "búa": "🪨", "bao": "📄", "giay": "📄", "giấy": "📄", "keo": "✂️", "kéo": "✂️"}
     choice = choice.lower()
