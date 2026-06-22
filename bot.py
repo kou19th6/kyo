@@ -97,7 +97,7 @@ async def check_gamble_conditions(ctx, amount_str):
     return user_data, bet
 
 # =====================================================================
-# DỮ LIỆU GAME
+# DỮ LIỆU GAME NHÂN SINH & RỪNG
 # =====================================================================
 EVENTS_P1 = [{"q": "Tình cờ nhặt được một chiếc ví rơi ngoài cổng trường.", "choices": [{"text": "Đem nộp lên công an", "rate": 80, "win": "Chủ ví là tổng tài, hậu tạ bạn món tiền lớn.", "lose": "Bị giam ở phường viết bản tường trình 3 ngày.", "tien_w": 2500, "tien_l": -100}, {"text": "Bỏ túi xài luôn", "rate": 20, "win": "Không ai biết, bạn bao lớp ăn chè thỏa thích.", "lose": "Bị check camera, bồi thường gấp đôi và bị đuổi học.", "tien_w": 3000, "tien_l": -8000}, {"text": "Lấy tờ 500k rồi vứt lại ví", "rate": 40, "win": "Trót lọt, bạn nạp game lên VIP.", "lose": "Chủ nhân báo mất, bị tra hỏi phạt nặng.", "tien_w": 1000, "tien_l": -4000}, {"text": "Giả vờ không thấy", "rate": 95, "win": "Thong thả đi học tiếp, chẳng rước họa vào thân.", "lose": "Đứa đi sau nhặt được đổ oan cho bạn.", "tien_w": 0, "tien_l": -500}]}, {"q": "Kỳ thi cuối cấp cận kề, bạn bè rủ cúp học đi net.", "choices": [{"text": "Ở nhà ôn bài kỹ", "rate": 85, "win": "Đỗ thủ khoa, được họ hàng thưởng nóng.", "lose": "Học tài thi phận, trượt vỏ chuối.", "tien_w": 2500, "tien_l": -500}, {"text": "Đi net cày rank", "rate": 10, "win": "Gặp idol ở quán net, được kéo lên Thách Đấu và cho tiền.", "lose": "Ngủ gục trên xe tông cột điện thăng thiên.", "tien_w": 3500, "tien_l": -10000, "die_l": True}, {"text": "Làm phao mang vào", "rate": 35, "win": "Mở phao mượt mà, điểm cao chót vót.", "lose": "Giám thị bắt quả tang, đình chỉ thi 0 điểm.", "tien_w": 2000, "tien_l": -5000}, {"text": "Ngủ cho khỏe", "rate": 50, "win": "Tinh thần sảng khoái, làm bài vừa đủ đậu.", "lose": "Ngủ nhiều lú não, làm sai phép tính cơ bản 1+1=3.", "tien_w": 800, "tien_l": -1000}]}]
 EVENTS_P2 = [{"q": "Tích cóp được chút vốn, bạn muốn làm giàu nhanh.", "choices": [{"text": "Bắt đáy chứng khoán", "rate": 30, "win": "Cổ phiếu tím lịm! Tiền lãi mua được cả căn nhà.", "lose": "Bị chủ tịch úp bô, cổ phiếu rác hủy niêm yết.", "tien_w": 15000, "tien_l": -25000}, {"text": "Cắm sổ đỏ đánh xóc đĩa", "rate": 5, "win": "Ăn thông 10 ván! Bạn mua hẳn siêu xe Mẹc-xê-đét.", "lose": "Cháy túi, nhảy cầu kết thúc cuộc đời.", "tien_w": 80000, "tien_l": -50000, "die_l": True}, {"text": "Khởi nghiệp bún đậu mắm tôm", "rate": 60, "win": "Đông khách nườm nượp, mở 5 chi nhánh.", "lose": "Bị phốt mắm tôm có giòi, sập tiệm đền tiền.", "tien_w": 12000, "tien_l": -8000}, {"text": "Gửi tiết kiệm ngân hàng", "rate": 95, "win": "Cuộc sống bình yên, có lãi ra tiêu vặt.", "lose": "Lạm phát phi mã, tiền bốc hơi từ từ.", "tien_w": 2000, "tien_l": -1500}]}]
@@ -125,6 +125,7 @@ SCENARIOS = {
     "jackpot": [{"mult": 5.0, "msg": "🎫 **VÉ SỐ ĐỘC ĐẮC!**\nNhặt được vé số đem dò trúng ĐẶC BIỆT!"}, {"mult": 12.0, "msg": "👑 **VƯƠNG MIỆN VUA ARTHUR!**\nVớt được vương miện nạm kim cương. Tỷ phú rồi!!"}]
 }
 
+# --- CỬA HÀNG VÀ PET ---
 SHOP_ITEMS = {
     "t1": {"type": "title", "name": "Tiểu Thương 🏪", "price": 50000, "emoji": "🏷️"},
     "t2": {"type": "title", "name": "Phú Nông 🌾", "price": 200000, "emoji": "🏷️"},
@@ -156,24 +157,23 @@ PET_RATES = {
     "mythic": {"rate": 0.1, "pool": ["Thần Long Hoàng Kim 🐲", "Hắc Ám Cự Thú 🦇", "Mèo Thần Tài Vô Cực 😻"]}
 }
 
-# --- HÀM TÍNH GIÁ BÁN ĐỒ TỒN KHO ---
 def get_asset_price(asset_name):
     for v in SHOP_ITEMS.values():
-        if v["name"] == asset_name: return int(v["price"] * 0.7) # Thu hồi 70% vốn
+        if v["name"] == asset_name: return int(v["price"] * 0.7)
     return 1000
 
 def get_pet_sell_price(pet_name):
     for rarity, data in PET_RATES.items():
         if pet_name in data["pool"]:
-            if rarity == "common": return 10000      # Gacha 30k -> Bán 10k (lỗ)
-            if rarity == "rare": return 30000        # Hòa vốn
-            if rarity == "epic": return 150000       # Lãi
-            if rarity == "legendary": return 1000000 # Lãi to
-            if rarity == "mythic": return 10000000   # Jackpot
+            if rarity == "common": return 10000
+            if rarity == "rare": return 30000
+            if rarity == "epic": return 150000
+            if rarity == "legendary": return 1000000
+            if rarity == "mythic": return 10000000
     return 1000
 
 # =====================================================================
-# GIAO DIỆN HỆ THỐNG
+# GIAO DIỆN GAME NHÂN SINH
 # =====================================================================
 class NhanSinhGameView(discord.ui.View):
     def __init__(self, author, stats):
@@ -230,6 +230,9 @@ class NhanSinhGameView(discord.ui.View):
         if interaction.response.is_done(): await interaction.message.edit(embed=embed, view=self)
         else: await interaction.response.edit_message(embed=embed, view=self)
 
+# =====================================================================
+# GIAO DIỆN KHU RỪNG THÁM HIỂM (ĐÃ SỬA LỖI TÊN)
+# =====================================================================
 class BushButton(discord.ui.Button):
     def __init__(self, label, style, custom_id, emoji): super().__init__(label=label, style=style, custom_id=custom_id, emoji=emoji)
     async def callback(self, interaction: discord.Interaction):
@@ -280,15 +283,19 @@ class WeaponSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         user_id = str(interaction.user.id); user_data = load_user(user_id); price = WEAPON_ODDS[self.values[0]]["price"]
         if user_data.get("money", 0) < price: return await interaction.response.send_message(f"Nghèo quá! Không đủ **{price} 💰**.", ephemeral=True)
-        user_data["money"] -= price; save_user(user_id)
+        user_data["money"] -= price; new_profit = self.session_profit - price; save_user(user_id)
         embed = discord.Embed(title="🌲 KHU RỪNG KỲ BÍ 🌲", description=f"Cầm **{WEAPON_ODDS[self.values[0]]['name']}**.\nPhía trước có 5 lùm cây. Chọn 1 lùm!", color=discord.Color.dark_green())
-        await interaction.response.edit_message(content=None, embed=embed, view=BushView(interaction.user, self.values[0], self.session_profit - price))
+        await interaction.response.edit_message(content=None, embed=embed, view=BushView(interaction.user, self.values[0], new_profit))
 
 class KhungRungShopView(discord.ui.View):
     def __init__(self, author, session_profit=0):
         super().__init__(timeout=60); self.author = author; self.add_item(WeaponSelect(session_profit))
     async def interaction_check(self, interaction: discord.Interaction): return interaction.user == self.author
 
+
+# =====================================================================
+# GIAO DIỆN TRẠM AFK & CỬA HÀNG ĐẠI GIA
+# =====================================================================
 class ExpSelect(discord.ui.Select):
     def __init__(self):
         options = [discord.SelectOption(label="4 Giờ (Bãi Cỏ Yên Bình)", description="Phần thưởng: ~450 💰", emoji="🌿", value="4"), discord.SelectOption(label="8 Giờ (Hang Động Tối Tăm)", description="Phần thưởng: ~1000 💰", emoji="🦇", value="8"), discord.SelectOption(label="12 Giờ (Di Tích Nguy Hiểm)", description="Phần thưởng: ~2000 💰", emoji="🏛️", value="12")]
@@ -333,22 +340,20 @@ class ShopCategoryMenu(discord.ui.View):
     async def btn_house(self, interaction: discord.Interaction, button: discord.ui.Button): await interaction.response.edit_message(content="**🛍️ BẤT ĐỘNG SẢN:**", embed=None, view=ShopDetailView(self.author, "house"))
     async def interaction_check(self, interaction: discord.Interaction): return interaction.user == self.author
 
+
 # =====================================================================
-# GIAO DIỆN BÁN ĐỒ (CHỢ ĐEN THU MUA LÔNG CHAI)
+# GIAO DIỆN CHỢ ĐEN (BÁN ĐỒ)
 # =====================================================================
 class SellAssetSelect(discord.ui.Select):
     def __init__(self, assets):
-        options = []
-        for asset in list(set(assets))[:25]: # Tối đa 25 món
-            options.append(discord.SelectOption(label=asset, description=f"Số lượng: {assets.count(asset)} | Thu mua: {get_asset_price(asset):,} 💰", value=asset))
-        super().__init__(placeholder="Chọn tài sản để bán (Lỗ 30% so với mua)...", min_values=1, max_values=1, options=options)
-
+        options = [discord.SelectOption(label=asset, description=f"Số lượng: {assets.count(asset)} | Thu mua: {get_asset_price(asset):,} 💰", value=asset) for asset in list(set(assets))[:25]]
+        super().__init__(placeholder="Chọn tài sản để bán (Lỗ 30%)...", min_values=1, max_values=1, options=options)
     async def callback(self, interaction: discord.Interaction):
         user_id = str(interaction.user.id); user_data = load_user(user_id); asset_name = self.values[0]
-        if asset_name not in user_data.get("assets", []): return await interaction.response.send_message("Lỗi: Bạn không còn tài sản này!", ephemeral=True)
+        if asset_name not in user_data.get("assets", []): return await interaction.response.send_message("Lỗi: Không còn tài sản này!", ephemeral=True)
         sell_price = get_asset_price(asset_name)
         user_data["assets"].remove(asset_name); user_data["money"] += sell_price; save_user(user_id)
-        await interaction.response.edit_message(content=f"✅ Bạn đã bán **{asset_name}** cho chợ đen và vớt vát được **{sell_price:,} 💰**!", embed=None, view=None)
+        await interaction.response.edit_message(content=f"✅ Bạn đã bán **{asset_name}** và vớt vát được **{sell_price:,} 💰**!", embed=None, view=None)
 
 class SellPetSelect(discord.ui.Select):
     def __init__(self, pets):
@@ -357,7 +362,6 @@ class SellPetSelect(discord.ui.Select):
             if count >= 25: break
             if qty > 0: options.append(discord.SelectOption(label=pet, description=f"Đang có: {qty} | Giá bán: {get_pet_sell_price(pet):,} 💰", value=pet)); count += 1
         super().__init__(placeholder="Chọn thú cưng để bán...", min_values=1, max_values=1, options=options)
-
     async def callback(self, interaction: discord.Interaction):
         user_id = str(interaction.user.id); user_data = load_user(user_id); pet_name = self.values[0]
         if user_data.get("pets", {}).get(pet_name, 0) <= 0: return await interaction.response.send_message("Lỗi: Không tìm thấy thú cưng này!", ephemeral=True)
@@ -365,26 +369,96 @@ class SellPetSelect(discord.ui.Select):
         user_data["pets"][pet_name] -= 1
         if user_data["pets"][pet_name] == 0: del user_data["pets"][pet_name]
         user_data["money"] += sell_price; save_user(user_id)
-        await interaction.response.edit_message(content=f"✅ Bạn đã bán thành công 1 con **{pet_name}** và thu về **{sell_price:,} 💰**!", embed=None, view=None)
+        await interaction.response.edit_message(content=f"✅ Đã bán 1 con **{pet_name}** thu về **{sell_price:,} 💰**!", embed=None, view=None)
 
 class SellCategoryMenu(discord.ui.View):
     def __init__(self, author): super().__init__(timeout=60); self.author = author
-
     @discord.ui.button(label="Bán Tài Sản (Nhà/Xe)", style=discord.ButtonStyle.primary, emoji="🏠")
     async def btn_asset(self, interaction: discord.Interaction, button: discord.ui.Button):
         assets = load_user(self.author.id).get("assets", [])
-        if not assets: return await interaction.response.send_message("Bạn trắng tay, làm gì có tài sản nào mà bán!", ephemeral=True)
+        if not assets: return await interaction.response.send_message("Làm gì có tài sản nào mà bán!", ephemeral=True)
         view = discord.ui.View(timeout=60); view.add_item(SellAssetSelect(assets))
-        await interaction.response.edit_message(content="**🏷️ CHỢ ĐEN BẤT ĐỘNG SẢN & XE CỘ:**\n*(Lưu ý: Bán lại sẽ bị khấu hao mất 30% giá trị gốc)*", embed=None, view=view)
-
+        await interaction.response.edit_message(content="**🏷️ CHỢ ĐEN BẤT ĐỘNG SẢN & XE CỘ:**\n*(Lưu ý: Khấu hao mất 30% giá trị gốc)*", embed=None, view=view)
     @discord.ui.button(label="Bán Thú Cưng", style=discord.ButtonStyle.success, emoji="🐾")
     async def btn_pet(self, interaction: discord.Interaction, button: discord.ui.Button):
         pets = load_user(self.author.id).get("pets", {})
-        if not pets or all(v == 0 for v in pets.values()): return await interaction.response.send_message("Bạn chưa có con thú cưng nào để bán!", ephemeral=True)
+        if not pets or all(v == 0 for v in pets.values()): return await interaction.response.send_message("Chưa có thú cưng nào để bán!", ephemeral=True)
         view = discord.ui.View(timeout=60); view.add_item(SellPetSelect(pets))
         await interaction.response.edit_message(content="**🏷️ TRẠM THU MUA THÚ CƯNG:**", embed=None, view=view)
-
     async def interaction_check(self, interaction: discord.Interaction): return interaction.user == self.author
+
+
+# =====================================================================
+# TÍNH NĂNG ĐẤU TRƯỜNG: SOLO OẲN TÙ TÌ (ĐÃ SỬA LỖI INTERACTION)
+# =====================================================================
+class SoloOTTGame(discord.ui.View):
+    def __init__(self, p1, p2, bet):
+        super().__init__(timeout=60); self.p1, self.p2, self.bet = p1, p2, bet
+        self.msg = None; self.choices = {str(p1.id): None, str(p2.id): None}
+    @discord.ui.button(emoji="🪨", style=discord.ButtonStyle.secondary)
+    async def btn_bua(self, interaction: discord.Interaction, button: discord.ui.Button): await self.handle_choice(interaction, "🪨")
+    @discord.ui.button(emoji="📄", style=discord.ButtonStyle.secondary)
+    async def btn_bao(self, interaction: discord.Interaction, button: discord.ui.Button): await self.handle_choice(interaction, "📄")
+    @discord.ui.button(emoji="✂️", style=discord.ButtonStyle.secondary)
+    async def btn_keo(self, interaction: discord.Interaction, button: discord.ui.Button): await self.handle_choice(interaction, "✂️")
+
+    async def handle_choice(self, interaction: discord.Interaction, choice: str):
+        user_id = str(interaction.user.id)
+        if user_id not in self.choices: return await interaction.response.send_message("Tránh ra chỗ khác!", ephemeral=True)
+        if self.choices[user_id] is not None: return await interaction.response.send_message("Ông đã ra chiêu rồi!", ephemeral=True)
+        
+        self.choices[user_id] = choice
+        await interaction.response.send_message(f"🤫 Bạn đã giấu tay chọn **{choice}**. Chờ đối thủ...", ephemeral=True)
+
+        if self.choices[str(self.p1.id)] and self.choices[str(self.p2.id)]:
+            for child in self.children: child.disabled = True
+            c1, c2 = self.choices[str(self.p1.id)], self.choices[str(self.p2.id)]
+            u1_data, u2_data = load_user(self.p1.id), load_user(self.p2.id)
+            tong_thuong = self.bet * 2
+            
+            if c1 == c2:
+                res = "🤝 **HÒA NHAU!** Tiền cược được trả lại."
+                u1_data["money"] += self.bet; u2_data["money"] += self.bet
+            elif (c1 == "🪨" and c2 == "✂️") or (c1 == "📄" and c2 == "🪨") or (c1 == "✂️" and c2 == "📄"):
+                res = f"🎉 **{self.p1.name} THẮNG!** Húp **{tong_thuong:,} 💰**."
+                u1_data["money"] += tong_thuong
+            else:
+                res = f"🎉 **{self.p2.name} THẮNG!** Húp **{tong_thuong:,} 💰**."
+                u2_data["money"] += tong_thuong
+                
+            save_user(self.p1.id); save_user(self.p2.id)
+            embed = discord.Embed(title="⚔️ KẾT QUẢ ĐẠI CHIẾN", color=discord.Color.gold())
+            embed.add_field(name=self.p1.name, value=f"Ra {c1}", inline=True); embed.add_field(name="VS", value="⚡", inline=True); embed.add_field(name=self.p2.name, value=f"Ra {c2}", inline=True)
+            embed.add_field(name="KẾT QUẢ", value=res, inline=False)
+            await self.msg.edit(embed=embed, view=self)
+            self.stop()
+            
+    async def on_timeout(self):
+        if not (self.choices[str(self.p1.id)] and self.choices[str(self.p2.id)]):
+            u1_data, u2_data = load_user(self.p1.id), load_user(self.p2.id)
+            u1_data["money"] += self.bet; u2_data["money"] += self.bet
+            save_user(self.p1.id); save_user(self.p2.id)
+            try: await self.msg.edit(embed=discord.Embed(title="⏳ HẾT GIỜ", description="Trận đấu bị hủy, tiền cược đã hoàn trả!"), view=None)
+            except: pass
+
+class SoloOTTAccept(discord.ui.View):
+    def __init__(self, p1, p2, bet):
+        super().__init__(timeout=60); self.p1, self.p2, self.bet = p1, p2, bet
+    @discord.ui.button(label="Nhận Kèo Ngay!", style=discord.ButtonStyle.danger, emoji="⚔️")
+    async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.p2.id: return await interaction.response.send_message("Không phận sự miễn vào!", ephemeral=True)
+        u1_data, u2_data = load_user(self.p1.id), load_user(self.p2.id)
+        if u1_data.get("money",0) < self.bet or u2_data.get("money",0) < self.bet: return await interaction.response.send_message("⚠️ Thiếu lúa để chơi!", ephemeral=True)
+        
+        u1_data["money"] -= self.bet; u2_data["money"] -= self.bet
+        save_user(self.p1.id); save_user(self.p2.id)
+        
+        game_view = SoloOTTGame(self.p1, self.p2, self.bet)
+        embed = discord.Embed(title="⚔️ QUYẾT CHIẾN", description=f"{self.p1.mention} 🆚 {self.p2.mention}\nCược: **{self.bet:,} 💰**\n👇 **CHỌN ĐI (Bị giấu kín)**")
+        # SỬA LỖI Ở ĐÂY: Dùng response.edit_message thay vì message.edit
+        await interaction.response.edit_message(embed=embed, view=game_view)
+        game_view.msg = interaction.message
+        self.stop()
 
 
 # =====================================================================
@@ -624,7 +698,9 @@ async def phai(ctx):
     await ctx.send(embed=discord.Embed(title="⛺ TRẠM AFK", description="Gửi nhân vật đi treo máy.\n👇 **CHỌN KHU VỰC** 👇", color=discord.Color.dark_green()), view=ExpView(ctx.author))
 
 @bot.command(aliases=['sansoi']) 
-async def thamhiem(ctx): await ctx.send(embed=discord.Embed(title="🛒 TRẠM TIẾP TẾ", description="👇 **MỞ MENU MUA VŨ KHÍ** 👇", color=discord.Color.orange()), view=ShopView(ctx.author, 0))
+async def thamhiem(ctx): 
+    # ĐÃ FIX: Dùng đúng KhungRungShopView
+    await ctx.send(embed=discord.Embed(title="🛒 TRẠM TIẾP TẾ", description="👇 **MỞ MENU MUA VŨ KHÍ** 👇", color=discord.Color.orange()), view=KhungRungShopView(ctx.author, 0))
 
 @bot.command(aliases=['mophong'])
 async def nhansinh(ctx):
