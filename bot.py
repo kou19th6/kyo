@@ -13,8 +13,10 @@ intents.message_content = True
 bot = commands.Bot(command_prefix=['K ', 'k ', 'K', 'k'], intents=intents)
 bot.remove_command('help')
 
+# --- QUẢN LÝ THỜI GIAN HỒI CHIÊU VÀ TRẠNG THÁI ---
 coin_cooldowns = {}
 nhansinh_cooldowns = {} 
+dang_choi_nhansinh = [] # Danh sách những người đang chơi dở ván Nhân Sinh
 
 # --- CÁC HÀM XỬ LÝ SỔ TAY LEVEL ---
 def load_data():
@@ -79,13 +81,11 @@ SCENARIOS = {
     ]
 }
 
-
 # =====================================================================
 # DATA NGÂN HÀNG CÂU HỎI NHÂN SINH (45 SỰ KIỆN)
 # =====================================================================
-# tt: Trí tuệ, ns: Nhan sắc, mm: May mắn, t: Tiền
 EVENTS_P1 = [
-    {"q": "Bạn nhặt được chiếc ví dày cộp của thầy Hiệu trưởng.", "a": "Nộp lên phòng giám thị", "b": "Lấy tiền đi bao bạn bè", "ra": "Thầy khen ngợi trước cờ, tăng uy tín.", "rb": "Tiêu xài sướng tay nhưng bị camera quay lại, hạ kiểm kiểm.", "ea": {"tt": 1, "ns": 0, "mm": 2, "t": 200}, "eb": {"tt": -2, "ns": 0, "mm": -3, "t": 1000}},
+    {"q": "Bạn nhặt được chiếc ví dày cộp của thầy Hiệu trưởng.", "a": "Nộp lên phòng giám thị", "b": "Lấy tiền đi bao bạn bè", "ra": "Thầy khen ngợi trước cờ, tăng uy tín.", "rb": "Tiêu xài sướng tay nhưng bị camera quay lại, hạ kiểm điểm.", "ea": {"tt": 1, "ns": 0, "mm": 2, "t": 200}, "eb": {"tt": -2, "ns": 0, "mm": -3, "t": 1000}},
     {"q": "Crush tỏ tình với bạn ngay sát kỳ thi quan trọng.", "a": "Từ chối để ôn thi", "b": "Đồng ý hẹn hò luôn", "ra": "Đau lòng nhưng đỗ điểm cao.", "rb": "Tình yêu thăng hoa, học hành đội sổ.", "ea": {"tt": 3, "ns": -1, "mm": 0, "t": 0}, "eb": {"tt": -3, "ns": 2, "mm": 1, "t": -200}},
     {"q": "Bị nhóm đầu gấu trấn lột tiền ăn sáng.", "a": "Gồng lên đấm lại", "b": "Ngoan ngoãn đưa tiền", "ra": "Bị đấm sưng mắt nhưng chúng nể phục.", "rb": "Mất tiền nhưng nhan sắc được bảo toàn.", "ea": {"tt": 0, "ns": -2, "mm": 2, "t": -100}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": -300}},
     {"q": "Trường tổ chức thi Nam thanh Nữ tú.", "a": "Tham gia thi", "b": "Ngồi dưới làm khán giả", "ra": "Lọt top hoa khôi/nam vương, được nhiều người biết đến.", "rb": "Nhạt nhòa giữa đám đông nhưng đỡ tốn thời gian.", "ea": {"tt": -1, "ns": 3, "mm": 1, "t": -200}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": 100}},
@@ -123,7 +123,7 @@ EVENTS_P2 = [
 EVENTS_P3 = [
     {"q": "Cò đất cò mồi bạn mua mảnh đất ở ngoại ô.", "a": "Chốt cọc mua", "b": "Chê xa không mua", "ra": "Đất dính quy hoạch! Tiền đầu tư biến thành rác.", "rb": "May mắn né được cú lừa thế kỷ.", "ea": {"tt": -2, "ns": 0, "mm": -3, "t": -5000}, "eb": {"tt": 2, "ns": 0, "mm": 1, "t": 1000}},
     {"q": "Cảm thấy cơ thể hay đau nhức.", "a": "Bỏ tiền mua thuốc xịn", "b": "Bỏ qua, cày tiếp", "ra": "Cơ thể khỏe mạnh, trẻ lại chục tuổi.", "rb": "Đột quỵ phải đi cấp cứu, tốn một núi tiền.", "ea": {"tt": 1, "ns": 2, "mm": 0, "t": -1000}, "eb": {"tt": -2, "ns": -3, "mm": -2, "t": -4000}},
-    {"q": "Mở rộng kinh doanh ra nước ngoài.", "a": "Vay vốn mở rộng", "b": "Giữ quy mô hiện tại", "ra": "Kinh doanh bùng nổ! Lợi nhuận tăng phi mã.", "rb": "Công ty giậm chân tại chỗ, dần thụt lùi.", "ea": {"tt": 2, "ns": 0, "mm": 2, "t": 6000}, "eb": {"tt": 0, "ns": 0, "mm": -1, "t": -500}},
+    {"q": "Mở rộng kinh doanh ra nước ngoài.", "a": "Vay vốn mở rộng", "b": "Giữ quy规模 hiện tại", "ra": "Kinh doanh bùng nổ! Lợi nhuận tăng phi mã.", "rb": "Công ty giậm chân tại chỗ, dần thụt lùi.", "ea": {"tt": 2, "ns": 0, "mm": 2, "t": 6000}, "eb": {"tt": 0, "ns": 0, "mm": -1, "t": -500}},
     {"q": "Con cái muốn đi du học trường đắt đỏ.", "a": "Rút tiết kiệm cho con đi", "b": "Bắt học trường công", "ra": "Con thành tài, sau này gửi tiền báo hiếu.", "rb": "Con bất mãn, quậy phá báo nhà.", "ea": {"tt": 2, "ns": 0, "mm": 1, "t": 4000}, "eb": {"tt": -1, "ns": 0, "mm": -2, "t": -2000}},
     {"q": "Bị giang hồ tông xe trên đường.", "a": "Bắt đền", "b": "Xin lỗi cho qua chuyện", "ra": "Bị chúng đập cho một trận nhừ tử, mất viện phí.", "rb": "Tốn tiền sửa xe nhưng toàn mạng.", "ea": {"tt": -1, "ns": -2, "mm": -2, "t": -3000}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": -500}},
     {"q": "Được mời làm cố vấn cho một công ty mới nổi.", "a": "Nhận lời", "b": "Từ chối", "ra": "Nhận cổ phần thưởng, công ty lên sàn bạn giàu to.", "rb": "Bỏ lỡ cơ hội đổi đời.", "ea": {"tt": 2, "ns": 0, "mm": 2, "t": 5000}, "eb": {"tt": 0, "ns": 0, "mm": 0, "t": 0}},
@@ -152,7 +152,6 @@ class NhanSinhGameView(discord.ui.View):
         self.tien_an = 0
         self.logs = []
         
-        # Random pick 3 sự kiện cho 3 giai đoạn
         self.event_p1 = random.choice(EVENTS_P1)
         self.event_p2 = random.choice(EVENTS_P2)
         self.event_p3 = random.choice(EVENTS_P3)
@@ -171,6 +170,12 @@ class NhanSinhGameView(discord.ui.View):
 
         self.add_item(self.btn_a)
         self.add_item(self.btn_b)
+
+    # --- HÀM XỬ LÝ LỖI TREO MÁY ---
+    async def on_timeout(self):
+        user_id = str(self.author.id)
+        if user_id in dang_choi_nhansinh:
+            dang_choi_nhansinh.remove(user_id)
 
     async def interaction_check(self, interaction: discord.Interaction):
         if interaction.user != self.author:
@@ -252,11 +257,15 @@ class NhanSinhGameView(discord.ui.View):
             self.btn_b.disabled = True
             self.clear_items() 
 
+            # --- KẾT THÚC VÁN: XÓA TÊN KHỎI DANH SÁCH ĐANG CHƠI ---
+            user_id = str(self.author.id)
+            if user_id in dang_choi_nhansinh:
+                dang_choi_nhansinh.remove(user_id)
+
             # TÍNH TOÁN KẾT QUẢ CUỐI CÙNG 
             total_reward = self.tien_an + (self.stats['tri_tue'] + self.stats['nhan_sac'] + self.stats['may_man']) * 50
             
             data = load_data()
-            user_id = str(self.author.id)
             if user_id not in data: data[user_id] = {"xp": 0, "level": 1, "money": 0}
             
             data[user_id]["money"] += total_reward
@@ -374,10 +383,10 @@ class WeaponSelect(discord.ui.Select):
     def __init__(self, session_profit):
         self.session_profit = session_profit
         options = [
-            discord.SelectOption(label="Gậy Gỗ Mục", description="Giá: 50 💰 | Tỉ lệ hên: Cực thấp (Dễ bị đấm)", emoji="🪵", value="gay_go"),
+            discord.SelectOption(label="Gậy Gỗ Mục", description="Giá: 50 💰 | Tỉ lệ hên: Cực thấp", emoji="🪵", value="gay_go"),
             discord.SelectOption(label="Kiếm Sắt Thường", description="Giá: 200 💰 | Tỉ lệ hên: Bình thường", emoji="🗡️", value="kiem_sat"),
-            discord.SelectOption(label="Kiếm Hiệp Sĩ", description="Giá: 500 💰 | Tỉ lệ hên: Khá Cao (Dễ ăn lãi)", emoji="⚔️", value="kiem_hiep_si"),
-            discord.SelectOption(label="Thánh Kiếm Mạ Vàng", description="Giá: 1500 💰 | Tỉ lệ hên: Tuyệt đỉnh (Dễ nổ hũ)", emoji="🔱", value="thanh_kiem")
+            discord.SelectOption(label="Kiếm Hiệp Sĩ", description="Giá: 500 💰 | Tỉ lệ hên: Khá Cao", emoji="⚔️", value="kiem_hiep_si"),
+            discord.SelectOption(label="Thánh Kiếm Mạ Vàng", description="Giá: 1500 💰 | Tỉ lệ hên: Tuyệt đỉnh", emoji="🔱", value="thanh_kiem")
         ]
         super().__init__(placeholder="Nhấp vào để mua vũ khí...", min_values=1, max_values=1, options=options)
 
@@ -522,6 +531,11 @@ async def nhansinh(ctx):
     phi = 100
     now = datetime.now()
 
+    # --- CHỐNG MỞ 2 VÁN CÙNG LÚC ---
+    if user_id in dang_choi_nhansinh:
+        await ctx.send(f"⏳ {ctx.author.mention}, bạn đang luân hồi dở dang rồi! Vui lòng bấm chọn hết các sự kiện của kiếp trước đi đã.")
+        return
+
     if user_id in nhansinh_cooldowns and (now - nhansinh_cooldowns[user_id]).total_seconds() < 5:
         giay_con_lai = int(5 - (now - nhansinh_cooldowns[user_id]).total_seconds())
         await ctx.send(f"⏳ Linh hồn bạn vừa mới luân hồi, cần nghỉ ngơi! Đợi **{giay_con_lai} giây** nữa mới được đầu thai tiếp.")
@@ -534,6 +548,9 @@ async def nhansinh(ctx):
 
     data[user_id]["money"] -= phi
     nhansinh_cooldowns[user_id] = now
+    
+    # GHI TÊN VÀO DANH SÁCH ĐANG CHƠI
+    dang_choi_nhansinh.append(user_id)
     save_data(data)
 
     stats = {
