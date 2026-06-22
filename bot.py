@@ -579,7 +579,7 @@ async def help(ctx):
     embed.add_field(name="🌲 KHÁM PHÁ & NHẬP VAI", value="`k thamhiem` • Đi rừng nhân phẩm\n`k phai` • Treo máy AFK kiếm tiền\n`k nhansinh` • Game mô phỏng luân hồi cực gắt", inline=False)
     
     if ctx.author.guild_permissions.administrator:
-        embed.add_field(name="⚙️ QUẢN TRỊ VIÊN", value="`k setup #kênh`, `k setkenh #kênh`\n`k themtien @user <tiền>`, `k trutien @user <tiền>`", inline=False)
+        embed.add_field(name="⚙️ QUẢN TRỊ VIÊN", value="`k setup #kênh`, `k setkenh #kênh`", inline=False)
     
     embed.set_footer(text="Chúc bạn chơi game vui vẻ không quạu!", icon_url=ctx.author.display_avatar.url)
     await ctx.send(embed=embed)
