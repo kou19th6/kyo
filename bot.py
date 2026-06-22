@@ -15,7 +15,7 @@ bot = commands.Bot(command_prefix=['K ', 'k ', 'K', 'k'], intents=intents)
 bot.remove_command('help')
 
 # --- QUẢN LÝ TRẠNG THÁI ---
-gamble_cooldowns = {} # Dùng chung cho coin, taixiu, duathu, ott
+gamble_cooldowns = {} 
 nhansinh_cooldowns = {} 
 dang_choi_nhansinh = [] 
 
@@ -71,81 +71,153 @@ async def channel_restriction_check(ctx):
     return True
 
 # =====================================================================
-# KHO SỰ KIỆN NHÂN SINH (HARDCORE)
+# KHO SỰ KIỆN NHÂN SINH (MỞ RỘNG HÀNG TRĂM KỊCH BẢN)
 # =====================================================================
 
-EVENTS_P1 = [
+EVENTS_P1 = [ # TUỔI 15
     {
         "q": "Tình cờ nhặt được một chiếc ví rơi ngoài cổng trường.",
         "choices": [
-            {"text": "Đem nộp lên công an", "rate": 80, "win": "Chủ ví là người tốt, hậu tạ bạn một ít tiền.", "lose": "Công an giữ lại điều tra lâu lắc, tốn công vô ích.", "tien_w": 500, "tien_l": -100},
-            {"text": "Bỏ túi xài luôn", "rate": 20, "win": "Không ai biết, bạn bao lớp ăn chè thỏa thích.", "lose": "Bị check camera, bồi thường gấp đôi và bị đình chỉ học.", "tien_w": 3000, "tien_l": -8000},
-            {"text": "Lấy tờ 500k rồi vứt lại ví", "rate": 40, "win": "Trót lọt, bạn mua được món đồ chơi yêu thích.", "lose": "Chủ nhân báo mất, bạn bị tra hỏi và phạt nặng.", "tien_w": 1000, "tien_l": -4000},
-            {"text": "Giả vờ không thấy", "rate": 95, "win": "Bạn thong thả đi học tiếp, chẳng rước họa vào thân.", "lose": "Đứa đi sau nhặt được quay ra đổ oan cho bạn.", "tien_w": 0, "tien_l": -500}
+            {"text": "Đem nộp lên công an", "rate": 80, "win": "Chủ ví là tổng tài, hậu tạ bạn món tiền lớn.", "lose": "Bị giam ở phường viết bản tường trình 3 ngày.", "tien_w": 2500, "tien_l": -100},
+            {"text": "Bỏ túi xài luôn", "rate": 20, "win": "Không ai biết, bạn bao lớp ăn chè thỏa thích.", "lose": "Bị check camera, bồi thường gấp đôi và bị đuổi học.", "tien_w": 3000, "tien_l": -8000},
+            {"text": "Lấy tờ 500k rồi vứt lại ví", "rate": 40, "win": "Trót lọt, bạn nạp game lên VIP.", "lose": "Chủ nhân báo mất, bị tra hỏi phạt nặng.", "tien_w": 1000, "tien_l": -4000},
+            {"text": "Giả vờ không thấy", "rate": 95, "win": "Thong thả đi học tiếp, chẳng rước họa vào thân.", "lose": "Đứa đi sau nhặt được đổ oan cho bạn.", "tien_w": 0, "tien_l": -500}
         ]
     },
     {
-        "q": "Kỳ thi cuối cấp cận kề, bạn bè rủ cúp học đi chơi net.",
+        "q": "Kỳ thi cuối cấp cận kề, bạn bè rủ cúp học đi net.",
         "choices": [
-            {"text": "Ở nhà ôn bài kỹ", "rate": 85, "win": "Bạn đỗ thủ khoa, được họ họ hàng thưởng tiền.", "lose": "Học tài thi phận, bạn vẫn trượt vỏ chuối.", "tien_w": 1500, "tien_l": -500},
-            {"text": "Đi net xuyên đêm", "rate": 15, "win": "Đi thi trúng phóc tủ mảng vừa đọc lướt ở net!", "lose": "Ngủ quên trong phòng thi, nộp giấy trắng.", "tien_w": 2500, "tien_l": -6000},
-            {"text": "Làm phao mang vào", "rate": 35, "win": "Mở phao mượt mà, điểm cao chót vót.", "lose": "Giám thị bắt quả tang, đánh dấu bài 0 điểm.", "tien_w": 2000, "tien_l": -5000},
-            {"text": "Ngủ cho khỏe", "rate": 50, "win": "Tinh thần sảng khoái, làm bài vừa đủ đậu.", "lose": "Ngủ nhiều lú não, làm sai hết phép tính cơ bản.", "tien_w": 800, "tien_l": -1000}
+            {"text": "Ở nhà ôn bài kỹ", "rate": 85, "win": "Đỗ thủ khoa, được họ hàng thưởng nóng.", "lose": "Học tài thi phận, trượt vỏ chuối.", "tien_w": 2500, "tien_l": -500},
+            {"text": "Đi net cày rank", "rate": 10, "win": "Gặp idol ở quán net, được kéo lên Thách Đấu và cho tiền.", "lose": "Ngủ gục trên xe tông cột điện thăng thiên.", "tien_w": 3500, "tien_l": -10000, "die_l": True},
+            {"text": "Làm phao mang vào", "rate": 35, "win": "Mở phao mượt mà, điểm cao chót vót.", "lose": "Giám thị bắt quả tang, đình chỉ thi 0 điểm.", "tien_w": 2000, "tien_l": -5000},
+            {"text": "Ngủ cho khỏe", "rate": 50, "win": "Tinh thần sảng khoái, làm bài vừa đủ đậu.", "lose": "Ngủ nhiều lú não, làm sai phép tính cơ bản 1+1=3.", "tien_w": 800, "tien_l": -1000}
+        ]
+    },
+    {
+        "q": "Đang đi học về thì bị chặn đánh xin đểu.",
+        "choices": [
+            {"text": "Ngoan ngoãn nộp tiền", "rate": 90, "win": "Giữ được mạng sống, chạy về nhà an toàn.", "lose": "Nó chê ít, lột luôn đôi giày real của bạn.", "tien_w": -200, "tien_l": -2000},
+            {"text": "Bộc phát Haki đấm lại", "rate": 15, "win": "Đấm gục đại ca, thu sạch tiền bảo kê của bọn chúng!", "lose": "Bị đánh hội đồng chấn thương sọ não, đi luôn.", "tien_w": 5000, "tien_l": -15000, "die_l": True},
+            {"text": "Bỏ chạy tốc biến", "rate": 60, "win": "Lẻn vào nhà dân thoát thân thành công.", "lose": "Vấp ổ gà ngã gãy răng, vừa đau vừa mất tiền.", "tien_w": 0, "tien_l": -3000},
+            {"text": "Bảo 'Anh tao là trùm khu này'", "rate": 45, "win": "Bọn nó rén, xin lỗi rối rít rồi chuồn.", "lose": "Nó gọi thẳng cho anh bạn ra đối chứng, ăn đập x2.", "tien_w": 0, "tien_l": -4500}
+        ]
+    },
+    {
+        "q": "Bạn muốn nổi tiếng trên mạng xã hội từ sớm.",
+        "choices": [
+            {"text": "Nhảy cover Tóp Tóp", "rate": 55, "win": "Video viral 10 triệu view, nhận booking mỏi tay.", "lose": "Nhảy rách đũng quần, bị thành trò cười cho thiên hạ.", "tien_w": 4000, "tien_l": -1000},
+            {"text": "Bóc phốt giang hồ mạng", "rate": 5, "win": "Trở thành chiến thần công lý, nhận donate donate khủng.", "lose": "Bị truy sát tới tận nhà, bay màu trong đêm.", "tien_w": 15000, "tien_l": -20000, "die_l": True},
+            {"text": "Livestream chơi game", "rate": 40, "win": "Kỹ năng đỉnh, có người donate cái thẻ 10 triệu.", "lose": "Chửi bậy trên stream bị khóa kênh, trầm cảm.", "tien_w": 2500, "tien_l": -500},
+            {"text": "Không chơi mạng xã hội", "rate": 95, "win": "Tâm hồn trong sáng, không bị drama toxic.", "lose": "Bị bạn bè chê là đồ tối cổ.", "tien_w": 0, "tien_l": -100}
         ]
     }
 ]
 
-EVENTS_P2 = [
+EVENTS_P2 = [ # TUỔI 25
     {
-        "q": "Bạn muốn khởi nghiệp nhưng thiếu vốn trầm trọng.",
+        "q": "Tích cóp được chút vốn, bạn muốn làm giàu nhanh.",
         "choices": [
-            {"text": "Gọi vốn gia đình", "rate": 60, "win": "Gia đình hỗ trợ, quán khai trương suôn sẻ.", "lose": "Làm ăn thua lỗ, ngại không dám nhìn mặt họ hàng.", "tien_w": 8000, "tien_l": -5000},
-            {"text": "Vay nợ tín dụng đen", "rate": 15, "win": "Phất lên như diều gặp gió, trả nợ cái một!", "lose": "Sập tiệm, giang hồ đến siết nợ chém bay màu.", "tien_w": 35000, "tien_l": -45000, "die_l": True},
-            {"text": "Làm từ quy mô nhỏ", "rate": 80, "win": "Chậm mà chắc, thu nhập ổn định.", "lose": "Ế ẩm, dẹp tiệm sớm.", "tien_w": 3000, "tien_l": -2000},
-            {"text": "Đầu tư Shitcoin", "rate": 10, "win": "Coin x100, bạn thành triệu phú đô la!", "lose": "Chia 100 tài khoản, ra gầm cầu ngủ.", "tien_w": 50000, "tien_l": -70000}
+            {"text": "Bắt đáy chứng khoán", "rate": 30, "win": "Cổ phiếu tím lịm! Tiền lãi mua được cả căn nhà.", "lose": "Bị chủ tịch úp bô, cổ phiếu rác hủy niêm yết.", "tien_w": 15000, "tien_l": -25000},
+            {"text": "Cắm sổ đỏ đánh xóc đĩa", "rate": 5, "win": "Ăn thông 10 ván! Bạn mua hẳn siêu xe Mẹc-xê-đét.", "lose": "Cháy túi, nhảy cầu kết thúc cuộc đời.", "tien_w": 80000, "tien_l": -50000, "die_l": True},
+            {"text": "Khởi nghiệp bún đậu mắm tôm", "rate": 60, "win": "Đông khách nườm nượp, mở 5 chi nhánh.", "lose": "Bị phốt mắm tôm có giòi, sập tiệm đền tiền.", "tien_w": 12000, "tien_l": -8000},
+            {"text": "Gửi tiết kiệm ngân hàng", "rate": 95, "win": "Cuộc sống bình yên, có lãi ra tiêu vặt.", "lose": "Lạm phát phi mã, tiền bốc hơi từ từ.", "tien_w": 2000, "tien_l": -1500}
+        ]
+    },
+    {
+        "q": "Đồng nghiệp xúi bạn chung vốn buôn Lan Đột Biến.",
+        "choices": [
+            {"text": "Vay nóng chơi lớn", "rate": 15, "win": "Sang tay ngay chậu lan cùi được 5 tỷ!", "lose": "Thị trường vỡ trận, ôm đống cỏ khô, trốn nợ biệt xứ.", "tien_w": 40000, "tien_l": -45000},
+            {"text": "Mua 1 mầm nhỏ thử", "rate": 40, "win": "Bán có lời chút đỉnh đủ mua con SH.", "lose": "Lan chết héo, mất toi vài tháng lương.", "tien_w": 6000, "tien_l": -5000},
+            {"text": "Báo công an bắt tụi thổi giá", "rate": 50, "win": "Phá đường dây lừa đảo, được thành phố thưởng lớn.", "lose": "Tụi nó mua chuộc công an, quay lại kiện bạn tội vu khống.", "tien_w": 8000, "tien_l": -12000},
+            {"text": "Mặc kệ, đi làm công ăn lương", "rate": 90, "win": "Sống thảnh thơi, tối về ngủ ngon.", "lose": "Thấy đồng nghiệp mua Mẹc, tiếc đến ốm.", "tien_w": 1000, "tien_l": -500}
+        ]
+    },
+    {
+        "q": "Bạn được sếp đề bạt lên vị trí Trưởng phòng, nhưng phải đi nhậu chốt hợp đồng liên tục.",
+        "choices": [
+            {"text": "Nhậu xả láng tới bến", "rate": 45, "win": "Hợp đồng ký ầm ầm, tiền thưởng doanh thu ngập mặt.", "lose": "Thủng dạ dày, xơ gan, nằm viện cấp cứu.", "tien_w": 18000, "tien_l": -15000},
+            {"text": "Uống trà đá bàn chuyện làm ăn", "rate": 20, "win": "Gặp đối tác cũng hệ mọt sách, chốt deal triệu đô nhẹ nhàng.", "lose": "Đối tác tự ái chê khinh người, hủy kèo, sếp đuổi việc.", "tien_w": 25000, "tien_l": -8000},
+            {"text": "Cho nhân viên cấp dưới đi nhậu thay", "rate": 65, "win": "Bạn thảnh thơi ngồi đếm tiền hoa hồng.", "lose": "Nhân viên nhậu xỉn cướp luôn hợp đồng rồi nghỉ việc.", "tien_w": 8000, "tien_l": -6000},
+            {"text": "Từ chối thăng chức", "rate": 85, "win": "Làm nhân viên quèn, sống dai sống thọ.", "lose": "Bị sếp ghim, đày ải làm đủ thứ việc lặt vặt.", "tien_w": 1500, "tien_l": -2000}
         ]
     }
 ]
 
-EVENTS_P3 = [
+EVENTS_P3 = [ # TUỔI 35
     {
-        "q": "Cò đất cò mồi bạn mua mảnh đất hoang trên núi rẻ như cho.",
+        "q": "Bất Động Sản đang sốt, cò đất rủ bạn lướt sóng phân lô bán nền.",
         "choices": [
-            {"text": "Bỏ qua mua chung cư ở", "rate": 75, "win": "Chung cư lên giá đều đều, gia đình sống thoải mái.", "lose": "Chủ đầu tư bỏ trốn, bạn chờ mỏi mòn không có sổ hồng.", "tien_w": 8000, "tien_l": -6000},
-            {"text": "Vay nóng mua mảnh đất hoang", "rate": 15, "win": "Chính phủ làm cao tốc qua núi! Đất nhân 20 lần giá!", "lose": "Đất dính quy hoạch mỏ đá, đột quỵ vì tiếc.", "tien_w": 80000, "tien_l": -60000, "die_l": True},
-            {"text": "Góp vốn cùng cò đất", "rate": 35, "win": "Cò bán lại lời chia đôi, làm ăn êm xuôi.", "lose": "Cò lừa bạn ôm giấy tờ giả chạy mất tăm.", "tien_w": 15000, "tien_l": -25000},
-            {"text": "Để tiền gửi tiết kiệm", "rate": 95, "win": "Tiền đẻ ra tiền nhè nhẹ, an toàn tuyệt đối.", "lose": "Lạm phát tăng cao, tiền mất giá từ từ.", "tien_w": 2500, "tien_l": -1500}
+            {"text": "Cầm nhà ngân hàng quất liền", "rate": 20, "win": "Giá đất x5 trong một đêm! Bạn thành đại gia nghìn tỷ.", "lose": "Dính bẫy lừa đảo dự án ma, ra đê ở, treo cổ tự tử.", "tien_w": 60000, "tien_l": -70000, "die_l": True},
+            {"text": "Mua miếng đất nhỏ vùng ven", "rate": 55, "win": "Chính phủ mở đường qua, đất nhân 3 giá trị.", "lose": "Đất dính quy hoạch mỏ đá, bán không ai mua.", "tien_w": 15000, "tien_l": -10000},
+            {"text": "Mở lớp dạy làm giàu từ BĐS", "rate": 40, "win": "Lùa được đàn gà đông đảo, thu học phí ngập mồm.", "lose": "Bị học viên bóc phốt úp sọt, đánh nhập viện.", "tien_w": 12000, "tien_l": -15000},
+            {"text": "Không quan tâm, lo giữ gia đình", "rate": 95, "win": "Nhà cửa êm ấm, vợ/chồng con cái hạnh phúc.", "lose": "Kinh tế khó khăn, đôi lúc cãi nhau vì tiền điện nước.", "tien_w": 3000, "tien_l": -1500}
+        ]
+    },
+    {
+        "q": "Có người gạ bạn vào đường dây buôn lậu hàng cấm.",
+        "choices": [
+            {"text": "Làm 1 chuyến rồi nghỉ", "rate": 10, "win": "Trót lọt! Ôm mớ tiền trốn ra nước ngoài sống sung tướng.", "lose": "Công an ập vào bắt tại trận, dựa cột tiêm thuốc độc tử hình.", "tien_w": 100000, "tien_l": -100000, "die_l": True},
+            {"text": "Làm chỉ điểm cho công an", "rate": 60, "win": "Phá án thành công, được cấp huân chương và thưởng lớn.", "lose": "Bị lộ thân phận, giang hồ thủ tiêu trong hẻm vắng.", "tien_w": 20000, "tien_l": -50000, "die_l": True},
+            {"text": "Từ chối nhưng bị uy hiếp", "rate": 50, "win": "Nhờ giang hồ quen biết dàn xếp êm xuôi.", "lose": "Phải cống nạp tiền bảo kê hàng tháng để yên thân.", "tien_w": -1000, "tien_l": -12000},
+            {"text": "Chuyển nhà lánh nạn", "rate": 80, "win": "Thoát khỏi vòng xoáy tội lỗi, làm lại từ đầu.", "lose": "Tốn bộn tiền chuyển nhà và thất nghiệp vài tháng.", "tien_w": 0, "tien_l": -4000}
+        ]
+    },
+    {
+        "q": "Cuộc hôn nhân của bạn đang có dấu hiệu rạn nứt.",
+        "choices": [
+            {"text": "Thuê thám tử điều tra", "rate": 50, "win": "Bắt quả tang ngoại tình, ly hôn chia 70% tài sản cho bạn.", "lose": "Phát hiện vợ/chồng bạn là trùm mafia ngầm, bạn bị thủ tiêu.", "tien_w": 15000, "tien_l": -30000, "die_l": True},
+            {"text": "Đi du lịch hâm nóng tình cảm", "rate": 70, "win": "Tình yêu quay lại như thuở ban đầu.", "lose": "Đi du lịch cãi nhau to hơn, ly hôn chia đôi tài sản.", "tien_w": 2000, "tien_l": -10000},
+            {"text": "Mặc kệ, đi nhậu nhẹt gái gú/trai đẹp", "rate": 30, "win": "Sống sướng bản thân, bung xõa tuổi trẻ.", "lose": "Bị tống cổ ra khỏi nhà với hai bàn tay trắng.", "tien_w": 1000, "tien_l": -25000},
+            {"text": "Đăng ký khóa học tâm lý gia đình", "rate": 85, "win": "Hòa giải thành công, gia đình lại hạnh phúc bách niên.", "lose": "Tốn tiền học mà chuyên gia tâm lý lại tư vấn xui ly dị.", "tien_w": 5000, "tien_l": -3000}
         ]
     }
 ]
 
-EVENTS_P4 = [
+EVENTS_P4 = [ # TUỔI 50
     {
-        "q": "Bước vào tuổi 50, bạn rơi vào khủng hoảng tuổi trung niên.",
+        "q": "Bước vào tuổi 50, bạn rơi vào khủng hoảng tuổi trung niên trầm trọng.",
         "choices": [
-            {"text": "Cầm cố nhà mua siêu xe đua", "rate": 20, "win": "Giành giải đua xe lão tướng, tiền thưởng ngập mặt.", "lose": "Đạp nhầm chân ga đâm vách núi, nổ tung chết cháy.", "tien_w": 25000, "tien_l": -30000, "die_l": True},
-            {"text": "Đi thám hiểm rừng Amazon", "rate": 15, "win": "Đào được kho báu của người Inca, thành huyền thoại.", "lose": "Bị rắn độc cắn giữa rừng sâu, bỏ mạng.", "tien_w": 50000, "tien_l": -15000, "die_l": True},
-            {"text": "Cặp bồ nhí đáng tuổi con mình", "rate": 30, "win": "Tâm hồn hồi xuân phơi phới, vui vẻ hưởng thụ.", "lose": "Bị vợ/chồng đánh ghen giữa đường, nhục nhã mất sạch tài sản.", "tien_w": 5000, "tien_l": -45000},
-            {"text": "Đi du lịch tĩnh tâm dưỡng lão", "rate": 85, "win": "Tâm hồn thư thái, huyết áp ổn định.", "lose": "Bị công ty tour lừa đảo, mang cục tức vào người.", "tien_w": 3000, "tien_l": -2000}
+            {"text": "Bán nhà mua siêu xe Mẹc G63 đua tốc độ", "rate": 15, "win": "Chiến thắng giải đua không chuyên, nổi đình đám ăn quảng cáo.", "lose": "Đạp nhầm chân ga tông xe tải, thăng thiên tại chỗ.", "tien_w": 35000, "tien_l": -40000, "die_l": True},
+            {"text": "Chơi đồ cổ, mua Lan Đột Biến", "rate": 35, "win": "Sưu tầm trúng bình gốm đời nhà Thanh, bán đấu giá giàu to.", "lose": "Mua phải bình gốm mẻ Bát Tràng fake, lỗ chổng vó.", "tien_w": 25000, "tien_l": -20000},
+            {"text": "Cặp bồ nhí cho hồi xuân", "rate": 25, "win": "Nuôi Sugar Baby/Boy êm thấm, tâm hồn trẻ lại.", "lose": "Bị vợ/chồng bắt ghen tung lên mạng, nhục nhã mất mặt và mất sạch tiền.", "tien_w": 2000, "tien_l": -50000},
+            {"text": "Tập Thiền, dọn về quê nuôi cá trồng rau", "rate": 90, "win": "Tâm hồn thanh tịnh, khí huyết lưu thông sống thọ.", "lose": "Về quê bị muỗi vằn chích sốt xuất huyết mém chết.", "tien_w": 5000, "tien_l": -3000}
+        ]
+    },
+    {
+        "q": "Con cái phá gia chi tử, báo nợ 10 tỷ.",
+        "choices": [
+            {"text": "Bán hết gia tài cứu con", "rate": 40, "win": "Con cái tỉnh ngộ, tu chí làm ăn sau này phụng dưỡng bạn.", "lose": "Cứu xong nó lại cờ bạc báo thêm 20 tỷ, bạn tăng xông chết.", "tien_w": 10000, "tien_l": -60000, "die_l": True},
+            {"text": "Từ mặt con, báo công an", "rate": 60, "win": "Giữ được tài sản dưỡng già, cắt đứt ung nhọt.", "lose": "Bọn xã hội đen tới đốt nhà bạn để xiết nợ thay con.", "tien_w": 8000, "tien_l": -30000},
+            {"text": "Thuê giang hồ xử bọn chủ nợ", "rate": 15, "win": "Giang hồ dẹp yên, con bạn trốn ra nước ngoài an toàn.", "lose": "Hai băng đảng thanh toán nhau, bạn ăn đạn lạc bay màu.", "tien_w": 5000, "tien_l": -50000, "die_l": True},
+            {"text": "Lên chùa nương tựa", "rate": 85, "win": "Né tránh bụi trần, ngày gõ mõ tụng kinh bình yên.", "lose": "Vẫn bị bọn đòi nợ lên chùa phá phách, mất tiền bồi thường chùa.", "tien_w": 2000, "tien_l": -8000}
         ]
     }
 ]
 
-EVENTS_P5 = [
+EVENTS_P5 = [ # TUỔI 70
     {
-        "q": "Chạm mốc 70 tuổi, bạn nghĩ về cái chết và di sản của mình.",
+        "q": "Chạm mốc 70 tuổi, một nhà sư bảo bạn sắp tới số.",
         "choices": [
-            {"text": "Mua thuốc trường sinh bất lão", "rate": 5, "win": "Bạn hóa tiên! Sống thọ thêm 100 tuổi với cơ thể sung mãn.", "lose": "Uống nhầm thủy ngân, nội tạng nát vụn thăng thiên.", "tien_w": 150000, "tien_l": -20000, "die_l": True},
-            {"text": "Chia đều tài sản cho con cháu", "rate": 70, "win": "Gia đình êm ấm, ai cũng vui vẻ phụng dưỡng bạn.", "lose": "Con cái đánh nhau mẻ đầu mẻ trán, bạn lên cơn đau tim gục chết.", "tien_w": 5000, "tien_l": -15000, "die_l": True},
-            {"text": "Quyên góp toàn bộ làm từ thiện", "rate": 90, "win": "Được nhà nước tạc tượng vinh danh công đức vô lượng.", "lose": "Tổ chức từ thiện cuỗm tiền bốc hơi, bạn tức hộc máu chết.", "tien_w": 10000, "tien_l": -50000, "die_l": True},
-            {"text": "Gom tiền đi quẩy Bar, nhảy đầm", "rate": 40, "win": "Trở thành dân chơi lão làng, idol của giới trẻ Tóp Tóp.", "lose": "Lắc hông quá đà gãy xương chậu, nằm liệt giường bón cháo.", "tien_w": 15000, "tien_l": -20000}
+            {"text": "Vung tiền mua Linh Đan Tu Tiên", "rate": 5, "win": "Kỳ tích! Bạn cải lão hoàn đồng thành thanh niên 20 tuổi!", "lose": "Uống nhầm thủy ngân, nội tạng nát vụn thăng thiên sớm.", "tien_w": 200000, "tien_l": -20000, "die_l": True},
+            {"text": "Lập di chúc chia đều tài sản", "rate": 75, "win": "Con cháu hòa thuận, tổ chức mừng thọ linh đình.", "lose": "Con cháu chê ít, đánh nhau mẻ đầu mẻ trán, bạn tức quá đột tử.", "tien_w": 5000, "tien_l": -15000, "die_l": True},
+            {"text": "Quyên góp 100% tài sản làm từ thiện", "rate": 90, "win": "Được nhà nước tạc tượng vinh danh công đức vô lượng.", "lose": "Tổ chức từ thiện cuỗm tiền bốc hơi, bạn trầm cảm mà đi.", "tien_w": 15000, "tien_l": -50000, "die_l": True},
+            {"text": "Lôi hết tiền đi Las Vegas chơi một đêm cuối", "rate": 20, "win": "Thắng Jackpot 50 triệu đô! Lên báo quốc tế rình rang.", "lose": "Thua sạch bong, lên cơn nhồi máu cơ tim gục tại bàn Roulette.", "tien_w": 100000, "tien_l": -40000, "die_l": True}
+        ]
+    },
+    {
+        "q": "Bỗng dưng có một cô gái trẻ 20 tuổi đến nhận làm vợ bé.",
+        "choices": [
+            {"text": "Rước nàng về rinh", "rate": 10, "win": "Nàng chăm sóc bạn chu đáo, bạn sống thọ thêm 20 năm.", "lose": "Mã thượng phong! Đột tử ngay đêm tân hôn.", "tien_w": -5000, "tien_l": -30000, "die_l": True},
+            {"text": "Chắc chắn lừa đảo, đuổi đi", "rate": 85, "win": "Bảo vệ được két sắt an toàn.", "lose": "Cô ta gọi đồng bọn tới dàn cảnh cướp giật tài sản.", "tien_w": 2000, "tien_l": -15000},
+            {"text": "Cho tiền rồi bảo đi đi", "rate": 60, "win": "Hóa giải nghiệp chướng, tích đức về sau.", "lose": "Bị tống tiền đòi thêm, nợ nần chồng chất.", "tien_w": -2000, "tien_l": -25000},
+            {"text": "Giả vờ mất trí nhớ lẩm cẩm", "rate": 95, "win": "Cô ta thấy thế chán nản bỏ đi.", "lose": "Bị đưa vào trại tâm thần nhốt.", "tien_w": 1000, "tien_l": -5000}
         ]
     }
 ]
 
 
 # =====================================================================
-# DATA THÁM HIỂM KHU RỪNG
+# DATA THÁM HIỂM KHU RỪNG (HÀNG TÁ BIẾN THỂ MỚI)
 # =====================================================================
 WEAPON_ODDS = {
     "gay_go": {"price": 50, "name": "Gậy Gỗ Mục", "terrible": 20, "bad": 40, "neutral": 20, "good": 15, "great": 5, "jackpot": 0},
@@ -156,30 +228,55 @@ WEAPON_ODDS = {
 
 SCENARIOS = {
     "terrible": [ 
+        {"mult": -2.0, "msg": "🐘 **KING KONG NỔI GIẬN!**\nBạn chọc tức chúa tể rừng xanh. Bị đấm bay xa 10km, rớt sạch đồ đạc!"},
         {"mult": -1.5, "msg": "🐉 **RỒNG PHUN LỬA!**\nBạn đánh thức rồng cổ đại. Bị nó khè lửa cháy trụi quần áo, rớt bộn tiền khi bỏ chạy!"},
         {"mult": -1.2, "msg": "🥷 **BĂNG CƯỚP HẮC ÁM!**\nGặp ngay băng thổ phỉ khét tiếng. Chúng trói bạn vào gốc cây và lột sạch đồ đạc."},
-        {"mult": -1.0, "msg": "💥 **ĐẠP TRÚNG MÌN GOBLIN!**\nBÙM! Bạn đạp trúng mìn tự chế của bọn Goblin. Tốn một mớ tiền để trả phí cấp cứu."}
+        {"mult": -1.5, "msg": "💥 **ĐẠP TRÚNG MÌN GOBLIN!**\nBÙM! Bạn đạp trúng mìn tự chế của bọn Goblin. Tốn một mớ tiền để trả phí cấp cứu."},
+        {"mult": -1.8, "msg": "👻 **TRÚNG NGẢI HEO!**\nĐi nhầm vào bản làng ma ám. Tiền tài không cánh mà bay, bụng to như mang bầu."},
+        {"mult": -2.5, "msg": "🚔 **BỊ KIỂM LÂM BẾ LÊN PHƯỜNG!**\nVô tình chặt nhầm cây cổ thụ ngàn năm. Đóng phạt nứt ví!"},
+        {"mult": -1.0, "msg": "🦇 **MA CÀ RỒNG!**\nBị một con ma cà rồng cắn. Trốn thoát được nhưng tốn một đống tiền truyền máu."},
+        {"mult": -1.3, "msg": "🕳️ **SỤP HỐ CHÔNG!**\nÁ a a a a! Rơi thẳng xuống hố chông của thợ săn. Gãy 2 cái sườn, nôn hết tiền mặt ra."}
     ],
     "bad": [ 
         {"mult": -0.5, "msg": "🐒 **KHỈ ĂN TRỘM!**\nMột con khỉ nhảy ra giật lấy túi tiền của bạn rồi đu cây biến mất."},
         {"mult": -0.4, "msg": "🪤 **BẪY GẤU!**\nCẠCH! Bạn đạp trúng bẫy gấu. Mất một khoản tiền đi mua bông băng thuốc đỏ."},
-        {"mult": -0.3, "msg": "🦟 **MUỖI KHỔNG LỒ!**\nBị bầy muỗi rừng khổng lồ chích sưng vù, phải đi mua thuốc mỡ bôi."}
+        {"mult": -0.3, "msg": "🦟 **MUỖI KHỔNG LỒ!**\nBị bầy muỗi rừng khổng lồ chích sưng vù, phải đi mua thuốc mỡ bôi."},
+        {"mult": -0.6, "msg": "🧪 **THUỐC QUÁ HẠN!**\nMua nhầm bình nước tăng lực hết hạn từ máy bán hàng tự động trong rừng."},
+        {"mult": -0.8, "msg": "💩 **TRƯỢT CHÂN VÀO BÃI KÍM!**\nBạn dẫm trúng bãi mìn khổng lồ của voi rừng. Tốn tiền mua bộ đồ mới xịt nước hoa."},
+        {"mult": -0.2, "msg": "🦅 **BỊ QUẠ ĐỊNH VỊ!**\nMột đàn quạ bay ngang qua và 'bổ sung canxi' lên đầu bạn. Xui xẻo mất tiền sửa vận."},
+        {"mult": -0.7, "msg": "📱 **RỚT ĐIỆN THOẠI XUỐNG SUỐI!**\nMải selfie sống ảo, rơi cmn cái iPhone 15 Pro Max xuống nước."},
+        {"mult": -0.5, "msg": "🍄 **ĂN NHẦM NẤM CƯỜI!**\nBốc nhầm nấm độc ăn, bạn cười điên dại nửa ngày trời rơi hết cả tiền lẻ trong túi."}
     ],
     "neutral": [ 
         {"mult": 0, "msg": "🍂 **LÁ KHÔ...**\nBạn vạch ra và... chẳng có gì cả, chỉ là một đống lá khô xào xạc."},
-        {"mult": 0, "msg": "🐇 **THỎ CON...**\nMột chú thỏ trắng nhìn bạn chằm chằm vài giây rồi quay đít chạy mất."}
+        {"mult": 0, "msg": "🐇 **THỎ CON...**\nMột chú thỏ trắng nhìn bạn chằm chằm vài giây rồi quay đít chạy mất."},
+        {"mult": 0, "msg": "📦 **RƯƠNG RỖNG!**\nHáo hức mở một cái rương cũ, nhưng bên trong chả có gì ngoài mạng nhện."},
+        {"mult": 0, "msg": "🌬️ **GIÓ THỔI LẠNH BẼO...**\nChỉ có gió thổi hiu hiu, khung cảnh yên bình không có biến động gì."},
+        {"mult": 0, "msg": "🪨 **MỘT CỤC ĐÁ TO!**\nBạn cố cạy nó lên xem có vàng không, kết quả là... nó chỉ là cục đá."},
+        {"mult": 0, "msg": "🐾 **VẾT CHÂN LỢN RỪNG!**\nBạn lần theo dấu vết hy vọng săn được thịt lợn rưng, nhưng mất dấu."}
     ],
     "good": [ 
         {"mult": 0.5, "msg": "💰 **TIỀN LẺ RỚT!**\nBạn nhặt được một chiếc ví nhỏ ai đó đánh rơi, bên trong có vài đồng xu."},
-        {"mult": 0.6, "msg": "🐟 **CÁ HIẾM!**\nBắt được một con cá có vảy lấp lánh dưới suối. Đem ra chợ bán được giá kha khá!"}
+        {"mult": 0.6, "msg": "🐟 **CÁ HIẾM!**\nBắt được một con cá có vảy lấp lánh dưới suối. Đem ra chợ bán được giá kha khá!"},
+        {"mult": 0.8, "msg": "🍄 **NẤM LINH CHI!**\nHái được một cây nấm linh chi đỏ rực. Tiệm thuốc trả cho bạn một khoản khá hời."},
+        {"mult": 1.0, "msg": "🙏 **NGƯỜI TỐT VIỆC TỐT!**\nNhặt được ví của một hiệp sĩ, bạn trả lại và được anh ta hậu tạ một khoản tiền."},
+        {"mult": 0.7, "msg": "🍯 **TỔ ONG MẬT KHỔNG LỒ!**\nBạn hun khói lấy được tảng mật ong rừng vàng óng. Thương lái mua với giá rất tốt!"},
+        {"mult": 0.4, "msg": "⌚ **ĐỒNG HỒ CŨ!**\nĐào sương sương thấy cái đồng hồ bị gỉ, đem ra tiệm cầm đồ vớt vát được vài đồng."},
+        {"mult": 0.9, "msg": "🐕 **CỨU ĐƯỢC CHÓ SĂN!**\nBạn giải cứu một chú chó bị mắc bẫy, chủ của nó thưởng bạn nóng một khoản tiền lớn!"}
     ],
     "great": [ 
         {"mult": 1.5, "msg": "⚔️ **TIÊU DIỆT THỔ PHỈ!**\nBằng sức mạnh áp đảo, bạn tóm gọn toán cướp nhỏ và tịch thu kho báu của chúng!"},
-        {"mult": 2.0, "msg": "💎 **NGỌC THÔ!**\nCầm cuốc gõ bừa vào đá, ai ngờ đào trúng viên ngọc lục bảo thô to bằng nắm tay!"}
+        {"mult": 2.0, "msg": "💎 **NGỌC THÔ!**\nCầm cuốc gõ bừa vào đá, ai ngờ đào trúng viên ngọc lục bảo thô to bằng nắm tay!"},
+        {"mult": 2.5, "msg": "🏆 **RƯƠNG HOÀNG KIM!**\nBạn phát hiện ra một rương kho báu vàng chóe bị chôn vùi nửa mét dưới đất. Mở ra toàn tiền!"},
+        {"mult": 3.0, "msg": "💍 **KIM CƯƠNG RỚT!**\nÁnh sáng lấp lánh đập vào mắt! Hóa ra là một viên kim cương tinh khiết rớt trên thảm cỏ."},
+        {"mult": 2.2, "msg": "🏺 **ĐÀO TRÚNG ĐỒ CỔ NHÀ TỐNG!**\nBình gốm ngàn năm không sứt mẻ. Giới siêu giàu vung tiền mua ngay lập tức!"},
+        {"mult": 2.8, "msg": "⛏️ **PHÁT HIỆN MỎ VÀNG MINI!**\nNhặt được một cục vàng cục bự chà bá ẩn dưới lớp rêu xanh. Phát tài rồi!"}
     ],
     "jackpot": [ 
         {"mult": 5.0, "msg": "🎫 **VÉ SỐ ĐỘC ĐẮC! (JACKPOT)**\nTrời ơi tin được không!? Bạn nhặt được tấm vé số đánh rơi, đem dò trúng giải đặc biệt!"},
-        {"mult": 10.0, "msg": "🏴‍☠️ **KHO BÁU VUA HẢI TẶC! (MEGAPOT)**\nCHẤN ĐỘNG!!! Bạn tìm thấy hang động cất giấu kho báu huyền thoại. Một núi Vàng hiện ra trước mắt!"}
+        {"mult": 8.0, "msg": "🏴‍☠️ **KHO BÁU VUA HẢI TẶC! (MEGAPOT)**\nCHẤN ĐỘNG!!! Bạn tìm thấy hang động cất giấu kho báu huyền thoại. Một núi Vàng hiện ra trước mắt!"},
+        {"mult": 10.0, "msg": "👑 **VƯƠNG MIỆN CỦA VUA ARTHUR! (ULTRAPOT)**\nDưới đáy đầm lầy, bạn vớt được Vương miện nạm 100 viên kim cương đỏ. Bạn trở thành tỷ phú đô la!!"},
+        {"mult": 7.5, "msg": "🧚 **CỨU ĐƯỢC THẦN RỪNG! (MEGAPOT)**\nBạn vô tình giải ấn cho vị thần cai quản khu rừng. Ngài ban cho bạn một rương ngập tràn vàng thỏi!"}
     ]
 }
 
@@ -518,13 +615,13 @@ async def help(ctx):
     bang_help.add_field(name="💸 `k give @user <số tiền>`", value="Chuyển tiền cho người khác.", inline=False)
     bang_help.add_field(name="🎮 CÁC TRÒ CHƠI CÁ CƯỢC:", value="━━━━━━━━━━━━━━", inline=False)
     bang_help.add_field(name="🪙 `k coin <số tiền/all>`", value="Tung đồng xu sấp ngửa (Tỉ lệ 50/50, x2 tiền).", inline=False)
-    bang_help.add_field(name="🎲 `k taixiu <tài/xỉu> <số tiền>`", value="Lắc 3 xí ngầu. Tài (11-18), Xỉu (3-10). Trúng Bão (3 viên giống nhau) ăn x5!", inline=False)
+    bang_help.add_field(name="🎲 `k taixiu <tài/xỉu> <số tiền>`", value="Lắc 3 xí ngầu. Trúng Bão ăn x5!", inline=False)
     bang_help.add_field(name="🏇 `k duathu <heo/cho/ngua/chuot> <số tiền>`", value="Đặt cược xem thú nào về đích trước. Ăn x3 tiền!", inline=False)
     bang_help.add_field(name="🪨 `k ott <bua/bao/keo> <số tiền>`", value="Oẳn tù tì với bot. Thắng ăn x2, hòa trả lại tiền.", inline=False)
-    bang_help.add_field(name="🌲 `k thamhiem`", value="Khám phá rừng rậm nhân phẩm (Lãi/lỗ phụ thuộc giá vũ khí).", inline=False)
+    bang_help.add_field(name="🌲 `k sansoi` (hoặc `k thamhiem`)", value="Khám phá rừng rậm nhân phẩm.", inline=False)
     bang_help.add_field(name="⛺ `k phai`", value="Phái đi thám hiểm (Treo máy AFK kiếm tiền).", inline=False)
-    bang_help.add_field(name="🌀 `k nhansinh`", value="Game Tương Tác RPG 5 Giai Đoạn. Cực hardcore, coi chừng ĐỘT TỬ!", inline=False)
-    bang_help.add_field(name="⚙️ QUẢN TRỊ VIÊN:", value="`k setup #kênh` (Cài kênh), `k setkenh #kênh` (Báo lên cấp), `k themtien / k trutien`", inline=False)
+    bang_help.add_field(name="🌀 `k nhansinh` (hoặc `k mophong`)", value="Game Tương Tác RPG siêu hardcore, coi chừng ĐỘT TỬ!", inline=False)
+    bang_help.add_field(name="⚙️ QUẢN TRỊ VIÊN:", value="`k setup #kênh`, `k setkenh #kênh`, `k themtien`, `k trutien`", inline=False)
     await ctx.send(embed=bang_help)
 
 # --- KIỂM TRA ĐIỀU KIỆN TRƯỚC KHI CÁ CƯỢC ---
@@ -584,10 +681,8 @@ async def taixiu(ctx, choice: str, amount: str):
     if total <= 10: res_str = "xỉu"
     else: res_str = "tài"
     
-    # Reload lại data tránh đụng độ
     user_data = load_user(user_id)
     
-    # Check kết quả
     if choice.replace("à", "a").replace("ỉ", "i") == res_str.replace("à", "a").replace("ỉ", "i"):
         if is_bao:
             win_amount = bet * 5
@@ -601,7 +696,6 @@ async def taixiu(ctx, choice: str, amount: str):
         result_msg = f"💀 **THUA CẮNG RĂNG!** Bạn mất **{bet} 💰**."
 
     save_user(user_id)
-    
     final_text = f"🎲 KẾT QUẢ: **{d1} - {d2} - {d3}** (Tổng: {total} - **{res_str.upper()}**)\n" + result_msg + f"\n💳 Số dư: **{user_data['money']} 💰**"
     await msg.edit(content=final_text)
 
@@ -612,7 +706,7 @@ async def duathu(ctx, choice: str, amount: str):
     choice = choice.lower()
     
     if choice not in animals:
-        return await ctx.send("⚠️ Chọn sai con vật! Có 4 con: `heo`, `cho`, `ngua`, `chuot`. VD: `k duathu heo 100`")
+        return await ctx.send("⚠️ Chọn sai con vật! Có 4 con: `heo`, `cho`, `ngua`, `chuot`.")
         
     user_data, bet = await check_gamble_conditions(ctx, amount)
     if not user_data: return
@@ -635,20 +729,17 @@ async def duathu(ctx, choice: str, amount: str):
         return txt
 
     msg = await ctx.send(get_track())
-    
-    # Cuộc đua diễn ra trong vòng 4 nhịp
     winner = None
     for _ in range(4):
         await asyncio.sleep(1.2)
         for pet in positions:
-            positions[pet] += random.randint(2, 6) # Tốc độ random
+            positions[pet] += random.randint(2, 6) 
             if positions[pet] >= track_length and winner is None:
                 winner = pet
         
         await msg.edit(content=get_track())
         if winner: break
         
-    # Lỡ sau 4 nhịp chưa ai tới đích thì ráng bốc 1 con chạy nhanh nhất
     if not winner:
         winner = max(positions, key=positions.get)
         positions[winner] = track_length
@@ -658,9 +749,9 @@ async def duathu(ctx, choice: str, amount: str):
     if animals[choice] == winner:
         win_amount = bet * 3
         user_data["money"] += win_amount
-        res_txt = f"\n🏆 **{winner} ĐÃ VỀ NHẤT!** Quá đỉnh, bạn ăn được **x3 tiền ({win_amount} 💰)**!"
+        res_txt = f"\n🏆 **{winner} ĐÃ VỀ NHẤT!** Quá đỉnh, ăn được **x3 tiền ({win_amount} 💰)**!"
     else:
-        res_txt = f"\n💀 **{winner} VỀ NHẤT!** Con {animals[choice]} của bạn chạy chậm quá. Mất sạch **{bet} 💰**."
+        res_txt = f"\n💀 **{winner} VỀ NHẤT!** Con {animals[choice]} của bạn xịt rồi. Mất sạch **{bet} 💰**."
         
     save_user(user_id)
     await msg.edit(content=get_track() + res_txt + f"\n💳 Số dư: **{user_data['money']} 💰**")
@@ -675,7 +766,7 @@ async def oantuti(ctx, choice: str, amount: str):
     }
     choice = choice.lower()
     if choice not in valid_choices:
-        return await ctx.send("⚠️ Phải ra `bua`, `bao` hoặc `keo`! VD: `k ott bua 50`")
+        return await ctx.send("⚠️ Phải ra `bua`, `bao` hoặc `keo`!")
 
     user_data, bet = await check_gamble_conditions(ctx, amount)
     if not user_data: return
@@ -689,15 +780,15 @@ async def oantuti(ctx, choice: str, amount: str):
     bot_choice = random.choice(bot_options)
     user_choice = valid_choices[choice]
     
-    msg = await ctx.send(f"🤔 Thách đấu với Bot à? Bạn ra {user_choice}. Bot đang suy nghĩ...")
+    msg = await ctx.send(f"🤔 Bạn ra {user_choice}. Bot đang suy nghĩ...")
     await asyncio.sleep(1)
-    await msg.edit(content=f"🤔 Thách đấu với Bot à? Bạn ra {user_choice}. Bot đang suy nghĩ...\n💥 Oẳn... tù... tì... RA CÁI GÌ RA CÁI NÀY!!")
+    await msg.edit(content=f"🤔 Bạn ra {user_choice}. Bot đang suy nghĩ...\n💥 Oẳn... tù... tì... RA CÁI GÌ RA CÁI NÀY!!")
     await asyncio.sleep(1)
 
     user_data = load_user(user_id)
     
     if user_choice == bot_choice:
-        user_data["money"] += bet # Trả lại tiền
+        user_data["money"] += bet
         res = "🤝 **HÒA NHAU!** Trả lại tiền cược."
     elif (user_choice == "🪨" and bot_choice == "✂️") or \
          (user_choice == "📄" and bot_choice == "🪨") or \
@@ -706,12 +797,12 @@ async def oantuti(ctx, choice: str, amount: str):
         user_data["money"] += win_amount
         res = f"🎉 **BẠN THẮNG RỒI!** Húp trọn **{win_amount} 💰**."
     else:
-        res = f"💀 **BOT THẮNG!** Đóng hụi họ cho bot **{bet} 💰** đi."
+        res = f"💀 **BOT THẮNG!** Mất **{bet} 💰**."
 
     save_user(user_id)
     await msg.edit(content=f"💥 Bot ra: **{bot_choice}** | Bạn ra: **{user_choice}**\n{res}\n💳 Số dư: **{user_data['money']} 💰**")
 
-# ----------------- TUNG ĐỒNG XU (GIỮ NGUYÊN) -----------------
+# ----------------- TUNG ĐỒNG XU -----------------
 @bot.command()
 async def coin(ctx, amount: str):
     user_data, bet = await check_gamble_conditions(ctx, amount)
@@ -873,6 +964,55 @@ async def daily(ctx):
     else:
         await ctx.send(f"🎁 Bạn nhận được **500 💰** tiền công! (Số dư: **{user_data['money']} 💰**)")
 
+@bot.command(aliases=['mophong'])
+async def nhansinh(ctx):
+    user_id = str(ctx.author.id)
+    phi = 100
+    now = datetime.now()
+
+    if user_id in dang_choi_nhansinh:
+        await ctx.send(f"⏳ {ctx.author.mention}, bạn đang luân hồi dở dang rồi! Hoàn thành kiếp trước đi đã.")
+        return
+
+    if user_id in nhansinh_cooldowns and (now - nhansinh_cooldowns[user_id]).total_seconds() < 5:
+        giay_con_lai = int(5 - (now - nhansinh_cooldowns[user_id]).total_seconds())
+        await ctx.send(f"⏳ Linh hồn bạn vừa mới luân hồi, cần nghỉ ngơi! Đợi **{giay_con_lai} giây** nữa mới được đầu thai tiếp.")
+        return
+
+    user_data = load_user(user_id)
+    if user_data.get("money", 0) < phi:
+        await ctx.send(f"Phí mua vé luân hồi là **{phi} 💰**. Nghèo quá thì đi cày rank kiếm tiền đi đã!")
+        return
+
+    user_data["money"] -= phi
+    nhansinh_cooldowns[user_id] = now
+    dang_choi_nhansinh.append(user_id)
+    save_user(user_id)
+
+    stats = {
+        "may_man": random.randint(1, 10)
+    }
+
+    view = NhanSinhGameView(ctx.author, stats)
+    embed = discord.Embed(title="🌀 MÔ PHỎNG NHÂN SINH 🌀", description=f"Ký chủ: {ctx.author.mention}", color=discord.Color.purple())
+    embed.add_field(name="🍀 Chỉ số tâm linh", value=f"May mắn ban đầu: **{stats['may_man']}/10** *(+ {stats['may_man']*2}% Tỉ lệ)*", inline=False)
+    
+    story = "\n\n".join(view.logs)
+    embed.add_field(name="📜 Hành trình cuộc đời", value=story, inline=False)
+    embed.add_field(name="❓ Ngã rẽ tuổi học trò (15 tuổi)", value=view.ev['q'], inline=False)
+
+    await ctx.send(embed=embed, view=view)
+
+@bot.command(aliases=['sansoi']) 
+async def thamhiem(ctx):
+    shop_embed = discord.Embed(
+        title="🛒 TRẠM TIẾP TẾ THÁM HIỂM 🛒",
+        description="Chào mừng đến với hội Thám Hiểm! Chọn vũ khí để bắt đầu. Chơi đồ xịn dễ nổ hũ to, nhưng lỡ xịt thì đền ốm.\n\n👇 **HÃY CLICK VÀO THANH MENU BÊN DƯỚI ĐỂ CHỌN MUA** 👇",
+        color=discord.Color.dark_red()
+    )
+    view = ShopView(ctx.author, session_profit=0)
+    await ctx.send(embed=shop_embed, view=view)
+
 @bot.event
 async def on_message(message):
     if message.author.bot: return
@@ -898,7 +1038,7 @@ async def on_message(message):
     await bot.process_commands(message)
 
 @bot.event
-async def on_ready(): print(f'{bot.user} đã lên mạng và sẵn sàng!')
+async def on_ready(): print(f'{bot.user} đã lên mạng và sẵn sàng càn quét server!')
 
 keep_alive() 
 
