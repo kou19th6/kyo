@@ -6,6 +6,7 @@ import os
 import random 
 import asyncio 
 from datetime import datetime, timedelta 
+import pymongo 
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -16,22 +17,55 @@ bot.remove_command('help')
 # --- QUẢN LÝ THỜI GIAN HỒI CHIÊU VÀ TRẠNG THÁI ---
 coin_cooldowns = {}
 nhansinh_cooldowns = {} 
-dang_choi_nhansinh = [] # Danh sách những người đang chơi dở ván Nhân Sinh
+dang_choi_nhansinh = [] 
 
-# --- CÁC HÀM XỬ LÝ SỔ TAY LEVEL ---
+# =====================================================================
+# KẾT NỐI KÉT SẮT MONGODB (ĐÁM MÂY)
+# =====================================================================
+# ⚠️ NHỚ: Thay thế <username> và <password> bằng tài khoản MongoDB của bạn
+MONGO_URI = "mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority"
+
+mongo_client = pymongo.MongoClient(MONGO_URI)
+db = mongo_client["DiscordBotDB"]
+users_col = db["users"]   
+config_col = db["config"] 
+
+# --- CÁC HÀM XỬ LÝ DỮ LIỆU ĐÁM MÂY ---
 def load_data():
-    if not os.path.exists('users.json'): return {}
-    with open('users.json', 'r') as f: return json.load(f)
+    data = {}
+    for doc in users_col.find():
+        user_id = doc["_id"]
+        data[user_id] = {
+            "xp": doc.get("xp", 0),
+            "level": doc.get("level", 1),
+            "money": doc.get("money", 0),
+            "exp_end": doc.get("exp_end"),
+            "exp_reward": doc.get("exp_reward"),
+            "last_daily": doc.get("last_daily")
+        }
+    return data
 
 def save_data(data):
-    with open('users.json', 'w') as f: json.dump(data, f, indent=4)
+    for user_id, info in data.items():
+        users_col.update_one(
+            {"_id": user_id},
+            {"$set": info},
+            upsert=True
+        )
 
 def load_config():
-    if not os.path.exists('config.json'): return {}
-    with open('config.json', 'r') as f: return json.load(f)
+    config = {}
+    for doc in config_col.find():
+        config[doc["_id"]] = doc["channel_id"]
+    return config
 
 def save_config(config):
-    with open('config.json', 'w') as f: json.dump(config, f, indent=4)
+    for server_id, channel_id in config.items():
+        config_col.update_one(
+            {"_id": server_id},
+            {"$set": {"channel_id": channel_id}},
+            upsert=True
+        )
 
 
 # =====================================================================
@@ -82,13 +116,13 @@ SCENARIOS = {
 }
 
 # =====================================================================
-# DATA NGÂN HÀNG CÂU HỎI NHÂN SINH (45 SỰ KIỆN)
+# DATA NGÂN HÀNG CÂU HỎI NHÂN SINH
 # =====================================================================
 EVENTS_P1 = [
     {"q": "Bạn nhặt được chiếc ví dày cộp của thầy Hiệu trưởng.", "a": "Nộp lên phòng giám thị", "b": "Lấy tiền đi bao bạn bè", "ra": "Thầy khen ngợi trước cờ, tăng uy tín.", "rb": "Tiêu xài sướng tay nhưng bị camera quay lại, hạ kiểm điểm.", "ea": {"tt": 1, "ns": 0, "mm": 2, "t": 200}, "eb": {"tt": -2, "ns": 0, "mm": -3, "t": 1000}},
     {"q": "Crush tỏ tình với bạn ngay sát kỳ thi quan trọng.", "a": "Từ chối để ôn thi", "b": "Đồng ý hẹn hò luôn", "ra": "Đau lòng nhưng đỗ điểm cao.", "rb": "Tình yêu thăng hoa, học hành đội sổ.", "ea": {"tt": 3, "ns": -1, "mm": 0, "t": 0}, "eb": {"tt": -3, "ns": 2, "mm": 1, "t": -200}},
     {"q": "Bị nhóm đầu gấu trấn lột tiền ăn sáng.", "a": "Gồng lên đấm lại", "b": "Ngoan ngoãn đưa tiền", "ra": "Bị đấm sưng mắt nhưng chúng nể phục.", "rb": "Mất tiền nhưng nhan sắc được bảo toàn.", "ea": {"tt": 0, "ns": -2, "mm": 2, "t": -100}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": -300}},
-    {"q": "Trường tổ chức thi Nam thanh Nữ tú.", "a": "Tham gia thi", "b": "Ngồi dưới làm khán giả", "ra": "Lọt top hoa khôi/nam vương, được nhiều người biết đến.", "rb": "Nhạt nhòa giữa đám đông nhưng đỡ tốn thời gian.", "ea": {"tt": -1, "ns": 3, "mm": 1, "t": -200}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": 100}},
+    {"q": "Trường tổ chức thi Nam thanh Nữ tú.", "a": "Tham gia thi", "b": "Ngồi dưới làm khán giả", "ra": "Lọt top hoa khôi/nam vương, được many người biết đến.", "rb": "Nhạt nhòa giữa đám đông nhưng đỡ tốn thời gian.", "ea": {"tt": -1, "ns": 3, "mm": 1, "t": -200}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": 100}},
     {"q": "Bạn tìm thấy một con mèo hoang sắp chết đói.", "a": "Nhặt về nuôi", "b": "Lờ đi vì sợ tốn tiền", "ra": "Tốn tiền mua hạt nhưng mèo mang lại may mắn.", "rb": "Giữ được tiền nhưng lòng áy náy.", "ea": {"tt": 0, "ns": 1, "mm": 2, "t": -300}, "eb": {"tt": 0, "ns": -1, "mm": -1, "t": 100}},
     {"q": "Bạn bè rủ cúp học đi nét chơi game mới ra.", "a": "Đi chơi luôn", "b": "Ở lại lớp làm bài tập", "ra": "Vui vẻ nhưng hổng kiến thức nghiêm trọng.", "rb": "Thầy giáo điểm danh đột xuất, bạn an toàn.", "ea": {"tt": -2, "ns": 0, "mm": 0, "t": -150}, "eb": {"tt": 2, "ns": 0, "mm": 1, "t": 0}},
     {"q": "Kiểm tra 15 phút mà bạn chưa học bài.", "a": "Mở tài liệu quay cóp", "b": "Làm bằng thực lực", "ra": "Được 10 điểm nhưng thấp thỏm lo sợ.", "rb": "Được 3 điểm nhưng lòng thanh thản.", "ea": {"tt": -1, "ns": 0, "mm": 2, "t": 0}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": 0}},
@@ -107,7 +141,7 @@ EVENTS_P2 = [
     {"q": "Sếp cướp công dự án bạn làm đêm ngày.", "a": "Đăng bài bóc phốt sếp", "b": "Nhẫn nhịn chờ thời", "ra": "Bị đuổi việc ngay lập tức, dính nợ thẻ tín dụng.", "rb": "Được thăng chức bù đắp sau này.", "ea": {"tt": -2, "ns": 0, "mm": -2, "t": -2000}, "eb": {"tt": 2, "ns": 0, "mm": 1, "t": 2500}},
     {"q": "Có một đại gia già xấu muốn bao nuôi bạn.", "a": "Gật đầu đồng ý", "b": "Từ chối kiên quyết", "ra": "Có tiền sắm đồ hiệu nhưng danh dự tụt dốc.", "rb": "Nghèo nhưng giữ được cốt cách.", "ea": {"tt": -2, "ns": -2, "mm": 0, "t": 5000}, "eb": {"tt": 1, "ns": 1, "mm": 0, "t": -500}},
     {"q": "Bắt trend tiền ảo đang lên ngôi.", "a": "All-in tiền tiết kiệm", "b": "Đứng ngoài xem", "ra": "Thị trường sập! Bạn chia 10 tài sản, khóc thét.", "rb": "Bạn né được cú sập thế kỷ, bảo toàn vốn.", "ea": {"tt": -3, "ns": 0, "mm": -2, "t": -4000}, "eb": {"tt": 2, "ns": 0, "mm": 1, "t": 0}},
-    {"q": "Bạn được mời làm KOL review đồ ăn.", "a": "Nhận lời làm", "b": "Sợ mập, không làm", "ra": "Nổi tiếng mạng xã hội, kiếm nhiều tiền nhưng tăng 10 cân.", "rb": "Giữ được body chuẩn nhưng ví mỏng.", "ea": {"tt": 0, "ns": -2, "mm": 1, "t": 3000}, "eb": {"tt": 0, "ns": 2, "mm": 0, "t": 0}},
+    {"q": "Bạn được mời làm KOL review đồ ăn.", "a": "Nhận lời làm", "b": "Sợ mập, không làm", "ra": "Nổi tiếng mạng xã hội, kiếm many tiền nhưng tăng 10 cân.", "rb": "Giữ được body chuẩn nhưng ví mỏng.", "ea": {"tt": 0, "ns": -2, "mm": 1, "t": 3000}, "eb": {"tt": 0, "ns": 2, "mm": 0, "t": 0}},
     {"q": "Khám phá ra một lỗ hổng phần mềm của công ty.", "a": "Báo cáo nội bộ", "b": "Bán dữ liệu cho hacker", "ra": "Được thưởng nóng vì tính trung thực.", "rb": "Kiếm bộn tiền nhưng bị công an sờ gáy, nộp phạt sấp mặt.", "ea": {"tt": 2, "ns": 0, "mm": 1, "t": 1000}, "eb": {"tt": -3, "ns": 0, "mm": -3, "t": -5000}},
     {"q": "Vay nợ mua xe SH để loè thiên hạ.", "a": "Quất luôn", "b": "Đi xe số cho lành", "ra": "Có le với gái/trai, nhưng cày cuốc trả lãi mệt mỏi.", "rb": "Không ai để ý nhưng tài chính vững vàng.", "ea": {"tt": -2, "ns": 2, "mm": 0, "t": -3000}, "eb": {"tt": 1, "ns": -1, "mm": 1, "t": 1000}},
     {"q": "Khách hàng ngỏ ý đút lót để lách luật.", "a": "Nhận phong bì", "b": "Cự tuyệt thẳng thừng", "ra": "Bị thanh tra phát hiện, mất việc và đền tiền.", "rb": "Giữ sạch hồ sơ, được cấp trên cất nhắc.", "ea": {"tt": -2, "ns": 0, "mm": -2, "t": -2500}, "eb": {"tt": 2, "ns": 0, "mm": 1, "t": 1500}},
@@ -123,7 +157,7 @@ EVENTS_P2 = [
 EVENTS_P3 = [
     {"q": "Cò đất cò mồi bạn mua mảnh đất ở ngoại ô.", "a": "Chốt cọc mua", "b": "Chê xa không mua", "ra": "Đất dính quy hoạch! Tiền đầu tư biến thành rác.", "rb": "May mắn né được cú lừa thế kỷ.", "ea": {"tt": -2, "ns": 0, "mm": -3, "t": -5000}, "eb": {"tt": 2, "ns": 0, "mm": 1, "t": 1000}},
     {"q": "Cảm thấy cơ thể hay đau nhức.", "a": "Bỏ tiền mua thuốc xịn", "b": "Bỏ qua, cày tiếp", "ra": "Cơ thể khỏe mạnh, trẻ lại chục tuổi.", "rb": "Đột quỵ phải đi cấp cứu, tốn một núi tiền.", "ea": {"tt": 1, "ns": 2, "mm": 0, "t": -1000}, "eb": {"tt": -2, "ns": -3, "mm": -2, "t": -4000}},
-    {"q": "Mở rộng kinh doanh ra nước ngoài.", "a": "Vay vốn mở rộng", "b": "Giữ quy规模 hiện tại", "ra": "Kinh doanh bùng nổ! Lợi nhuận tăng phi mã.", "rb": "Công ty giậm chân tại chỗ, dần thụt lùi.", "ea": {"tt": 2, "ns": 0, "mm": 2, "t": 6000}, "eb": {"tt": 0, "ns": 0, "mm": -1, "t": -500}},
+    {"q": "Mở rộng kinh doanh ra nước ngoài.", "a": "Vay vốn mở rộng", "b": "Giữ quy mô hiện tại", "ra": "Kinh doanh bùng nổ! Lợi nhuận tăng phi mã.", "rb": "Công ty giậm chân tại chỗ, dần thụt lùi.", "ea": {"tt": 2, "ns": 0, "mm": 2, "t": 6000}, "eb": {"tt": 0, "ns": 0, "mm": -1, "t": -500}},
     {"q": "Con cái muốn đi du học trường đắt đỏ.", "a": "Rút tiết kiệm cho con đi", "b": "Bắt học trường công", "ra": "Con thành tài, sau này gửi tiền báo hiếu.", "rb": "Con bất mãn, quậy phá báo nhà.", "ea": {"tt": 2, "ns": 0, "mm": 1, "t": 4000}, "eb": {"tt": -1, "ns": 0, "mm": -2, "t": -2000}},
     {"q": "Bị giang hồ tông xe trên đường.", "a": "Bắt đền", "b": "Xin lỗi cho qua chuyện", "ra": "Bị chúng đập cho một trận nhừ tử, mất viện phí.", "rb": "Tốn tiền sửa xe nhưng toàn mạng.", "ea": {"tt": -1, "ns": -2, "mm": -2, "t": -3000}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": -500}},
     {"q": "Được mời làm cố vấn cho một công ty mới nổi.", "a": "Nhận lời", "b": "Từ chối", "ra": "Nhận cổ phần thưởng, công ty lên sàn bạn giàu to.", "rb": "Bỏ lỡ cơ hội đổi đời.", "ea": {"tt": 2, "ns": 0, "mm": 2, "t": 5000}, "eb": {"tt": 0, "ns": 0, "mm": 0, "t": 0}},
@@ -171,7 +205,6 @@ class NhanSinhGameView(discord.ui.View):
         self.add_item(self.btn_a)
         self.add_item(self.btn_b)
 
-    # --- HÀM XỬ LÝ LỖI TREO MÁY ---
     async def on_timeout(self):
         user_id = str(self.author.id)
         if user_id in dang_choi_nhansinh:
@@ -257,12 +290,10 @@ class NhanSinhGameView(discord.ui.View):
             self.btn_b.disabled = True
             self.clear_items() 
 
-            # --- KẾT THÚC VÁN: XÓA TÊN KHỎI DANH SÁCH ĐANG CHƠI ---
             user_id = str(self.author.id)
             if user_id in dang_choi_nhansinh:
                 dang_choi_nhansinh.remove(user_id)
 
-            # TÍNH TOÁN KẾT QUẢ CUỐI CÙNG 
             total_reward = self.tien_an + (self.stats['tri_tue'] + self.stats['nhan_sac'] + self.stats['may_man']) * 50
             
             data = load_data()
@@ -531,7 +562,6 @@ async def nhansinh(ctx):
     phi = 100
     now = datetime.now()
 
-    # --- CHỐNG MỞ 2 VÁN CÙNG LÚC ---
     if user_id in dang_choi_nhansinh:
         await ctx.send(f"⏳ {ctx.author.mention}, bạn đang luân hồi dở dang rồi! Vui lòng bấm chọn hết các sự kiện của kiếp trước đi đã.")
         return
@@ -549,7 +579,6 @@ async def nhansinh(ctx):
     data[user_id]["money"] -= phi
     nhansinh_cooldowns[user_id] = now
     
-    # GHI TÊN VÀO DANH SÁCH ĐANG CHƠI
     dang_choi_nhansinh.append(user_id)
     save_data(data)
 
@@ -734,7 +763,8 @@ async def on_ready(): print(f'{bot.user} đã lên mạng và sẵn sàng!')
 
 keep_alive() 
 
-# Hai nửa mã Token của bạn
-nua_dau = 'MTUxODUwMzkzNDIyNDg5NjAwMA.GVIyrV.'
-nua_sau = 'j8oLKlNxSTcHIDBFjQ_yjQtlJADTrzn4abcKds'
+# === HAI NỬA MÃ TOKEN MỚI ĐÃ ĐƯỢC CHIA ĐÔI ===
+nua_dau = 'MTUxODUwMzkzNDIyNDg5NjAwMA.GyKHSc.'
+nua_sau = 'WCjwsbS87_itRFAJxPTpDOCbFcmmjhQdcDSDU0'
+
 bot.run(nua_dau + nua_sau)
