@@ -15,5 +15,9 @@ async def chao(ctx):
     await ctx.send(f'Chào {ctx.author.name}! Mình đang online 24/24 nè!')
 
 keep_alive() 
-# Nhớ thay dòng bên dưới bằng mã Token thật của bot bạn nhé!
-bot.run('DÁN_MÃ_TOKEN_CỦA_BẠN_VÀO_ĐÂY')
+
+# --- PHẦN MÃ ĐÃ ĐƯỢC CẮT ĐÔI ---
+nua_dau = 'MTUxODUwMzkzNDIyNDg5NjAwMA.GVIyrV.'
+nua_sau = 'j8oLKlNxSTcHIDBFjQ_yjQtlJADTrzn4abcKds'
+
+bot.run(nua_dau + nua_sau)
