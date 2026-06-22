@@ -20,7 +20,7 @@ nhansinh_cooldowns = {}
 dang_choi_nhansinh = [] 
 
 # =====================================================================
-# KẾT NỐI MONGODB VÀ TỐI ƯU BỘ NHỚ (CACHE)
+# KẾT NỐI MONGODB (ĐÃ TỐI ƯU HÓA SIÊU TỐC)
 # =====================================================================
 MONGO_URI = "mongodb+srv://jakinat101084_db_user:Lam17722@cluster0.y6jqmz8.mongodb.net/?appName=Cluster0"
 
@@ -29,7 +29,7 @@ db = mongo_client["DiscordBotDB"]
 users_col = db["users"]   
 config_col = db["config"] 
 
-# BỘ ĐỆM RAM
+# BỘ ĐỆM RAM (Tránh lag bot khi nhiều người chơi)
 DB_CACHE = {}
 CONFIG_CACHE = {}
 
@@ -52,7 +52,6 @@ def save_user(user_id):
             upsert=True
         )
 
-# Tối ưu tải config bằng Cache
 def load_server_config(server_id):
     server_id = str(server_id)
     if server_id not in CONFIG_CACHE:
@@ -63,25 +62,16 @@ def load_server_config(server_id):
             CONFIG_CACHE[server_id] = {}
     return CONFIG_CACHE[server_id]
 
-# =====================================================================
-# HỆ THỐNG KIỂM TRA KÊNH ĐƯỢC PHÉP DÙNG LỆNH
-# =====================================================================
 @bot.check
 async def channel_restriction_check(ctx):
-    # Admin luôn có thể dùng lệnh ở mọi kênh để tránh bị kẹt
     if ctx.author.guild_permissions.administrator:
         return True
-        
     if not ctx.guild:
         return True
-        
     config = load_server_config(ctx.guild.id)
     allowed_channels = config.get("allowed_channels", [])
-    
-    # Nếu server có cài đặt giới hạn kênh, mà kênh gõ lệnh ko nằm trong danh sách thì CHẶN
     if allowed_channels and ctx.channel.id not in allowed_channels:
         return False
-        
     return True
 
 
@@ -326,6 +316,7 @@ class NhanSinhGameView(discord.ui.View):
         return True
 
     async def process_choice(self, interaction: discord.Interaction, choice: str):
+        # Xác định stat cần roll
         stat_key = self.ev["stat_a"] if choice == "A" else self.ev["stat_b"]
         diff = self.ev["diff_a"] if choice == "A" else self.ev["diff_b"]
         
@@ -345,10 +336,12 @@ class NhanSinhGameView(discord.ui.View):
         self.stats["may_man"] += eff["mm"]
         self.tien_an += eff["t"]
 
+        # FIX LỖI TẠI ĐÂY: Dùng biến short_key để tra cứu đúng từ khóa trong dictionary eff
+        short_key = "tt" if stat_key == "tri_tue" else "ns" if stat_key == "nhan_sac" else "mm"
         stat_name = "Trí tuệ" if stat_key == "tri_tue" else "Nhan sắc" if stat_key == "nhan_sac" else "May mắn"
         kq_thung = "✅ **THÀNH CÔNG**" if is_win else "❌ **THẤT BẠI**"
         
-        log_entry = f"🎲 **Đổ xúc xắc:** Lăn được {roll} + {stat_name} ({self.stats[stat_key] - eff[stat_key]}) = **{total}** (Cần {diff})\n{kq_thung}: {res}"
+        log_entry = f"🎲 **Đổ xúc xắc:** Lăn được {roll} + {stat_name} ({self.stats[stat_key] - eff[short_key]}) = **{total}** (Cần {diff})\n{kq_thung}: {res}"
         
         if self.phase == 1:
             self.logs.append(f"🎒 **Tuổi 15:** Bạn chọn {choice}.\n{log_entry}")
@@ -432,13 +425,9 @@ class BushButton(discord.ui.Button):
         weights = [weapon_info["terrible"], weapon_info["bad"], weapon_info["neutral"], weapon_info["good"], weapon_info["great"], weapon_info["jackpot"]]
         
         category = random.choices(choices, weights=weights, k=1)[0]
-        import sys
-        import types
-        module_main_data = types.ModuleType('_main_data')
-        module_main_data.SCENARIOS = SCENARIOS
-        sys.modules['_main_data'] = module_main_data
         
-        from _main_data import SCENARIOS
+        # Sửa lỗi reference SCENARIOS bằng cách import từ global scope
+        global SCENARIOS
         scenario = random.choice(SCENARIOS[category])
         
         if "mult" in scenario:
@@ -457,11 +446,6 @@ class BushButton(discord.ui.Button):
         
         ket_qua_text = f"{scenario['msg']}\n\n{icon_tien}: **{thuong_phat} 💰**\n💸 **Số dư hiện tại:** **{user_data['money']} 💰**\n📊 **Tổng kết phiên:** **{profit_text}**"
         
-        module_main_view = types.ModuleType('_main_view')
-        module_main_view.ResultView = ResultView
-        sys.modules['_main_view'] = module_main_view
-
-        from _main_view import ResultView 
         res_view = ResultView(interaction.user, new_session_profit)
         msg = await interaction.original_response()
         await msg.edit(content=ket_qua_text, view=res_view)
