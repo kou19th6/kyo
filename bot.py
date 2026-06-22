@@ -97,7 +97,7 @@ async def check_gamble_conditions(ctx, amount_str):
     return user_data, bet
 
 # =====================================================================
-# DỮ LIỆU GAME NHÂN SINH & RỪNG
+# DỮ LIỆU GAME
 # =====================================================================
 EVENTS_P1 = [{"q": "Tình cờ nhặt được một chiếc ví rơi ngoài cổng trường.", "choices": [{"text": "Đem nộp lên công an", "rate": 80, "win": "Chủ ví là tổng tài, hậu tạ bạn món tiền lớn.", "lose": "Bị giam ở phường viết bản tường trình 3 ngày.", "tien_w": 2500, "tien_l": -100}, {"text": "Bỏ túi xài luôn", "rate": 20, "win": "Không ai biết, bạn bao lớp ăn chè thỏa thích.", "lose": "Bị check camera, bồi thường gấp đôi và bị đuổi học.", "tien_w": 3000, "tien_l": -8000}, {"text": "Lấy tờ 500k rồi vứt lại ví", "rate": 40, "win": "Trót lọt, bạn nạp game lên VIP.", "lose": "Chủ nhân báo mất, bị tra hỏi phạt nặng.", "tien_w": 1000, "tien_l": -4000}, {"text": "Giả vờ không thấy", "rate": 95, "win": "Thong thả đi học tiếp, chẳng rước họa vào thân.", "lose": "Đứa đi sau nhặt được đổ oan cho bạn.", "tien_w": 0, "tien_l": -500}]}, {"q": "Kỳ thi cuối cấp cận kề, bạn bè rủ cúp học đi net.", "choices": [{"text": "Ở nhà ôn bài kỹ", "rate": 85, "win": "Đỗ thủ khoa, được họ hàng thưởng nóng.", "lose": "Học tài thi phận, trượt vỏ chuối.", "tien_w": 2500, "tien_l": -500}, {"text": "Đi net cày rank", "rate": 10, "win": "Gặp idol ở quán net, được kéo lên Thách Đấu và cho tiền.", "lose": "Ngủ gục trên xe tông cột điện thăng thiên.", "tien_w": 3500, "tien_l": -10000, "die_l": True}, {"text": "Làm phao mang vào", "rate": 35, "win": "Mở phao mượt mà, điểm cao chót vót.", "lose": "Giám thị bắt quả tang, đình chỉ thi 0 điểm.", "tien_w": 2000, "tien_l": -5000}, {"text": "Ngủ cho khỏe", "rate": 50, "win": "Tinh thần sảng khoái, làm bài vừa đủ đậu.", "lose": "Ngủ nhiều lú não, làm sai phép tính cơ bản 1+1=3.", "tien_w": 800, "tien_l": -1000}]}]
 EVENTS_P2 = [{"q": "Tích cóp được chút vốn, bạn muốn làm giàu nhanh.", "choices": [{"text": "Bắt đáy chứng khoán", "rate": 30, "win": "Cổ phiếu tím lịm! Tiền lãi mua được cả căn nhà.", "lose": "Bị chủ tịch úp bô, cổ phiếu rác hủy niêm yết.", "tien_w": 15000, "tien_l": -25000}, {"text": "Cắm sổ đỏ đánh xóc đĩa", "rate": 5, "win": "Ăn thông 10 ván! Bạn mua hẳn siêu xe Mẹc-xê-đét.", "lose": "Cháy túi, nhảy cầu kết thúc cuộc đời.", "tien_w": 80000, "tien_l": -50000, "die_l": True}, {"text": "Khởi nghiệp bún đậu mắm tôm", "rate": 60, "win": "Đông khách nườm nượp, mở 5 chi nhánh.", "lose": "Bị phốt mắm tôm có giòi, sập tiệm đền tiền.", "tien_w": 12000, "tien_l": -8000}, {"text": "Gửi tiết kiệm ngân hàng", "rate": 95, "win": "Cuộc sống bình yên, có lãi ra tiêu vặt.", "lose": "Lạm phát phi mã, tiền bốc hơi từ từ.", "tien_w": 2000, "tien_l": -1500}]}]
@@ -125,7 +125,7 @@ SCENARIOS = {
     "jackpot": [{"mult": 5.0, "msg": "🎫 **VÉ SỐ ĐỘC ĐẮC!**\nNhặt được vé số đem dò trúng ĐẶC BIỆT!"}, {"mult": 12.0, "msg": "👑 **VƯƠNG MIỆN VUA ARTHUR!**\nVớt được vương miện nạm kim cương. Tỷ phú rồi!!"}]
 }
 
-# --- CỬA HÀNG VÀ PET ---
+# --- CỬA HÀNG VÀ PET (ĐÃ CÂN BẰNG LẠI TỈ LỆ CHỐNG BUG TIỀN) ---
 SHOP_ITEMS = {
     "t1": {"type": "title", "name": "Tiểu Thương 🏪", "price": 50000, "emoji": "🏷️"},
     "t2": {"type": "title", "name": "Phú Nông 🌾", "price": 200000, "emoji": "🏷️"},
@@ -150,10 +150,10 @@ SHOP_ITEMS = {
 }
 
 PET_RATES = {
-    "common": {"rate": 60.0, "pool": ["Gà Con 🐥", "Chó Cỏ 🐕", "Mèo Mướp 🐈", "Lợn Đất 🐖", "Cá Chép 🐟", "Ếch Xanh 🐸", "Chuột Đồng 🐁", "Bò Sữa 🐄"]},
-    "rare": {"rate": 25.0, "pool": ["Sói Tuyết 🐺", "Gấu Bự 🐻", "Cáo Chín Đuôi 🦊", "Đại Bàng 🦅", "Báo Gấm 🐆", "Hươu Sao 🦌"]},
-    "epic": {"rate": 10.0, "pool": ["Sư Tử Lửa 🦁", "Khỉ Đột 🦍", "Bạch Hổ 🐅", "Cá Mập Megalodon 🦈", "Tê Giác Đất 🦏"]},
-    "legendary": {"rate": 4.9, "pool": ["Rồng Đỏ Hủy Diệt 🐉", "Kỳ Lân Ánh Sáng 🦄", "Phượng Hoàng Lửa 🦚", "Thủy Quái Leviathan 🐙"]},
+    "common": {"rate": 80.0, "pool": ["Gà Con 🐥", "Chó Cỏ 🐕", "Mèo Mướp 🐈", "Lợn Đất 🐖", "Cá Chép 🐟", "Ếch Xanh 🐸", "Chuột Đồng 🐁", "Bò Sữa 🐄"]},
+    "rare": {"rate": 15.0, "pool": ["Sói Tuyết 🐺", "Gấu Bự 🐻", "Cáo Chín Đuôi 🦊", "Đại Bàng 🦅", "Báo Gấm 🐆", "Hươu Sao 🦌"]},
+    "epic": {"rate": 4.0, "pool": ["Sư Tử Lửa 🦁", "Khỉ Đột 🦍", "Bạch Hổ 🐅", "Cá Mập Megalodon 🦈", "Tê Giác Đất 🦏"]},
+    "legendary": {"rate": 0.9, "pool": ["Rồng Đỏ Hủy Diệt 🐉", "Kỳ Lân Ánh Sáng 🦄", "Phượng Hoàng Lửa 🦚", "Thủy Quái Leviathan 🐙"]},
     "mythic": {"rate": 0.1, "pool": ["Thần Long Hoàng Kim 🐲", "Hắc Ám Cự Thú 🦇", "Mèo Thần Tài Vô Cực 😻"]}
 }
 
@@ -165,11 +165,11 @@ def get_asset_price(asset_name):
 def get_pet_sell_price(pet_name):
     for rarity, data in PET_RATES.items():
         if pet_name in data["pool"]:
-            if rarity == "common": return 10000
-            if rarity == "rare": return 30000
-            if rarity == "epic": return 150000
-            if rarity == "legendary": return 1000000
-            if rarity == "mythic": return 10000000
+            if rarity == "common": return 5000      # Quay 30k bán 5k (lỗ sặc máu)
+            if rarity == "rare": return 15000       # Bán 15k (lỗ 1/2)
+            if rarity == "epic": return 100000      # Lãi
+            if rarity == "legendary": return 500000 # Lãi to
+            if rarity == "mythic": return 5000000   # Trúng số đổi đời
     return 1000
 
 # =====================================================================
@@ -231,7 +231,7 @@ class NhanSinhGameView(discord.ui.View):
         else: await interaction.response.edit_message(embed=embed, view=self)
 
 # =====================================================================
-# GIAO DIỆN KHU RỪNG THÁM HIỂM (ĐÃ SỬA LỖI TÊN)
+# GIAO DIỆN KHU RỪNG THÁM HIỂM
 # =====================================================================
 class BushButton(discord.ui.Button):
     def __init__(self, label, style, custom_id, emoji): super().__init__(label=label, style=style, custom_id=custom_id, emoji=emoji)
@@ -389,7 +389,7 @@ class SellCategoryMenu(discord.ui.View):
 
 
 # =====================================================================
-# TÍNH NĂNG ĐẤU TRƯỜNG: SOLO OẲN TÙ TÌ (ĐÃ SỬA LỖI INTERACTION)
+# TÍNH NĂNG ĐẤU TRƯỜNG: SOLO OẲN TÙ TÌ
 # =====================================================================
 class SoloOTTGame(discord.ui.View):
     def __init__(self, p1, p2, bet):
@@ -455,7 +455,6 @@ class SoloOTTAccept(discord.ui.View):
         
         game_view = SoloOTTGame(self.p1, self.p2, self.bet)
         embed = discord.Embed(title="⚔️ QUYẾT CHIẾN", description=f"{self.p1.mention} 🆚 {self.p2.mention}\nCược: **{self.bet:,} 💰**\n👇 **CHỌN ĐI (Bị giấu kín)**")
-        # SỬA LỖI Ở ĐÂY: Dùng response.edit_message thay vì message.edit
         await interaction.response.edit_message(embed=embed, view=game_view)
         game_view.msg = interaction.message
         self.stop()
@@ -496,7 +495,7 @@ async def gacha(ctx):
     await msg.edit(content=f"🥚 Vỏ trứng bắt đầu nứt rạn...\n⚡ Ánh sáng chói lóa phát ra từ bên trong!"); await asyncio.sleep(1.5)
 
     roll = random.uniform(0, 100)
-    if roll <= PET_RATES["mythic"]["rate"]: rarity, color, text = "mythic", discord.Color.dark_purple(), "🌌 THẦN THOẠI (0.1%)"
+    if roll <= PET_RATES["mythic"]["rate"]: rarity, color, text = "mythic", discord.Color.dark_purple(), "🌌 THẦN THOẠI"
     elif roll <= PET_RATES["mythic"]["rate"] + PET_RATES["legendary"]["rate"]: rarity, color, text = "legendary", discord.Color.gold(), "👑 HUYỀN THOẠI"
     elif roll <= PET_RATES["mythic"]["rate"] + PET_RATES["legendary"]["rate"] + PET_RATES["epic"]["rate"]: rarity, color, text = "epic", discord.Color.purple(), "🔮 SỬ THI"
     elif roll <= PET_RATES["mythic"]["rate"] + PET_RATES["legendary"]["rate"] + PET_RATES["epic"]["rate"] + PET_RATES["rare"]["rate"]: rarity, color, text = "rare", discord.Color.blue(), "💎 HIẾM"
@@ -699,7 +698,6 @@ async def phai(ctx):
 
 @bot.command(aliases=['sansoi']) 
 async def thamhiem(ctx): 
-    # ĐÃ FIX: Dùng đúng KhungRungShopView
     await ctx.send(embed=discord.Embed(title="🛒 TRẠM TIẾP TẾ", description="👇 **MỞ MENU MUA VŨ KHÍ** 👇", color=discord.Color.orange()), view=KhungRungShopView(ctx.author, 0))
 
 @bot.command(aliases=['mophong'])
