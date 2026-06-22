@@ -44,17 +44,17 @@ WEAPON_ODDS = {
 
 SCENARIOS = {
     "terrible": [ 
-        {"tien": -800, "msg": "🐉 **RỒNG PHUN LỬA!**\nBạn đánh thức một con rồng cổ đại. Bị nó khè lửa cháy trụi quần áo, rớt sạch tiền bạc khi bỏ chạy!"},
-        {"tien": -600, "msg": "🥷 **BĂNG CƯỚP HẮC ÁM!**\nGặp ngay băng thổ phỉ khét tiếng. Chúng trói bạn vào gốc cây và lột sạch sành sanh không chừa 1 đồng."},
-        {"tien": -700, "msg": "💥 **ĐẠP TRÚNG MÌN GOBLIN!**\nBÙM! Bạn đạp trúng mìn tự chế của bọn Goblin. Tiền túi bay mất để trả phí cấp cứu bệnh viện."},
-        {"tien": -500, "msg": "📉 **LỪA ĐẢO ĐA CẤP!**\nBạn bị một tay thương nhân lừa mua 'Bình thuốc trường sinh' giả. Nhận ra thì hắn đã tẩu thoát, tiền mất tật mang."},
-        {"tien": -1000, "msg": "🦇 **MA CÀ RỒNG!**\nBị một con ma cà rồng cắn. Trốn thoát được nhưng phải tốn một đống tiền mua máu nhân tạo để hồi sức."}
+        {"tien": -400, "msg": "🐉 **RỒNG PHUN LỬA!**\nBạn đánh thức một con rồng cổ đại. Bị nó khè lửa cháy trụi quần áo, rớt sạch tiền bạc khi bỏ chạy!"},
+        {"tien": -300, "msg": "🥷 **BĂNG CƯỚP HẮC ÁM!**\nGặp ngay băng thổ phỉ khét tiếng. Chúng trói bạn vào gốc cây và lột sạch sành sanh không chừa 1 đồng."},
+        {"tien": -350, "msg": "💥 **ĐẠP TRÚNG MÌN GOBLIN!**\nBÙM! Bạn đạp trúng mìn tự chế của bọn Goblin. Tiền túi bay mất để trả phí cấp cứu bệnh viện."},
+        {"tien": -250, "msg": "📉 **LỪA ĐẢO ĐA CẤP!**\nBạn bị một tay thương nhân lừa mua 'Bình thuốc trường sinh' giả. Nhận ra thì hắn đã tẩu thoát, tiền mất tật mang."},
+        {"tien": -500, "msg": "🦇 **MA CÀ RỒNG!**\nBị một con ma cà rồng cắn. Trốn thoát được nhưng phải tốn một đống tiền mua máu nhân tạo để hồi sức."}
     ],
     "bad": [ 
-        {"tien": -150, "msg": "🐒 **KHỈ ĂN TRỘM!**\nMột con khỉ nhảy ra giật lấy túi tiền của bạn rồi đu cây biến mất."},
-        {"tien": -200, "msg": "🪤 **BẪY GẤU!**\nCẠCH! Bạn đạp trúng bẫy gấu. Mất một khoản tiền đi mua bông băng thuốc đỏ."},
-        {"tien": -100, "msg": "🦟 **MUỖI KHỔNG LỒ!**\nBị bầy muỗi rừng khổng lồ chích sưng vù, phải đi mua thuốc mỡ bôi."},
-        {"tien": -250, "msg": "🧪 **THUỐC QUÁ HẠN!**\nMua nhầm bình nước tăng lực hết hạn từ máy bán hàng tự động trong rừng. Vừa mất tiền vừa đau bụng."}
+        {"tien": -75, "msg": "🐒 **KHỈ ĂN TRỘM!**\nMột con khỉ nhảy ra giật lấy túi tiền của bạn rồi đu cây biến mất."},
+        {"tien": -100, "msg": "🪤 **BẪY GẤU!**\nCẠCH! Bạn đạp trúng bẫy gấu. Mất một khoản tiền đi mua bông băng thuốc đỏ."},
+        {"tien": -50, "msg": "🦟 **MUỖI KHỔNG LỒ!**\nBị bầy muỗi rừng khổng lồ chích sưng vù, phải đi mua thuốc mỡ bôi."},
+        {"tien": -125, "msg": "🧪 **THUỐC QUÁ HẠN!**\nMua nhầm bình nước tăng lực hết hạn từ máy bán hàng tự động trong rừng. Vừa mất tiền vừa đau bụng."}
     ],
     "neutral": [ 
         {"tien": 0, "msg": "🍂 **LÁ KHÔ...**\nBạn vạch ra và... chẳng có gì cả, chỉ là một đống lá khô xào xạc."},
@@ -62,26 +62,85 @@ SCENARIOS = {
         {"tien": 0, "msg": "📦 **RƯƠNG RỖNG!**\nHáo hức mở một cái rương cũ, nhưng bên trong chả có gì ngoài mạng nhện."}
     ],
     "good": [ 
-        {"tien": 150, "msg": "💰 **TIỀN LẺ RỚT!**\nBạn nhặt được một chiếc ví nhỏ ai đó đánh rơi, bên trong có vài đồng xu."},
-        {"tien": 200, "msg": "🐟 **CÁ HIẾM!**\nBắt được một con cá có vảy lấp lánh dưới suối. Đem ra chợ bán được giá kha khá!"},
-        {"tien": 250, "msg": "🍄 **NẤM LINH CHI!**\nHái được một cây nấm linh chi đỏ rực. Tiệm thuốc Bắc trả cho bạn một khoản khá hời."},
-        {"tien": 300, "msg": "🙏 **NGƯỜI TỐT VIỆC TỐT!**\nNhặt được ví của một hiệp sĩ, bạn trả lại và được anh ta hậu tạ một khoản tiền."}
+        {"tien": 75, "msg": "💰 **TIỀN LẺ RỚT!**\nBạn nhặt được một chiếc ví nhỏ ai đó đánh rơi, bên trong có vài đồng xu."},
+        {"tien": 100, "msg": "🐟 **CÁ HIẾM!**\nBắt được một con cá có vảy lấp lánh dưới suối. Đem ra chợ bán được giá kha khá!"},
+        {"tien": 125, "msg": "🍄 **NẤM LINH CHI!**\nHái được một cây nấm linh chi đỏ rực. Tiệm thuốc Bắc trả cho bạn một khoản khá hời."},
+        {"tien": 150, "msg": "🙏 **NGƯỜI TỐT VIỆC TỐT!**\nNhặt được ví của một hiệp sĩ, bạn trả lại và được anh ta hậu tạ một khoản tiền."}
     ],
     "great": [ 
-        {"tien": 1000, "msg": "⚔️ **TIÊU DIỆT THỔ PHỈ!**\nBằng sức mạnh áp đảo, bạn tóm gọn toán cướp nhỏ và tịch thu kho báu của chúng!"},
-        {"tien": 1200, "msg": "💎 **NGỌC THÔ!**\nCầm cuốc gõ bừa vào đá, ai ngờ đào trúng viên ngọc lục bảo thô to bằng nắm tay!"},
-        {"tien": 1500, "msg": "🏆 **RƯƠNG HOÀNG KIM!**\nBạn phát hiện ra một rương kho báu vàng chóe bị chôn vùi nửa mét dưới đất. Mở ra toàn tiền!"},
-        {"tien": 2000, "msg": "💍 **KIM CƯƠNG RỚT!**\nÁnh sáng lấp lánh đập vào mắt! Hóa ra là một viên kim cương tinh khiết ai đó đánh rơi trên thảm cỏ."}
+        {"tien": 500, "msg": "⚔️ **TIÊU DIỆT THỔ PHỈ!**\nBằng sức mạnh áp đảo, bạn tóm gọn toán cướp nhỏ và tịch thu kho báu của chúng!"},
+        {"tien": 600, "msg": "💎 **NGỌC THÔ!**\nCầm cuốc gõ bừa vào đá, ai ngờ đào trúng viên ngọc lục bảo thô to bằng nắm tay!"},
+        {"tien": 750, "msg": "🏆 **RƯƠNG HOÀNG KIM!**\nBạn phát hiện ra một rương kho báu vàng chóe bị chôn vùi nửa mét dưới đất. Mở ra toàn tiền!"},
+        {"tien": 1000, "msg": "💍 **KIM CƯƠNG RỚT!**\nÁnh sáng lấp lánh đập vào mắt! Hóa ra là một viên kim cương tinh khiết ai đó đánh rơi trên thảm cỏ."}
     ],
     "jackpot": [ 
-        {"tien": 5000, "msg": "🎫 **VÉ SỐ ĐỘC ĐẮC! (JACKPOT)**\nTrời ơi tin được không!? Bạn nhặt được tấm vé số của ai đó đánh rơi, đem dò thì trúng giải đặc biệt! Thần tài độ rồi!!!"},
-        {"tien": 10000, "msg": "🏴‍☠️ **KHO BÁU VUA HẢI TẶC! (MEGAPOT)**\nCHẤN ĐỘNG!!! Sau lớp sương mù, bạn tìm thấy hang động cất giấu kho báu huyền thoại ngàn năm. Một núi Vàng hiện ra trước mắt! Bạn thành đại gia rồi!!!"}
+        {"tien": 2500, "msg": "🎫 **VÉ SỐ ĐỘC ĐẮC! (JACKPOT)**\nTrời ơi tin được không!? Bạn nhặt được tấm vé số của ai đó đánh rơi, đem dò thì trúng giải đặc biệt! Thần tài độ rồi!!!"},
+        {"tien": 5000, "msg": "🏴‍☠️ **KHO BÁU VUA HẢI TẶC! (MEGAPOT)**\nCHẤN ĐỘNG!!! Sau lớp sương mù, bạn tìm thấy hang động cất giấu kho báu huyền thoại ngàn năm. Một núi Vàng hiện ra trước mắt! Bạn đổi đời rồi!!!"}
     ]
 }
 
 
 # =====================================================================
-# GIAO DIỆN GAME NHÂN SINH (CÓ LỰA CHỌN TƯƠNG TÁC)
+# DATA NGÂN HÀNG CÂU HỎI NHÂN SINH (45 SỰ KIỆN)
+# =====================================================================
+# tt: Trí tuệ, ns: Nhan sắc, mm: May mắn, t: Tiền
+EVENTS_P1 = [
+    {"q": "Bạn nhặt được chiếc ví dày cộp của thầy Hiệu trưởng.", "a": "Nộp lên phòng giám thị", "b": "Lấy tiền đi bao bạn bè", "ra": "Thầy khen ngợi trước cờ, tăng uy tín.", "rb": "Tiêu xài sướng tay nhưng bị camera quay lại, hạ kiểm kiểm.", "ea": {"tt": 1, "ns": 0, "mm": 2, "t": 200}, "eb": {"tt": -2, "ns": 0, "mm": -3, "t": 1000}},
+    {"q": "Crush tỏ tình với bạn ngay sát kỳ thi quan trọng.", "a": "Từ chối để ôn thi", "b": "Đồng ý hẹn hò luôn", "ra": "Đau lòng nhưng đỗ điểm cao.", "rb": "Tình yêu thăng hoa, học hành đội sổ.", "ea": {"tt": 3, "ns": -1, "mm": 0, "t": 0}, "eb": {"tt": -3, "ns": 2, "mm": 1, "t": -200}},
+    {"q": "Bị nhóm đầu gấu trấn lột tiền ăn sáng.", "a": "Gồng lên đấm lại", "b": "Ngoan ngoãn đưa tiền", "ra": "Bị đấm sưng mắt nhưng chúng nể phục.", "rb": "Mất tiền nhưng nhan sắc được bảo toàn.", "ea": {"tt": 0, "ns": -2, "mm": 2, "t": -100}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": -300}},
+    {"q": "Trường tổ chức thi Nam thanh Nữ tú.", "a": "Tham gia thi", "b": "Ngồi dưới làm khán giả", "ra": "Lọt top hoa khôi/nam vương, được nhiều người biết đến.", "rb": "Nhạt nhòa giữa đám đông nhưng đỡ tốn thời gian.", "ea": {"tt": -1, "ns": 3, "mm": 1, "t": -200}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": 100}},
+    {"q": "Bạn tìm thấy một con mèo hoang sắp chết đói.", "a": "Nhặt về nuôi", "b": "Lờ đi vì sợ tốn tiền", "ra": "Tốn tiền mua hạt nhưng mèo mang lại may mắn.", "rb": "Giữ được tiền nhưng lòng áy náy.", "ea": {"tt": 0, "ns": 1, "mm": 2, "t": -300}, "eb": {"tt": 0, "ns": -1, "mm": -1, "t": 100}},
+    {"q": "Bạn bè rủ cúp học đi nét chơi game mới ra.", "a": "Đi chơi luôn", "b": "Ở lại lớp làm bài tập", "ra": "Vui vẻ nhưng hổng kiến thức nghiêm trọng.", "rb": "Thầy giáo điểm danh đột xuất, bạn an toàn.", "ea": {"tt": -2, "ns": 0, "mm": 0, "t": -150}, "eb": {"tt": 2, "ns": 0, "mm": 1, "t": 0}},
+    {"q": "Kiểm tra 15 phút mà bạn chưa học bài.", "a": "Mở tài liệu quay cóp", "b": "Làm bằng thực lực", "ra": "Được 10 điểm nhưng thấp thỏm lo sợ.", "rb": "Được 3 điểm nhưng lòng thanh thản.", "ea": {"tt": -1, "ns": 0, "mm": 2, "t": 0}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": 0}},
+    {"q": "Quảng cáo mua điện thoại xịn giá rẻ bèo trên mạng.", "a": "Chốt đơn mua ngay", "b": "Biết là lừa đảo, bỏ qua", "ra": "Nhận được cục gạch, mất trắng tiền tiết kiệm.", "rb": "Bảo toàn số tiền, tăng thêm kinh nghiệm sống.", "ea": {"tt": -2, "ns": 0, "mm": -2, "t": -800}, "eb": {"tt": 2, "ns": 0, "mm": 0, "t": 0}},
+    {"q": "Thấy người già ăn xin ngoài cổng trường.", "a": "Cho hết tiền ăn sáng", "b": "Đi thẳng vào lớp", "ra": "Bụng đói meo nhưng tích được phước đức.", "rb": "Bụng no nê nhưng bỏ lỡ cơ hội làm việc tốt.", "ea": {"tt": 0, "ns": 0, "mm": 3, "t": -200}, "eb": {"tt": 0, "ns": 0, "mm": -1, "t": 0}},
+    {"q": "Giải đấu thể thao cấp trường đang thiếu người.", "a": "Đăng ký thi đấu", "b": "Từ chối vì sợ mệt", "ra": "Mang vinh quang về cho lớp, nhan sắc tỏa sáng.", "rb": "Ngồi chơi xơi nước, người tích mỡ.", "ea": {"tt": -1, "ns": 2, "mm": 1, "t": 0}, "eb": {"tt": 0, "ns": -1, "mm": 0, "t": 0}},
+    {"q": "Phát hiện bạn thân nói dối giáo viên.", "a": "Bao che cho bạn", "b": "Nói ra sự thật", "ra": "Tình bạn thêm gắn kết, nhưng bạn trở thành kẻ dối trá.", "rb": "Giáo viên tin tưởng, nhưng bạn thân cạch mặt.", "ea": {"tt": -1, "ns": 0, "mm": 1, "t": 0}, "eb": {"tt": 2, "ns": 0, "mm": -1, "t": 0}},
+    {"q": "Nhặt được tờ vé số cũ trong ngăn bàn.", "a": "Đem đi dò thử", "b": "Vứt sọt rác", "ra": "Trúng giải khuyến khích, có tiền ăn vặt!", "rb": "Bỏ lỡ vận may từ trên trời rơi xuống.", "ea": {"tt": 0, "ns": 0, "mm": 2, "t": 500}, "eb": {"tt": 0, "ns": 0, "mm": -1, "t": 0}},
+    {"q": "Học lỏm một ngoại ngữ mới.", "a": "Cày cuốc học đêm", "b": "Lười quá đi ngủ", "ra": "Tăng mạnh trí tuệ nhưng mặt mọc mụn vì thức khuya.", "rb": "Ngủ đủ giấc, da dẻ hồng hào nhưng não phẳng.", "ea": {"tt": 3, "ns": -1, "mm": 0, "t": 0}, "eb": {"tt": -1, "ns": 2, "mm": 0, "t": 0}},
+    {"q": "Mua sách luyện thi hay nạp tiền chơi game?", "a": "Mua sách", "b": "Nạp game", "ra": "Trở thành mọt sách, kiến thức uyên thâm.", "rb": "Lên rank vù vù nhưng kiến thức trống rỗng.", "ea": {"tt": 2, "ns": -1, "mm": 0, "t": -300}, "eb": {"tt": -2, "ns": 0, "mm": 0, "t": -300}},
+    {"q": "Tranh cử chức Bí thư lớp.", "a": "Đứng lên tranh cử", "b": "Để người khác làm", "ra": "Trở thành người lãnh đạo, tăng uy tín.", "rb": "An phận làm học sinh bình thường.", "ea": {"tt": 1, "ns": 1, "mm": 1, "t": 0}, "eb": {"tt": 0, "ns": 0, "mm": 0, "t": 0}}
+]
+
+EVENTS_P2 = [
+    {"q": "Một người bạn rủ góp vốn mở quán trà chanh.", "a": "Đầu tư ngay", "b": "Từ chối, tiền để ngân hàng", "ra": "Quán đông khách, bạn kiếm được một khoản kha khá.", "rb": "An toàn nhưng không sinh lời nhiều.", "ea": {"tt": 1, "ns": 0, "mm": 1, "t": 1500}, "eb": {"tt": 0, "ns": 0, "mm": 0, "t": 200}},
+    {"q": "Sếp cướp công dự án bạn làm đêm ngày.", "a": "Đăng bài bóc phốt sếp", "b": "Nhẫn nhịn chờ thời", "ra": "Bị đuổi việc ngay lập tức, dính nợ thẻ tín dụng.", "rb": "Được thăng chức bù đắp sau này.", "ea": {"tt": -2, "ns": 0, "mm": -2, "t": -2000}, "eb": {"tt": 2, "ns": 0, "mm": 1, "t": 2500}},
+    {"q": "Có một đại gia già xấu muốn bao nuôi bạn.", "a": "Gật đầu đồng ý", "b": "Từ chối kiên quyết", "ra": "Có tiền sắm đồ hiệu nhưng danh dự tụt dốc.", "rb": "Nghèo nhưng giữ được cốt cách.", "ea": {"tt": -2, "ns": -2, "mm": 0, "t": 5000}, "eb": {"tt": 1, "ns": 1, "mm": 0, "t": -500}},
+    {"q": "Bắt trend tiền ảo đang lên ngôi.", "a": "All-in tiền tiết kiệm", "b": "Đứng ngoài xem", "ra": "Thị trường sập! Bạn chia 10 tài sản, khóc thét.", "rb": "Bạn né được cú sập thế kỷ, bảo toàn vốn.", "ea": {"tt": -3, "ns": 0, "mm": -2, "t": -4000}, "eb": {"tt": 2, "ns": 0, "mm": 1, "t": 0}},
+    {"q": "Bạn được mời làm KOL review đồ ăn.", "a": "Nhận lời làm", "b": "Sợ mập, không làm", "ra": "Nổi tiếng mạng xã hội, kiếm nhiều tiền nhưng tăng 10 cân.", "rb": "Giữ được body chuẩn nhưng ví mỏng.", "ea": {"tt": 0, "ns": -2, "mm": 1, "t": 3000}, "eb": {"tt": 0, "ns": 2, "mm": 0, "t": 0}},
+    {"q": "Khám phá ra một lỗ hổng phần mềm của công ty.", "a": "Báo cáo nội bộ", "b": "Bán dữ liệu cho hacker", "ra": "Được thưởng nóng vì tính trung thực.", "rb": "Kiếm bộn tiền nhưng bị công an sờ gáy, nộp phạt sấp mặt.", "ea": {"tt": 2, "ns": 0, "mm": 1, "t": 1000}, "eb": {"tt": -3, "ns": 0, "mm": -3, "t": -5000}},
+    {"q": "Vay nợ mua xe SH để loè thiên hạ.", "a": "Quất luôn", "b": "Đi xe số cho lành", "ra": "Có le với gái/trai, nhưng cày cuốc trả lãi mệt mỏi.", "rb": "Không ai để ý nhưng tài chính vững vàng.", "ea": {"tt": -2, "ns": 2, "mm": 0, "t": -3000}, "eb": {"tt": 1, "ns": -1, "mm": 1, "t": 1000}},
+    {"q": "Khách hàng ngỏ ý đút lót để lách luật.", "a": "Nhận phong bì", "b": "Cự tuyệt thẳng thừng", "ra": "Bị thanh tra phát hiện, mất việc và đền tiền.", "rb": "Giữ sạch hồ sơ, được cấp trên cất nhắc.", "ea": {"tt": -2, "ns": 0, "mm": -2, "t": -2500}, "eb": {"tt": 2, "ns": 0, "mm": 1, "t": 1500}},
+    {"q": "Một công ty nước ngoài mời bạn sang làm việc.", "a": "Xuất ngoại", "b": "Ở lại quê hương", "ra": "Lương đô-la nhưng cô đơn nơi xứ người.", "rb": "Thu nhập bình thường nhưng có gia đình kề bên.", "ea": {"tt": 2, "ns": 0, "mm": 0, "t": 4000}, "eb": {"tt": 0, "ns": 0, "mm": 1, "t": 1000}},
+    {"q": "Tham gia khóa học kỹ năng mềm 50 củ.", "a": "Đăng ký học", "b": "Tự học trên mạng", "ra": "Mở rộng mối quan hệ VIP, kỹ năng thăng hạng.", "rb": "Tiết kiệm tiền nhưng tiến bộ chậm.", "ea": {"tt": 3, "ns": 0, "mm": 1, "t": -1000}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": 0}},
+    {"q": "Người yêu cũ rủ quay lại.", "a": "Gương vỡ lại lành", "b": "Say No!", "ra": "Tiếp tục cãi vã, stress tột độ ảnh hưởng công việc.", "rb": "Đầu óc thư thái, tập trung kiếm tiền.", "ea": {"tt": -1, "ns": -1, "mm": -1, "t": -500}, "eb": {"tt": 1, "ns": 1, "mm": 1, "t": 1000}},
+    {"q": "Thuê chung cư cao cấp hay phòng trọ giá rẻ?", "a": "Chung cư cao cấp", "b": "Phòng trọ sinh viên", "ra": "Sống sướng, sang chảnh nhưng lương tháng nào hết tháng đó.", "rb": "Sống cực khổ nhưng dư dả tiền tiết kiệm.", "ea": {"tt": 0, "ns": 1, "mm": 0, "t": -2000}, "eb": {"tt": 0, "ns": -1, "mm": 0, "t": 2000}},
+    {"q": "Có người gạ bán bảo hiểm nhân thọ cho bạn.", "a": "Mua 1 gói", "b": "Từ chối", "ra": "Tháng sau vô tình gãy chân, được đền bù y tế khủng.", "rb": "Bị tai nạn tốn tiền túi tự lo.", "ea": {"tt": 1, "ns": 0, "mm": 3, "t": 2500}, "eb": {"tt": 0, "ns": 0, "mm": -2, "t": -1500}},
+    {"q": "Đồng nghiệp nhờ bảo lãnh vay nợ tín chấp.", "a": "Ký giấy giúp", "b": "Nói không", "ra": "Đồng nghiệp bỏ trốn, bạn è cổ trả nợ thay!", "rb": "Mất lòng bạn nhưng an toàn ví tiền.", "ea": {"tt": -3, "ns": 0, "mm": -2, "t": -4000}, "eb": {"tt": 2, "ns": 0, "mm": 0, "t": 0}},
+    {"q": "Tham gia gameshow hẹn hò trên tivi.", "a": "Đi thi", "b": "Ngại xuất hiện", "ra": "Trở thành tâm điểm mạng xã hội, kiếm bộn tiền quảng cáo.", "rb": "Cuộc sống trôi qua vô vị.", "ea": {"tt": 0, "ns": 2, "mm": 2, "t": 3500}, "eb": {"tt": 0, "ns": 0, "mm": 0, "t": 0}}
+]
+
+EVENTS_P3 = [
+    {"q": "Cò đất cò mồi bạn mua mảnh đất ở ngoại ô.", "a": "Chốt cọc mua", "b": "Chê xa không mua", "ra": "Đất dính quy hoạch! Tiền đầu tư biến thành rác.", "rb": "May mắn né được cú lừa thế kỷ.", "ea": {"tt": -2, "ns": 0, "mm": -3, "t": -5000}, "eb": {"tt": 2, "ns": 0, "mm": 1, "t": 1000}},
+    {"q": "Cảm thấy cơ thể hay đau nhức.", "a": "Bỏ tiền mua thuốc xịn", "b": "Bỏ qua, cày tiếp", "ra": "Cơ thể khỏe mạnh, trẻ lại chục tuổi.", "rb": "Đột quỵ phải đi cấp cứu, tốn một núi tiền.", "ea": {"tt": 1, "ns": 2, "mm": 0, "t": -1000}, "eb": {"tt": -2, "ns": -3, "mm": -2, "t": -4000}},
+    {"q": "Mở rộng kinh doanh ra nước ngoài.", "a": "Vay vốn mở rộng", "b": "Giữ quy mô hiện tại", "ra": "Kinh doanh bùng nổ! Lợi nhuận tăng phi mã.", "rb": "Công ty giậm chân tại chỗ, dần thụt lùi.", "ea": {"tt": 2, "ns": 0, "mm": 2, "t": 6000}, "eb": {"tt": 0, "ns": 0, "mm": -1, "t": -500}},
+    {"q": "Con cái muốn đi du học trường đắt đỏ.", "a": "Rút tiết kiệm cho con đi", "b": "Bắt học trường công", "ra": "Con thành tài, sau này gửi tiền báo hiếu.", "rb": "Con bất mãn, quậy phá báo nhà.", "ea": {"tt": 2, "ns": 0, "mm": 1, "t": 4000}, "eb": {"tt": -1, "ns": 0, "mm": -2, "t": -2000}},
+    {"q": "Bị giang hồ tông xe trên đường.", "a": "Bắt đền", "b": "Xin lỗi cho qua chuyện", "ra": "Bị chúng đập cho một trận nhừ tử, mất viện phí.", "rb": "Tốn tiền sửa xe nhưng toàn mạng.", "ea": {"tt": -1, "ns": -2, "mm": -2, "t": -3000}, "eb": {"tt": 1, "ns": 0, "mm": 0, "t": -500}},
+    {"q": "Được mời làm cố vấn cho một công ty mới nổi.", "a": "Nhận lời", "b": "Từ chối", "ra": "Nhận cổ phần thưởng, công ty lên sàn bạn giàu to.", "rb": "Bỏ lỡ cơ hội đổi đời.", "ea": {"tt": 2, "ns": 0, "mm": 2, "t": 5000}, "eb": {"tt": 0, "ns": 0, "mm": 0, "t": 0}},
+    {"q": "Đánh rơi nhẫn kim cương xuống cống.", "a": "Thuê người móc cống", "b": "Bỏ luôn", "ra": "Tìm lại được nhẫn, nhưng người dính đầy bùn đất.", "rb": "Mất trắng tài sản quý giá.", "ea": {"tt": 0, "ns": -2, "mm": 1, "t": 1000}, "eb": {"tt": 0, "ns": 0, "mm": -2, "t": -3000}},
+    {"q": "Phát hiện vợ/chồng quỹ đen.", "a": "Tịch thu hết", "b": "Nhắm mắt làm ngơ", "ra": "Ví dày cộp nhưng gia đình lục đục.", "rb": "Gia đình êm ấm, tinh thần thoải mái.", "ea": {"tt": 0, "ns": 0, "mm": -1, "t": 2000}, "eb": {"tt": 1, "ns": 1, "mm": 0, "t": 0}},
+    {"q": "Bác sĩ khuyên nên phẫu thuật thẩm mỹ để đổi vận.", "a": "Đập đi xây lại", "b": "Giữ nét tự nhiên", "ra": "Phẫu thuật lỗi! Biến chứng sưng vù, tốn tiền đền bù.", "rb": "Nhan sắc tàn phai theo năm tháng nhưng tiết kiệm.", "ea": {"tt": -2, "ns": -3, "mm": -2, "t": -4000}, "eb": {"tt": 1, "ns": -1, "mm": 0, "t": 1000}},
+    {"q": "Tham gia đấu giá một bức tranh cổ.", "a": "Giơ bảng mua", "b": "Ngồi im", "ra": "Trúng mánh! Bức tranh là đồ thật, giá trị tăng gấp 3.", "rb": "Giữ tiền trong thẻ, không mất gì.", "ea": {"tt": 2, "ns": 0, "mm": 2, "t": 7000}, "eb": {"tt": 0, "ns": 0, "mm": 0, "t": 0}},
+    {"q": "Bạn được mời đi đánh golf với đối tác lớn.", "a": "Đi ngay", "b": "Ở nhà ngủ", "ra": "Ký được hợp đồng triệu đô, mở ra chân trời mới.", "rb": "Đối tác chọn công ty khác, bạn mất hợp đồng.", "ea": {"tt": 1, "ns": 1, "mm": 2, "t": 5500}, "eb": {"tt": -1, "ns": 0, "mm": -1, "t": -1000}},
+    {"q": "Một quỹ từ thiện mạo danh nhờ bạn quyên góp.", "a": "Chuyển khoản ủng hộ", "b": "Điều tra kỹ", "ra": "Mất tiền oan cho bọn lừa đảo.", "rb": "Phanh phui đường dây, được lên báo tuyên dương.", "ea": {"tt": -2, "ns": 0, "mm": -1, "t": -2500}, "eb": {"tt": 2, "ns": 1, "mm": 1, "t": 1500}},
+    {"q": "Nổi hứng muốn mua xe hơi thể thao.", "a": "Vay tiền quất luôn", "b": "Mua xe cũ thôi", "ra": "Mua xe trả góp gánh nợ tụt hơi, nhưng oai.", "rb": "Dư dả tiền bạc kinh doanh tiếp.", "ea": {"tt": -2, "ns": 2, "mm": 0, "t": -3500}, "eb": {"tt": 1, "ns": 0, "mm": 1, "t": 2000}},
+    {"q": "Sóng thần truyền thông: Bạn bị bóc phốt oan.", "a": "Thuê luật sư kiện", "b": "Im lặng chờ chìm", "ra": "Thắng kiện, lấy lại danh dự và tiền bồi thường.", "rb": "Sự nghiệp tụt dốc, bị đối tác quay lưng.", "ea": {"tt": 2, "ns": 1, "mm": 1, "t": 4500}, "eb": {"tt": -1, "ns": -1, "mm": -2, "t": -3000}},
+    {"q": "Rảnh rỗi sinh nông nổi, đi sòng bài Macao.", "a": "Mang sổ đỏ ra chơi", "b": "Đánh vui 100 đô", "ra": "Thua cháy túi, bay luôn căn biệt thự!", "rb": "Ra về vui vẻ, mua được món quà cho gia đình.", "ea": {"tt": -3, "ns": 0, "mm": -3, "t": -8000}, "eb": {"tt": 1, "ns": 0, "mm": 1, "t": 500}}
+]
+
+
+# =====================================================================
+# GIAO DIỆN GAME NHÂN SINH TƯƠNG TÁC NGẪU NHIÊN
 # =====================================================================
 
 class NhanSinhGameView(discord.ui.View):
@@ -93,17 +152,21 @@ class NhanSinhGameView(discord.ui.View):
         self.tien_an = 0
         self.logs = []
         
-        # Tạo cốt truyện khởi đầu
+        # Random pick 3 sự kiện cho 3 giai đoạn
+        self.event_p1 = random.choice(EVENTS_P1)
+        self.event_p2 = random.choice(EVENTS_P2)
+        self.event_p3 = random.choice(EVENTS_P3)
+
         if self.stats["may_man"] >= 8:
-            self.logs.append("👶 **Tuổi 0:** Bạn sinh ra ngậm thìa vàng, bố làm giám đốc, sống trong nhung lụa từ bé.")
+            self.logs.append("👶 **Tuổi 0:** Bạn sinh ra ngậm thìa vàng, bố làm chủ tịch, sống trong nhung lụa từ bé.")
         elif self.stats["may_man"] >= 4:
             self.logs.append("👶 **Tuổi 0:** Bạn sinh ra trong một gia đình êm ấm, đủ ăn đủ mặc.")
         else:
             self.logs.append("👶 **Tuổi 0:** Bố mẹ ôm nợ bỏ trốn, bạn phải tự thân vận động từ khi còn nhỏ xíu.")
 
-        self.btn_a = discord.ui.Button(label="A. Chăm chỉ học", style=discord.ButtonStyle.primary, custom_id="btn_a")
+        self.btn_a = discord.ui.Button(label=f"A. {self.event_p1['a']}", style=discord.ButtonStyle.primary, custom_id="btn_a")
         self.btn_a.callback = self.choice_a
-        self.btn_b = discord.ui.Button(label="B. Chơi bời làm đẹp", style=discord.ButtonStyle.secondary, custom_id="btn_b")
+        self.btn_b = discord.ui.Button(label=f"B. {self.event_p1['b']}", style=discord.ButtonStyle.secondary, custom_id="btn_b")
         self.btn_b.callback = self.choice_b
 
         self.add_item(self.btn_a)
@@ -123,40 +186,42 @@ class NhanSinhGameView(discord.ui.View):
 
     async def process_choice(self, interaction: discord.Interaction, choice: str):
         if self.phase == 1:
-            if choice == "A":
-                self.stats["tri_tue"] += 3
-                self.stats["nhan_sac"] -= 1
-                self.logs.append("🎒 **Tuổi 15:** Bạn cày cuốc học ngày đêm. Mắt cận 5 độ, nhan sắc tụt dốc nhưng đỗ thủ khoa trường chuyên!")
-            else:
-                self.stats["nhan_sac"] += 3
-                self.stats["tri_tue"] -= 1
-                self.logs.append("✨ **Tuổi 15:** Bạn dành thanh xuân để ăn diện, làm hotboy/hotgirl của trường. Học lực lẹt đẹt nhưng khối người theo đuổi.")
+            ev = self.event_p1
+            eff = ev["ea"] if choice == "A" else ev["eb"]
+            res = ev["ra"] if choice == "A" else ev["rb"]
+            
+            self.stats["tri_tue"] += eff["tt"]
+            self.stats["nhan_sac"] += eff["ns"]
+            self.stats["may_man"] += eff["mm"]
+            self.tien_an += eff["t"]
+            
+            self.logs.append(f"🎒 **Tuổi 15:** {res}")
             self.phase = 2
 
         elif self.phase == 2:
-            if choice == "A":
-                if self.stats["may_man"] + self.stats["tri_tue"] >= 13:
-                    self.tien_an += 5000
-                    self.logs.append("🚀 **Tuổi 25:** Bạn liều lĩnh khởi nghiệp! Nhờ trí tuệ và may mắn, công ty lên sàn chứng khoán, bạn giàu to!")
-                else:
-                    self.tien_an -= 3000
-                    self.logs.append("📉 **Tuổi 25:** Khởi nghiệp thất bại. Bạn phá sản, ôm một khoản nợ khổng lồ từ thời trẻ.")
-            else:
-                self.tien_an += 1500
-                self.logs.append("💼 **Tuổi 25:** Bạn an phận làm nhân viên văn phòng. Lương không cao nhưng ổn định, cuối tháng có tiền nhậu.")
+            ev = self.event_p2
+            eff = ev["ea"] if choice == "A" else ev["eb"]
+            res = ev["ra"] if choice == "A" else ev["rb"]
+            
+            self.stats["tri_tue"] += eff["tt"]
+            self.stats["nhan_sac"] += eff["ns"]
+            self.stats["may_man"] += eff["mm"]
+            self.tien_an += eff["t"]
+            
+            self.logs.append(f"💼 **Tuổi 25:** {res}")
             self.phase = 3
 
         elif self.phase == 3:
-            if choice == "A":
-                if self.stats["may_man"] > 6:
-                    self.tien_an += 12000
-                    self.logs.append("🎰 **Tuổi 35:** Chơi lớn tất tay vào coin! Thần tài gõ cửa, bạn chốt lời trên đỉnh, thành đại gia ngầm!")
-                else:
-                    self.tien_an -= 8000
-                    self.logs.append("🚨 **Tuổi 35:** Bị lừa dự án đa cấp. Bán nhà, vay nặng lãi rồi mất trắng. Giang hồ ngày nào cũng tới tạt sơn!")
-            else:
-                self.tien_an += 3000
-                self.logs.append("🏦 **Tuổi 35:** Bạn từ chối cám dỗ, đem tiền mua vàng và gửi tiết kiệm. Sống thảnh thơi nhàn hạ.")
+            ev = self.event_p3
+            eff = ev["ea"] if choice == "A" else ev["eb"]
+            res = ev["ra"] if choice == "A" else ev["rb"]
+            
+            self.stats["tri_tue"] += eff["tt"]
+            self.stats["nhan_sac"] += eff["ns"]
+            self.stats["may_man"] += eff["mm"]
+            self.tien_an += eff["t"]
+            
+            self.logs.append(f"🏦 **Tuổi 35:** {res}")
             self.phase = 4
 
         await self.update_ui(interaction)
@@ -171,37 +236,36 @@ class NhanSinhGameView(discord.ui.View):
         embed.add_field(name="📜 Hành trình cuộc đời", value=story, inline=False)
 
         if self.phase == 1:
-            embed.add_field(name="❓ Ngã rẽ tuổi học trò (15 tuổi)", value="Kỳ thi chuyển cấp quan trọng sắp tới, bạn sẽ:\n\n**A.** Cắm đầu vào học, bỏ bê ngoại hình.\n**B.** Chăm chút nhan sắc, đi chơi tán gái/trai.", inline=False)
-            self.btn_a.label = "A. Chăm chỉ học"
-            self.btn_b.label = "B. Chơi bời làm đẹp"
+            embed.add_field(name="❓ Ngã rẽ tuổi học trò (15 tuổi)", value=self.event_p1['q'], inline=False)
+            self.btn_a.label = f"A. {self.event_p1['a']}"
+            self.btn_b.label = f"B. {self.event_p1['b']}"
         elif self.phase == 2:
-            embed.add_field(name="❓ Quyết định tuổi 25", value="Vừa tốt nghiệp xong, đường đời vẫy gọi:\n\n**A.** Vay vốn khởi nghiệp, liều ăn nhiều.\n**B.** Xin làm nhân viên quèn, an phận thủ thường.", inline=False)
-            self.btn_a.label = "A. Khởi nghiệp"
-            self.btn_b.label = "B. Làm văn phòng"
+            embed.add_field(name="❓ Quyết định tuổi 25", value=self.event_p2['q'], inline=False)
+            self.btn_a.label = f"A. {self.event_p2['a']}"
+            self.btn_b.label = f"B. {self.event_p2['b']}"
         elif self.phase == 3:
-            embed.add_field(name="❓ Cám dỗ tuổi 35", value="Một người bạn rủ đầu tư lợi nhuận 500%/tháng. Bạn làm gì?\n\n**A.** All-in tất tay! Muốn giàu phải liều.\n**B.** Lừa đảo chắc luôn, mang tiền gửi ngân hàng.", inline=False)
-            self.btn_a.label = "A. All-in tất tay"
-            self.btn_b.label = "B. Gửi tiết kiệm an toàn"
+            embed.add_field(name="❓ Cám dỗ tuổi 35", value=self.event_p3['q'], inline=False)
+            self.btn_a.label = f"A. {self.event_p3['a']}"
+            self.btn_b.label = f"B. {self.event_p3['b']}"
         elif self.phase == 4:
             self.btn_a.disabled = True
             self.btn_b.disabled = True
             self.clear_items() 
 
-            # TÍNH TOÁN KẾT QUẢ CUỐI CÙNG
+            # TÍNH TOÁN KẾT QUẢ CUỐI CÙNG 
             total_reward = self.tien_an + (self.stats['tri_tue'] + self.stats['nhan_sac'] + self.stats['may_man']) * 50
             
             data = load_data()
             user_id = str(self.author.id)
             if user_id not in data: data[user_id] = {"xp": 0, "level": 1, "money": 0}
             
-            # Lưu ý: Được phép nợ
             data[user_id]["money"] += total_reward
             save_data(data)
 
             if total_reward < 0:
                 embed.add_field(name="🪦 Nhắm mắt xuôi tay", value=f"Sống lay lắt qua ngày, cuối đời bệnh tật không tiền chữa.\n❌ **BÁO NHÀ!** Bạn để lại khoản nợ: **{total_reward} 💰**\n*(Hệ thống đã trừ nợ vào sổ, đi cày `k daily` mà trả nhé!)*", inline=False)
-            elif total_reward >= 10000:
-                embed.add_field(name="🪦 Nhắm mắt xuôi tay", value=f"Hưởng thọ trong biệt thự dát vàng. Tang lễ 3 ngày 3 đêm.\n👑 **ĐẠI PHÚ HÀO!** Di sản kiếp sau: **+{total_reward} 💰**", inline=False)
+            elif total_reward >= 5000:
+                embed.add_field(name="🪦 Nhắm mắt xuôi tay", value=f"Hưởng thọ trong biệt thự cao cấp. Tang lễ hoành tráng.\n👑 **ĐẠI PHÚ HÀO!** Di sản kiếp sau: **+{total_reward} 💰**", inline=False)
             else:
                 embed.add_field(name="🪦 Nhắm mắt xuôi tay", value=f"Cuộc đời bình dị, thanh thản ra đi bên con cháu.\n💼 **DƯ DẢ!** Di sản kiếp sau: **+{total_reward} 💰**", inline=False)
 
@@ -278,7 +342,6 @@ class BushButton(discord.ui.Button):
         scenario = random.choice(SCENARIOS[category])
         thuong_phat = scenario["tien"]
         
-        # FIX LỖI "NỢ BỊ MẤT": Cho phép cộng dồn kể cả khi tiền đang âm
         data[user_id]["money"] += thuong_phat
             
         actual_change = data[user_id]["money"] - old_money
@@ -354,9 +417,9 @@ class ShopView(discord.ui.View):
 class ExpSelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="4 Giờ (Bãi Cỏ Yên Bình)", description="Phần thưởng: ~1500 💰", emoji="🌿", value="4"),
-            discord.SelectOption(label="8 Giờ (Hang Động Tối Tăm)", description="Phần thưởng: ~3500 💰", emoji="🦇", value="8"),
-            discord.SelectOption(label="12 Giờ (Di Tích Nguy Hiểm)", description="Phần thưởng: ~6000 💰", emoji="🏛️", value="12")
+            discord.SelectOption(label="4 Giờ (Bãi Cỏ Yên Bình)", description="Phần thưởng: ~450 💰", emoji="🌿", value="4"),
+            discord.SelectOption(label="8 Giờ (Hang Động Tối Tăm)", description="Phần thưởng: ~1000 💰", emoji="🦇", value="8"),
+            discord.SelectOption(label="12 Giờ (Di Tích Nguy Hiểm)", description="Phần thưởng: ~2000 💰", emoji="🏛️", value="12")
         ]
         super().__init__(placeholder="Chọn khu vực phái đi...", min_values=1, max_values=1, options=options)
 
@@ -366,9 +429,9 @@ class ExpSelect(discord.ui.Select):
         
         hours = int(self.values[0])
         reward = 0
-        if hours == 4: reward = random.randint(1200, 1800)
-        elif hours == 8: reward = random.randint(3000, 4000)
-        elif hours == 12: reward = random.randint(5500, 6500)
+        if hours == 4: reward = random.randint(300, 600)
+        elif hours == 8: reward = random.randint(700, 1200)
+        elif hours == 12: reward = random.randint(1500, 2500)
 
         end_time = datetime.now() + timedelta(hours=hours)
         
@@ -405,11 +468,11 @@ async def help(ctx):
     )
     bang_help.add_field(name="✨ `k rank`", value="Xem hồ sơ và số Tiền 💰 hiện tại.", inline=False)
     bang_help.add_field(name="🏆 `k top`", value="Bảng xếp hạng đại gia.", inline=False)
-    bang_help.add_field(name="📅 `k daily`", value="Nhận lương hằng ngày (1000 💰).", inline=False)
+    bang_help.add_field(name="📅 `k daily`", value="Nhận lương hằng ngày (500 💰).", inline=False)
     bang_help.add_field(name="🪙 `k coin <số tiền/all>`", value="Cờ bạc tung xu hồi hộp (Chờ 3s).", inline=False)
     bang_help.add_field(name="🌲 `k thamhiem`", value="Mở cửa hàng vũ khí & đi thám hiểm rừng rậm nhặt tiền.", inline=False)
     bang_help.add_field(name="⛺ `k phai`", value="Phái đi thám hiểm (Treo máy AFK kiếm tiền).", inline=False)
-    bang_help.add_field(name="🌀 `k nhansinh`", value="Game Tương Tác Nhân Sinh (Phí vé: 100 💰). Coi chừng kiếp sau gánh nợ!", inline=False)
+    bang_help.add_field(name="🌀 `k nhansinh`", value="Game Tương Tác Nhân Sinh (Phí vé: 100 💰).", inline=False)
     bang_help.add_field(name="💸 `k give @người-nhận <số tiền>`", value="Chuyển khoản.", inline=False)
     await ctx.send(embed=bang_help)
 
@@ -425,7 +488,7 @@ async def phai(ctx):
         exp_end = datetime.strptime(exp_end_str, "%Y-%m-%d %H:%M:%S")
         now = datetime.now()
         if now >= exp_end:
-            reward = data[user_id].get("exp_reward", 1000)
+            reward = data[user_id].get("exp_reward", 500)
             data[user_id]["money"] = data[user_id].get("money", 0) + reward
             del data[user_id]["exp_end"]
             del data[user_id]["exp_reward"]
@@ -452,7 +515,6 @@ async def thamhiem(ctx):
     view = ShopView(ctx.author, session_profit=0)
     await ctx.send(embed=shop_embed, view=view)
 
-# --- MÔ PHỎNG NHÂN SINH TƯƠNG TÁC ---
 @bot.command()
 async def nhansinh(ctx):
     data = load_data()
@@ -487,7 +549,7 @@ async def nhansinh(ctx):
     
     story = "\n\n".join(view.logs)
     embed.add_field(name="📜 Hành trình cuộc đời", value=story, inline=False)
-    embed.add_field(name="❓ Ngã rẽ tuổi học trò (15 tuổi)", value="Kỳ thi chuyển cấp quan trọng sắp tới, bạn sẽ:\n\n**A.** Cắm đầu vào học, bỏ bê ngoại hình.\n**B.** Chăm chút nhan sắc, đi chơi tán gái/trai.", inline=False)
+    embed.add_field(name="❓ Ngã rẽ tuổi học trò (15 tuổi)", value=view.event_p1['q'], inline=False)
 
     await ctx.send(embed=embed, view=view)
 
@@ -511,14 +573,14 @@ async def daily(ctx):
             await ctx.send(f"⏳ Tham lam vậy! Trở lại sau **{hours} giờ {minutes} phút** nữa để nhận lương tiếp nhé.")
             return
 
-    data[user_id]["money"] += 1000
+    data[user_id]["money"] += 500
     data[user_id]["last_daily"] = now.strftime("%Y-%m-%d %H:%M:%S")
     save_data(data)
     
     if data[user_id]["money"] < 0:
-        await ctx.send(f"🎁 Bạn nhận được **1000 💰** tiền công!\n⚠️ Hệ thống đã siết nợ tự động! Bạn vẫn còn đang nợ **{data[user_id]['money']} 💰**.")
+        await ctx.send(f"🎁 Bạn nhận được **500 💰** tiền công!\n⚠️ Hệ thống đã siết nợ tự động! Bạn vẫn còn đang nợ **{data[user_id]['money']} 💰**.")
     else:
-        await ctx.send(f"🎁 Bạn nhận được **1000 💰** tiền công! (Số dư: **{data[user_id]['money']} 💰**)")
+        await ctx.send(f"🎁 Bạn nhận được **500 💰** tiền công! (Số dư: **{data[user_id]['money']} 💰**)")
 
 @bot.command()
 async def top(ctx):
@@ -639,7 +701,7 @@ async def on_message(message):
     if data[u_id]["xp"] >= data[u_id]["level"] * 100:
         data[u_id]["xp"] -= data[u_id]["level"] * 100
         data[u_id]["level"] += 1
-        thuong = data[u_id]["level"] * 500
+        thuong = data[u_id]["level"] * 200
         data[u_id]["money"] += thuong
         
         tb = discord.Embed(title="🎉 LÊN CẤP! 🎉", description=f'{message.author.mention} đạt Cấp {data[u_id]["level"]}!\nThưởng: **{thuong} 💰**', color=discord.Color.gold())
