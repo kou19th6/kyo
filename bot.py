@@ -584,8 +584,8 @@ class ExpView(discord.ui.View):
         self.author = author
         self.add_item(ExpSelect())
     async def interaction_check(self, interaction: discord.Interaction): return interaction.user.id == self.author.id
-    class NhanSinhGameView(discord.ui.View):
-        def __init__(self, author, stats):
+     class NhanSinhGameView(discord.ui.View):
+    def __init__(self, author, stats):
         super().__init__(timeout=180)
         self.author = author
         self.stats = stats
@@ -669,6 +669,51 @@ class ExpView(discord.ui.View):
 
         await self.update_ui(interaction)
 
+    async def update_ui(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="🌀 MÔ PHỎNG NHÂN SINH", description=f"Ký chủ luân hồi: {self.author.mention}", color=discord.Color.teal())
+        stats_text = f"Tâm linh / May mắn: **{self.stats['may_man']}/10** *(Được buff +{self.stats['may_man']*1.5}% Tỉ lệ)*"
+        embed.add_field(name="🍀 Chỉ số ban đầu", value=stats_text, inline=False)
+
+        if len(self.logs) > 4: story = "...\n\n" + "\n\n".join(self.logs[-4:])
+        else: story = "\n\n".join(self.logs)
+        embed.add_field(name="📜 Hành trình cuộc đời", value=story, inline=False)
+
+        if self.phase <= 5:
+            if self.phase == 1: tuoi_next = 15
+            elif self.phase == 2: tuoi_next = 25
+            elif self.phase == 3: tuoi_next = 35
+            elif self.phase == 4: tuoi_next = 50
+            else: tuoi_next = 70
+            
+            embed.add_field(name=f"❓ Ngã rẽ quyết định tuổi {tuoi_next}", value=f"**{self.ev['q']}**", inline=False)
+            self.btn_a.label = f"A. {self.ev['choices'][0]['text'][:70]}"
+            self.btn_b.label = f"B. {self.ev['choices'][1]['text'][:70]}"
+            self.btn_c.label = f"C. {self.ev['choices'][2]['text'][:70]}"
+            self.btn_d.label = f"D. {self.ev['choices'][3]['text'][:70]}"
+        else:
+            self.btn_a.disabled = True; self.btn_b.disabled = True; self.btn_c.disabled = True; self.btn_d.disabled = True
+            self.clear_items() 
+            
+            user_id = str(self.author.id)
+            if user_id in dang_choi_nhansinh: dang_choi_nhansinh.remove(user_id)
+
+            user_data = load_user(user_id)
+            user_data["money"] += self.tien_an
+            save_user(user_id)
+            add_history(user_id, f"Kết thúc Nhân Sinh ({'+' if self.tien_an >=0 else ''}{self.tien_an:,} 💰)")
+
+            if self.tien_an < 0:
+                embed.color = discord.Color.red()
+                embed.add_field(name="🪦 Về với Cát Bụi", value=f"Sống lỗi để lại một đống nợ khổng lồ, chủ nợ đến siết nhà.\n❌ **BÁO NHÀ!** Khoản nợ phải gánh: **{self.tien_an:,} 💰**", inline=False)
+            elif self.tien_an >= 500000:
+                embed.color = discord.Color.gold()
+                embed.add_field(name="🪦 Về với Cát Bụi", value=f"Hưởng thọ trong nhung lụa vinh hoa, con cháu kính trọng.\n👑 **TỶ PHÚ ĐỜI THẬT!** Di sản để lại: **+{self.tien_an:,} 💰**", inline=False)
+            else:
+                embed.color = discord.Color.blue()
+                embed.add_field(name="🪦 Về với Cát Bụi", value=f"Một cuộc đời êm ấm trôi qua, không còn gì nuối tiếc.\n💼 **DƯ DẢ!** Di sản để lại: **+{self.tien_an:,} 💰**", inline=False)
+
+        if interaction.response.is_done(): await interaction.message.edit(embed=embed, view=self)
+        else: await interaction.response.edit_message(embed=embed, view=self)
     async def update_ui(self, interaction: discord.Interaction):
         embed = discord.Embed(title="🌀 MÔ PHỎNG NHÂN SINH", description=f"Ký chủ luân hồi: {self.author.mention}", color=discord.Color.teal())
         stats_text = f"Tâm linh / May mắn: **{self.stats['may_man']}/10** *(Được buff +{self.stats['may_man']*1.5}% Tỉ lệ)*"
