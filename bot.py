@@ -2312,7 +2312,513 @@ async def ipo(ctx):
         color=discord.Color.green()
     )
     await ctx.reply(embed=embed_success, mention_author=False)
+# =====================================================================
+# HỆ THỐNG LỆNH NGÂN HÀNG TRUNG ƯƠNG
+# =====================================================================
+@bot.group(invoke_without_command=True, aliases=['nganhang', 'nh'])
+async def bank(ctx):
+    """Dashboard quản lý ngân hàng trung ương"""
+    user_data = load_user(ctx.author.id)
+    bank_balance = user_data.get("bank", 0)
+    wallet_balance = user_data.get("money", 0)
+    
+    embed = discord.Embed(
+        title="🏦 NGÂN HÀNG TRUNG ƯƠNG SERVER", 
+        description="Gửi tiền an toàn tuyệt đối. Tiền nằm trong ngân hàng sẽ không bao giờ bị mất do Casino, bị trộm hay bị đánh thuế!\n\n"
+                    "📥 `k bank gui <số tiền / all>`: Gửi tiền mặt vào két sắt\n"
+                    "📤 `k bank rut <số tiền / all>`: Rút tiền từ két sắt ra ví", 
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="💳 Ví tiền mặt (Wallet)", value=f"**{wallet_balance:,} 💰**", inline=True)
+    embed.add_field(name="🏦 Số dư Két sắt (Bank)", value=f"**{bank_balance:,} 💰**", inline=True)
+    embed.set_thumbnail(url=GIF_LINKS.get("bank", ""))
+    
+    await ctx.reply(embed=embed, mention_author=False)
 
+@bank.command(aliases=['send'])
+async def gui(ctx, amount: str):
+    """Lệnh gửi tiền vào ngân hàng"""
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    
+    try: 
+        if amount.lower() == "all":
+            deposit_amount = user_data["money"]
+        else:
+            deposit_amount = int(amount)
+    except ValueError: 
+        embed_err = discord.Embed(description="⚠️ Vui lòng nhập đúng số tiền hoặc chữ `all`!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+    
+    if deposit_amount <= 0 or deposit_amount > user_data["money"]: 
+        embed_err = discord.Embed(description="⚠️ Số tiền trong ví không đủ để gửi!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+        
+    user_data["money"] -= deposit_amount
+    user_data["bank"] = user_data.get("bank", 0) + deposit_amount
+    save_user(user_id)
+    
+    embed_success = discord.Embed(
+        description=f"✅ Nhân viên ngân hàng đã đóng gói và đưa **{deposit_amount:,} 💰** của bạn vào két sắt an toàn tuyệt đối!", 
+        color=discord.Color.green()
+    )
+    await ctx.reply(embed=embed_success, mention_author=False)
+
+@bank.command(aliases=['withdraw'])
+async def rut(ctx, amount: str):
+    """Lệnh rút tiền từ ngân hàng ra ví"""
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    bank_balance = user_data.get("bank", 0)
+    
+    try: 
+        if amount.lower() == "all":
+            withdraw_amount = bank_balance
+        else:
+            withdraw_amount = int(amount)
+    except ValueError: 
+        embed_err = discord.Embed(description="⚠️ Vui lòng nhập đúng số tiền hoặc chữ `all`!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+    
+    if withdraw_amount <= 0 or withdraw_amount > bank_balance: 
+        embed_err = discord.Embed(description="⚠️ Số dư trong ngân hàng của bạn không đủ!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+        
+    user_data["bank"] -= withdraw_amount
+    user_data["money"] += withdraw_amount
+    save_user(user_id)
+    
+    embed_success = discord.Embed(
+        description=f"✅ Bạn đã rút thành công **{withdraw_amount:,} 💰** từ két sắt mang ra ngoài ví để ăn chơi!", 
+        color=discord.Color.green()
+    )
+    await ctx.reply(embed=embed_success, mention_author=False)
+
+# =====================================================================
+# HỆ THỐNG LỆNH KẾT HÔN VÀ LY HÔN
+# =====================================================================
+@bot.command()
+async def marry(ctx, member: discord.Member):
+    """Lệnh cầu hôn tốn 1 triệu"""
+    player_1_data = load_user(ctx.author.id)
+    player_2_data = load_user(member.id)
+    
+    if ctx.author.id == member.id or member.bot: 
+        return await ctx.reply("Lỗi: Bạn không thể tự kết hôn với bản thân hoặc với Bot!")
+        
+    if player_1_data.get("spouse"): 
+        return await ctx.reply("Lỗi: Bạn đã có vợ/chồng rồi! Tham lam định lập phòng nhì à?")
+        
+    if player_2_data.get("spouse"): 
+        return await ctx.reply(f"Lỗi: Xin lỗi, {member.name} là hoa đã có chủ, đập chậu cướp hoa không được đâu!")
+        
+    if player_1_data.get("money", 0) < 1000000: 
+        embed_poor = discord.Embed(
+            description="⚠️ Nhẫn cưới kim cương giá **1,000,000 💰**. Tiền trong ví bạn không đủ cưới vợ đâu, lo cày tiền trước đi!", 
+            color=discord.Color.red()
+        )
+        return await ctx.reply(embed=embed_poor)
+    
+    embed_offer = discord.Embed(
+        title="💍 LỜI CẦU HÔN TỪ ĐẠI GIA", 
+        description=f"{member.mention} ơi! Đại gia {ctx.author.mention} mang sính lễ 1 củ đang quỳ gối cầu hôn bạn kìa!\n\nBạn có đồng ý sánh bước trăm năm cùng người ấy không?", 
+        color=discord.Color.pink()
+    )
+    await ctx.send(embed=embed_offer, view=MarryAccept(ctx.author, member))
+
+@bot.command()
+async def divorce(ctx):
+    """Lệnh ly hôn"""
+    player_1_id = str(ctx.author.id)
+    player_1_data = load_user(player_1_id)
+    
+    if not player_1_data.get("spouse"): 
+        return await ctx.reply("Bạn đang ế chỏng chơ mà ly hôn với ma à?")
+    
+    player_2_id = player_1_data["spouse"]
+    player_2_data = load_user(player_2_id)
+    
+    player_1_data["spouse"] = None
+    player_2_data["spouse"] = None
+    
+    save_user(player_1_id)
+    save_user(player_2_id)
+    
+    embed_divorce = discord.Embed(
+        description=f"💔 Tình yêu như bát bún thiu... Bạn đã nộp đơn ly hôn ra tòa. Mọi giấy tờ đã được giải quyết, từ nay đường ai nấy đi!", 
+        color=discord.Color.dark_grey()
+    )
+    await ctx.reply(embed=embed_divorce, mention_author=False)
+
+# =====================================================================
+# HỆ THỐNG LỆNH QUẢN LÝ CÔNG TY ĐẦY ĐỦ
+# =====================================================================
+@bot.group(invoke_without_command=True, aliases=['congty'])
+async def cty(ctx):
+    """Dashboard trung tâm quản lý công ty"""
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    comp_id = user_data.get("company")
+
+    if not comp_id:
+        embed_none = discord.Embed(
+            title="🏢 SÀN GIAO DỊCH DOANH NGHIỆP", 
+            description="Bạn hiện đang là kẻ lang thang thất nghiệp.\nĐể thành lập công ty, gõ:\n`k cty tao <tên công ty>` (Phí thành lập: 500,000 💰)", 
+            color=discord.Color.red()
+        )
+        return await ctx.send(embed=embed_none)
+    
+    comp = load_company(comp_id)
+    if not comp:
+        user_data["company"] = None
+        save_user(user_id)
+        return await ctx.send("Công ty của bạn đã phá sản từ trước rồi! Hãy dọn dẹp đống đổ nát và lập công ty mới.")
+        
+    my_role = comp["members"].get(user_id, "nhanvien")
+    role_name = comp["roles"].get(my_role, my_role)
+    
+    embed_dashboard = discord.Embed(title=f"🏢 CÔNG TY: {comp['name']}", color=discord.Color.gold())
+    embed_dashboard.add_field(name="Quỹ Công Ty", value=f"**{comp['treasury']:,} 💰**", inline=True)
+    embed_dashboard.add_field(name="Nhân Sự", value=f"**{len(comp['members'])} người**", inline=True)
+    embed_dashboard.add_field(name="Chức vụ của bạn", value=f"**{role_name}**", inline=False)
+    
+    cmds = "`k cty gop <tiền>`: Đóng góp tiền túi vào quỹ công ty\n`k cty thulai`: Nhận lãi suất ngân hàng mỗi ngày\n`k cty roi`: Nộp đơn từ chức nghỉ việc"
+    
+    if my_role in ["boss", "quanly"]:
+        cmds += "\n\n**Quyền Quản Lý:**\n`k cty tuyen @user`: Tuyển dụng nhân viên\n`k cty duoi @user`: Sa thải nhân viên"
+        
+    if my_role == "boss":
+        cmds += "\n\n**Quyền Chủ Tịch:**\n`k cty luong <tiền>`: Rút quỹ phát lương cho toàn Cty\n`k cty chucvu @user <quanly/nhanvien>`: Set role\n`k cty doitenchuc <boss/quanly/nhanvien> <Tên>`: Đổi tên hiển thị"
+        
+    embed_dashboard.add_field(name="Bảng Lệnh Công Ty", value=cmds, inline=False)
+    await ctx.send(embed=embed_dashboard)
+
+@cty.command()
+async def tao(ctx, *, name: str):
+    """Lệnh thành lập công ty tốn 500k"""
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    
+    if user_data.get("company"): 
+        return await ctx.reply("Bạn đã ký hợp đồng với một công ty rồi! Hãy thoát ra trước khi tạo mới.", mention_author=False)
+        
+    if user_data.get("money", 0) < 500000: 
+        return await ctx.reply("⚠️ Phí đăng ký doanh nghiệp là **500,000 💰**. Cày thêm đi sếp!", mention_author=False)
+    
+    user_data["money"] -= 500000
+    user_data["company"] = user_id
+    
+    new_comp = {
+        "_id": user_id, 
+        "name": name, 
+        "treasury": 0, 
+        "members": {user_id: "boss"}, 
+        "roles": {"boss": "Chủ Tịch", "quanly": "Giám Đốc", "nhanvien": "Nhân Viên"}, 
+        "last_interest": "2000-01-01 00:00:00",
+        "is_ipo": False
+    }
+    
+    COMPANY_CACHE[user_id] = new_comp
+    save_company(user_id)
+    save_user(user_id)
+    
+    embed_success = discord.Embed(
+        title="🏢 KHAI TRƯƠNG HỒNG PHÁT", 
+        description=f"Cắt băng khánh thành! Chúc mừng sếp {ctx.author.mention} đã thành lập doanh nghiệp **{name}**!\n\nGõ `k cty` để mở bảng điều khiển và bắt đầu tuyển dụng.", 
+        color=discord.Color.green()
+    )
+    await ctx.send(embed=embed_success)
+
+@cty.command()
+async def tuyen(ctx, member: discord.Member):
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    comp_id = user_data.get("company")
+    
+    if not comp_id: 
+        return await ctx.reply("Bạn có công ty đâu mà đòi tuyển nhân sự!", mention_author=False)
+        
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) not in ["boss", "quanly"]: 
+        return await ctx.reply("Quyền hạn không đủ! Chỉ Giám đốc và Chủ tịch mới được tuyển người!", mention_author=False)
+        
+    if load_user(member.id).get("company"): 
+        return await ctx.reply("Người này đang làm việc cho công ty khác rồi.", mention_author=False)
+    
+    view = CompanyInviteView(comp_id, comp["name"], member)
+    await ctx.send(f"🏢 {member.mention}, bạn có một lá thư mời nhận việc tại **{comp['name']}**! Bấm nút bên dưới để quyết định.", view=view)
+
+@cty.command()
+async def duoi(ctx, member: discord.Member):
+    user_id = str(ctx.author.id)
+    comp_id = load_user(user_id).get("company")
+    if not comp_id: return
+    
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) not in ["boss", "quanly"]: 
+        return await ctx.reply("Bạn không có quyền sa thải nhân sự!", mention_author=False)
+        
+    target_id = str(member.id)
+    if target_id not in comp["members"]: 
+        return await ctx.reply("Lỗi: Người này không có mặt trong danh sách công ty!", mention_author=False)
+        
+    if comp["members"][target_id] == "boss": 
+        return await ctx.reply("Tính làm phản hả? Không ai đuổi được sếp tổng đâu!", mention_author=False)
+    
+    del comp["members"][target_id]
+    target_data = load_user(target_id)
+    target_data["company"] = None
+    
+    save_company(comp_id)
+    save_user(target_id)
+    
+    await ctx.reply(f"👢 Đóng mộc sa thải! Bộ phận Nhân sự đã đuổi cổ {member.mention} ra khỏi công ty!", mention_author=False)
+
+@cty.command()
+async def gop(ctx, amount: int):
+    if amount <= 0: return
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    comp_id = user_data.get("company")
+    
+    if not comp_id: 
+        return await ctx.reply("Bạn chưa gia nhập công ty nào để cống hiến.", mention_author=False)
+        
+    if user_data.get("money", 0) < amount: 
+        return await ctx.reply("Trong ví làm gì có đủ tiền mà bấm góp!", mention_author=False)
+    
+    comp = load_company(comp_id)
+    user_data["money"] -= amount
+    comp["treasury"] += amount
+    
+    save_user(user_id)
+    save_company(comp_id)
+    
+    await ctx.reply(f"💰 Tuyệt vời! Bạn đã cống hiến **{amount:,} 💰** vào quỹ đen của công ty. \nTổng quỹ hiện tại: **{comp['treasury']:,} 💰**.", mention_author=False)
+
+@cty.command()
+async def thulai(ctx):
+    user_id = str(ctx.author.id)
+    comp_id = load_user(user_id).get("company")
+    if not comp_id: return
+    
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) != "boss": 
+        return await ctx.reply("Chỉ đích thân Chủ tịch mới được ký giấy thu lãi ngân hàng!", mention_author=False)
+    
+    now = datetime.now()
+    last = datetime.strptime(comp.get("last_interest", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
+    
+    if now - last < timedelta(days=1):
+        return await ctx.reply("⏳ Kế toán chưa chốt sổ! Mỗi ngày công ty chỉ được thu lãi từ Ngân hàng 1 lần.", mention_author=False)
+        
+    # Tính lãi 5%, giới hạn tối đa 100k
+    lai_nhan_duoc = int(comp["treasury"] * 0.05) 
+    if lai_nhan_duoc > 100000: 
+        lai_nhan_duoc = 100000 
+    
+    comp["treasury"] += lai_nhan_duoc
+    comp["last_interest"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    save_company(comp_id)
+    
+    await ctx.reply(f"📈 Chốt sổ kinh doanh! Công ty đã nhận được **{lai_nhan_duoc:,} 💰** tiền lãi hôm nay. \nTổng quỹ tăng lên: **{comp['treasury']:,} 💰**.", mention_author=False)
+
+@cty.command()
+async def luong(ctx, amount: int):
+    user_id = str(ctx.author.id)
+    comp_id = load_user(user_id).get("company")
+    if not comp_id: return
+    
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) != "boss": 
+        return await ctx.reply("Lỗi: Chỉ Chủ tịch mới được quyền ký quỹ phát lương!", mention_author=False)
+        
+    mem_count = len(comp["members"])
+    total_cost = amount * mem_count
+    
+    if total_cost > comp["treasury"]: 
+        return await ctx.reply(f"Quỹ không đủ! Bạn cần tới **{total_cost:,} 💰** để phát đồng đều cho {mem_count} người.", mention_author=False)
+    
+    comp["treasury"] -= total_cost
+    for m_id in list(comp["members"].keys()):
+        m_data = load_user(m_id)
+        m_data["money"] += amount
+        save_user(m_id)
+        
+    save_company(comp_id)
+    
+    embed_salary = discord.Embed(
+        description=f"💸 Sếp tổng đã hào phóng phát **{amount:,} 💰** lương cho mỗi nhân viên!\nTổng tiền quỹ bị trừ: **{total_cost:,} 💰**", 
+        color=discord.Color.green()
+    )
+    await ctx.send(embed_salary)
+
+@cty.command()
+async def chucvu(ctx, member: discord.Member, role: str):
+    user_id = str(ctx.author.id)
+    comp_id = load_user(user_id).get("company")
+    if not comp_id: return
+    
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) != "boss": 
+        return await ctx.reply("Chỉ Chủ tịch mới được set chức vụ!", mention_author=False)
+        
+    target_id = str(member.id)
+    if target_id not in comp["members"]: 
+        return await ctx.reply("Người này không thuộc công ty.", mention_author=False)
+        
+    if target_id == user_id: 
+        return await ctx.reply("Không thể tự đổi chức của bản thân, sếp vẫn là sếp!", mention_author=False)
+        
+    if role not in ["quanly", "nhanvien"]: 
+        return await ctx.reply("Chức vụ bắt buộc phải là `quanly` hoặc `nhanvien`.", mention_author=False)
+    
+    comp["members"][target_id] = role
+    save_company(comp_id)
+    await ctx.reply(f"✅ Đã quyết định thăng/giáng chức {member.mention} thành **{comp['roles'][role]}**.", mention_author=False)
+
+@cty.command()
+async def doitenchuc(ctx, role: str, *, name: str):
+    user_id = str(ctx.author.id)
+    comp_id = load_user(user_id).get("company")
+    if not comp_id: return
+    
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) != "boss": 
+        return await ctx.reply("Chỉ Chủ tịch mới được quyền đổi tên chức vụ!", mention_author=False)
+        
+    if role not in ["boss", "quanly", "nhanvien"]: 
+        return await ctx.reply("Hệ phái cần đổi phải là `boss`, `quanly` hoặc `nhanvien`.", mention_author=False)
+    
+    comp["roles"][role] = name
+    save_company(comp_id)
+    await ctx.reply(f"✅ Đã đổi tên hệ phái `{role}` thành **{name}**.", mention_author=False)
+
+@cty.command()
+async def roi(ctx):
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    comp_id = user_data.get("company")
+    
+    if not comp_id: 
+        return await ctx.reply("Bạn chưa gia nhập công ty nào cả!", mention_author=False)
+        
+    comp = load_company(comp_id)
+    if not comp:
+        user_data["company"] = None
+        save_user(user_id)
+        return await ctx.reply("Công ty của bạn đã không còn tồn tại trên hệ thống.", mention_author=False)
+    
+    my_role = comp["members"].get(user_id)
+    
+    if my_role == "boss":
+        COMPANY_CACHE.pop(comp_id, None)
+        companies_col.delete_one({"_id": comp_id})
+        
+        for m_id in list(comp["members"].keys()):
+            m_data = load_user(m_id)
+            m_data["company"] = None
+            save_user(m_id)
+            
+        embed_bankrupt = discord.Embed(
+            description="🏢 Bão tố ập tới! Chủ tịch đã bỏ trốn, công ty tuyên bố **PHÁ SẢN** và giải tán toàn bộ nhân sự!", 
+            color=discord.Color.red()
+        )
+        embed_bankrupt.set_image(url=GIF_LINKS.get("bankrupt", "https://media.giphy.com/media/3o6UB5RrlQuMfZp82Y/giphy.gif"))
+        await ctx.reply(embed=embed_bankrupt, mention_author=False)
+    else:
+        if user_id in comp["members"]:
+            del comp["members"][user_id]
+            
+        user_data["company"] = None
+        save_user(user_id)
+        save_company(comp_id)
+        
+        embed_leave = discord.Embed(
+            description="🎒 Bạn đã nộp đơn xin từ chức, thu dọn hành lý rời khỏi công ty.", 
+            color=discord.Color.dark_grey()
+        )
+        await ctx.reply(embed=embed_leave, mention_author=False)
+
+@bot.command()
+async def daichien(ctx, member: discord.Member = None, tactic: str = None):
+    """Đại chiến thương trường cướp quỹ công ty"""
+    user_id = str(ctx.author.id)
+    comp_id = load_user(user_id).get("company")
+    
+    if not member or not tactic or tactic.lower() not in ["hack", "phot", "giangho"]:
+        embed_help = discord.Embed(
+            title="⚔️ ĐẠI CHIẾN THƯƠNG TRƯỜNG (SÁNG TẠO)", 
+            description="Dùng trí tuệ và thủ đoạn để hạ gục công ty đối thủ!\nCách dùng: `k daichien @user <chiến_thuật>`", 
+            color=discord.Color.red()
+        )
+        embed_help.add_field(name="1. hack (Tấn công mạng)", value="Tỉ lệ thắng: **30%**\nPhần thưởng: Cướp **10%** quỹ đối thủ.\nThất bại: Đền bù **5%** quỹ của mình.", inline=False)
+        embed_help.add_field(name="2. phot (Thuê KOL bóc phốt)", value="Tỉ lệ thắng: **50%**\nPhần thưởng: Cướp **5%** quỹ đối thủ.\nThất bại: Đền bù **2%** quỹ của mình.", inline=False)
+        embed_help.add_field(name="3. giangho (Vũ lực)", value="Tỉ lệ thắng: **70%**\nPhần thưởng: Cướp **2%** quỹ đối thủ.\nThất bại: Đền bù **1%** quỹ của mình.", inline=False)
+        embed_help.set_image(url=GIF_LINKS.get("fight", ""))
+        return await ctx.send(embed=embed_help)
+        
+    target_id = str(member.id)
+    target_comp_id = load_user(target_id).get("company")
+    
+    if user_id == target_id or member.bot: 
+        return await ctx.reply("⚠️ Đánh với ai chứ đừng tự kỷ hoặc đi đánh Bot.", mention_author=False)
+        
+    if not comp_id or not target_comp_id: 
+        return await ctx.reply("⚠️ Cả 2 đều phải ở trong công ty thì mới được phép PK!", mention_author=False)
+        
+    if comp_id == target_comp_id: 
+        return await ctx.reply("⚠️ Cùng một công ty, anh em tương tàn làm gì!", mention_author=False)
+    
+    now = datetime.now()
+    if comp_id in cty_cooldowns and (now - cty_cooldowns[comp_id]).total_seconds() < 3600:
+        return await ctx.reply(embed=discord.Embed(description="⏳ Công ty bạn vừa xuất quân rồi! Phải đợi 1 tiếng để hồi phục binh lực.", color=discord.Color.orange()), mention_author=False)
+    
+    comp1 = load_company(comp_id)
+    comp2 = load_company(target_comp_id)
+    
+    if comp2["treasury"] < 10000: 
+        return await ctx.reply(embed=discord.Embed(description="⚠️ Quỹ công ty đối thủ quá nghèo (<10k), không đáng để tốn sức cất quân đi đánh!", color=discord.Color.red()), mention_author=False)
+    
+    cty_cooldowns[comp_id] = now
+    tactic = tactic.lower()
+    
+    if tactic == "hack": 
+        win_rate, win_pct, lose_pct, name = 30, 0.10, 0.05, "TẤN CÔNG MẠNG"
+    elif tactic == "phot": 
+        win_rate, win_pct, lose_pct, name = 50, 0.05, 0.02, "THUÊ BÁO CHÍ BÓC PHỐT"
+    else: 
+        win_rate, win_pct, lose_pct, name = 70, 0.02, 0.01, "ĐƯA GIANG HỒ ĐẾN ĐẬP PHÁ"
+    
+    embed_start = discord.Embed(description=f"⚔️ **{comp1['name']}** đang dùng chiến thuật **{name}** lên đầu **{comp2['name']}**...", color=discord.Color.dark_grey())
+    msg = await ctx.send(embed=embed_start)
+    await asyncio.sleep(2.5)
+    
+    if random.randint(1, 100) <= win_rate:
+        steal = int(comp2["treasury"] * win_pct)
+        comp1["treasury"] += steal
+        comp2["treasury"] -= steal
+        save_company(comp_id)
+        save_company(target_comp_id)
+        
+        win_embed = discord.Embed(
+            description=f"🔥 **ĐẠI THẮNG!** Binh pháp quá đỉnh!\n💰 Phe bạn đã cướp được **{steal:,} 💰** mang về quỹ công ty!", 
+            color=discord.Color.green()
+        )
+        win_embed.set_image(url=GIF_LINKS.get("fight", ""))
+        await msg.edit(embed=win_embed)
+    else:
+        fine = int(comp1["treasury"] * lose_pct)
+        comp1["treasury"] -= fine
+        comp2["treasury"] += fine
+        save_company(comp_id)
+        save_company(target_comp_id)
+        
+        lose_embed = discord.Embed(
+            description=f"💀 **THẤT BẠI NHỤC NHÃ!** Đối thủ đã phòng bị!\nBạn bị kiện ngược và công ty phải đền bù **{fine:,} 💰** cho quỹ đối thủ.", 
+            color=discord.Color.red()
+        )
+        await msg.edit(embed=lose_embed)
 # =====================================================================
 # HỆ THỐNG LỆNH CƠ BẢN, NHẬP VAI, TOP VÀ CÀY CUỐC
 # =====================================================================
