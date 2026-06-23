@@ -3102,7 +3102,1114 @@ async def nhansinh(ctx):
     embed.add_field(name="❓ Ngã rẽ quyết định tuổi 15", value=f"**{view.ev['q']}**", inline=False)
     
     await ctx.reply(embed=embed, view=view, mention_author=False)
+# =====================================================================
+# [MODULE MỚI] KALLEN FANTASY - BẢN SAO HONKAI IMPACT 3
+# =====================================================================
+# Hệ thống Data, Kịch bản, Chỉ số nhân vật và Vết thánh
 
+KALLEN_BATTLESUITS = {
+    "imayoh": {
+        "id": "imayoh",
+        "name": "Ritual Imayoh (MECH)",
+        "type": "MECH",
+        "rarity": "A",
+        "base_hp": 1200,
+        "base_atk": 250,
+        "base_def": 150,
+        "base_crt": 30,
+        "skill_basic_name": "Súng Kata",
+        "skill_basic_dmg": 1.2,
+        "skill_combo_name": "Mưa Đạn Động Năng",
+        "skill_combo_dmg": 2.5,
+        "skill_ult_name": "Khúc Ca Elysia",
+        "skill_ult_dmg": 6.0,
+        "ult_sp_cost": 80,
+        "evade_name": "Vết Nứt Không Gian",
+        "emoji": "🔫"
+    },
+    "sundenjager": {
+        "id": "sundenjager",
+        "name": "Sündenjäger (MECH)",
+        "type": "MECH",
+        "rarity": "A",
+        "base_hp": 1400,
+        "base_atk": 220,
+        "base_def": 180,
+        "base_crt": 25,
+        "skill_basic_name": "Xạ Kích Liên Thanh",
+        "skill_basic_dmg": 1.0,
+        "skill_combo_name": "Càn Quét Tội Lỗi",
+        "skill_combo_dmg": 2.2,
+        "skill_ult_name": "Oanh Tạc Quỹ Đạo",
+        "skill_ult_dmg": 5.5,
+        "ult_sp_cost": 75,
+        "evade_name": "Phản Xạ Vượt Cấp",
+        "emoji": "🦇"
+    },
+    "sixth_serenade": {
+        "id": "sixth_serenade",
+        "name": "Sixth Serenade (PSY)",
+        "type": "PSY",
+        "rarity": "S",
+        "base_hp": 1500,
+        "base_atk": 320,
+        "base_def": 140,
+        "base_crt": 40,
+        "skill_basic_name": "Dạ Khúc Dạ Tưởng",
+        "skill_basic_dmg": 1.5,
+        "skill_combo_name": "Dấu Ấn Quạ Đen",
+        "skill_combo_dmg": 3.0,
+        "skill_ult_name": "Bản Tình Ca Bóng Tối",
+        "skill_ult_dmg": 8.0,
+        "ult_sp_cost": 100,
+        "evade_name": "Vũ Điệu Quạ Đen",
+        "emoji": "🎭"
+    }
+}
+
+KALLEN_WEAPONS = {
+    "wp_usp": {
+        "id": "wp_usp",
+        "name": "Súng Ngắn USP",
+        "rarity": 2,
+        "atk": 50,
+        "crt": 5,
+        "ability": "Không có"
+    },
+    "wp_colt": {
+        "id": "wp_colt",
+        "name": "Colt Peacemaker",
+        "rarity": 3,
+        "atk": 120,
+        "crt": 10,
+        "ability": "Tăng 5% sát thương vật lý"
+    },
+    "wp_water": {
+        "id": "wp_water",
+        "name": "Water Spirit Type-II",
+        "rarity": 4,
+        "atk": 200,
+        "crt": 15,
+        "ability": "Tăng 15% sát thương khi địch bị đóng băng"
+    },
+    "wp_jingwei": {
+        "id": "wp_jingwei",
+        "name": "Cánh Chim Jingwei",
+        "rarity": 4,
+        "atk": 230,
+        "crt": 20,
+        "ability": "Đánh trúng địch 10 lần tăng 10% ATK"
+    },
+    "wp_aria": {
+        "id": "wp_aria",
+        "name": "Tranquil Arias",
+        "rarity": 5,
+        "atk": 350,
+        "crt": 35,
+        "ability": "Sau khi đổi nhân vật hoặc dùng Ulti, tăng 50% sát thương trong 5s"
+    },
+    "wp_keys": {
+        "id": "wp_keys",
+        "name": "Keys of the Void",
+        "rarity": 5,
+        "atk": 380,
+        "crt": 40,
+        "ability": "Tăng 20% sát thương bạo kích và 15% sát thương nguyên tố"
+    }
+}
+
+KALLEN_STIGMATA = {
+    "stig_attila_t": {
+        "id": "stig_attila_t",
+        "name": "Attila (T)",
+        "set_name": "Attila",
+        "type": "T",
+        "rarity": 3,
+        "hp": 200, "atk": 40, "def": 30, "crt": 0,
+        "effect": "Combo > 10, tăng 15% Tốc độ di chuyển"
+    },
+    "stig_attila_m": {
+        "id": "stig_attila_m",
+        "name": "Attila (M)",
+        "set_name": "Attila",
+        "type": "M",
+        "rarity": 3,
+        "hp": 220, "atk": 0, "def": 45, "crt": 5,
+        "effect": "Combo > 20, tăng 20% Phòng ngự"
+    },
+    "stig_attila_b": {
+        "id": "stig_attila_b",
+        "name": "Attila (B)",
+        "set_name": "Attila",
+        "type": "B",
+        "rarity": 3,
+        "hp": 210, "atk": 30, "def": 35, "crt": 5,
+        "effect": "Combo > 30, tăng 31% Sát thương vật lý"
+    },
+    "stig_michelangelo_t": {
+        "id": "stig_michelangelo_t",
+        "name": "Michelangelo (T)",
+        "set_name": "Michelangelo",
+        "type": "T",
+        "rarity": 5,
+        "hp": 400, "atk": 100, "def": 50, "crt": 0,
+        "effect": "Mỗi đòn đánh thường tăng 7.2% Sát thương vật lý, cộng dồn 5 lần"
+    },
+    "stig_michelangelo_m": {
+        "id": "stig_michelangelo_m",
+        "name": "Michelangelo (M)",
+        "set_name": "Michelangelo",
+        "type": "M",
+        "rarity": 5,
+        "hp": 450, "atk": 0, "def": 120, "crt": 10,
+        "effect": "Mỗi đòn đánh thường tăng 3% Tỉ lệ bạo kích, cộng dồn 5 lần"
+    },
+    "stig_michelangelo_b": {
+        "id": "stig_michelangelo_b",
+        "name": "Michelangelo (B)",
+        "set_name": "Michelangelo",
+        "type": "B",
+        "rarity": 5,
+        "hp": 420, "atk": 70, "def": 60, "crt": 15,
+        "effect": "Mỗi đòn đánh thường tăng 14% Sát thương bạo kích, cộng dồn 5 lần"
+    },
+    "stig_nohime_t": {
+        "id": "stig_nohime_t",
+        "name": "Nohime (T)",
+        "set_name": "Nohime",
+        "type": "T",
+        "rarity": 5,
+        "hp": 420, "atk": 110, "def": 40, "crt": 0,
+        "effect": "Tấn công thường có 15% đóng băng địch trong 4s. Gây thêm sát thương nguyên tố Băng"
+    },
+    "stig_nohime_m": {
+        "id": "stig_nohime_m",
+        "name": "Nohime (M)",
+        "set_name": "Nohime",
+        "type": "M",
+        "rarity": 5,
+        "hp": 480, "atk": 0, "def": 150, "crt": 5,
+        "effect": "Tăng 80% sát thương Băng lên kẻ địch bị đóng băng"
+    },
+    "stig_nohime_b": {
+        "id": "stig_nohime_b",
+        "name": "Nohime (B)",
+        "set_name": "Nohime",
+        "type": "B",
+        "rarity": 5,
+        "hp": 450, "atk": 80, "def": 50, "crt": 10,
+        "effect": "Mỗi kẻ địch bị đóng băng/làm chậm trên sân tăng 10% Tốc chạy và 25% sát thương Băng (Max 3 stack)"
+    }
+}
+
+KALLEN_ENEMIES = {
+    "zombie_1": {"name": "Xác Sống Cầm Kiếm", "type": "BIO", "hp": 2000, "atk": 100, "def": 50, "sp_drop": 5},
+    "zombie_2": {"name": "Cung Thủ Xác Sống", "type": "BIO", "hp": 1800, "atk": 150, "def": 40, "sp_drop": 8},
+    "zombie_boss": {"name": "White Ninja (Boss)", "type": "BIO", "hp": 15000, "atk": 300, "def": 150, "sp_drop": 20},
+    "beast_1": {"name": "Thú Honkai Kỵ Binh", "type": "PSY", "hp": 3000, "atk": 120, "def": 100, "sp_drop": 5},
+    "beast_2": {"name": "Thú Honkai Bay", "type": "PSY", "hp": 2500, "atk": 180, "def": 80, "sp_drop": 8},
+    "beast_boss": {"name": "Ganesha (Boss)", "type": "PSY", "hp": 25000, "atk": 400, "def": 250, "sp_drop": 30},
+    "mecha_1": {"name": "Robot Tuần Tra", "type": "MECH", "hp": 3500, "atk": 80, "def": 200, "sp_drop": 5},
+    "mecha_2": {"name": "Titan Nhện", "type": "MECH", "hp": 4500, "atk": 250, "def": 300, "sp_drop": 10},
+    "mecha_boss": {"name": "RPC-6626 (Boss)", "type": "MECH", "hp": 30000, "atk": 500, "def": 400, "sp_drop": 50},
+    "god_boss": {"name": "Herrscher of the Void", "type": "BIO", "hp": 100000, "atk": 1200, "def": 800, "sp_drop": 100}
+}
+
+KALLEN_STAGES = {
+    "1-1": {"name": "1-1: Sự thức tỉnh", "enemies": ["zombie_1", "zombie_1", "zombie_2"], "reward_money": 5000, "reward_xp": 100},
+    "1-2": {"name": "1-2: Cuộc vây hãm", "enemies": ["zombie_2", "beast_1", "beast_1"], "reward_money": 7000, "reward_xp": 150},
+    "1-3": {"name": "1-3: Bóng trắng trong đêm (Boss)", "enemies": ["zombie_1", "zombie_boss"], "reward_money": 15000, "reward_xp": 300},
+    "2-1": {"name": "2-1: Cảnh báo Honkai", "enemies": ["beast_1", "beast_2", "beast_2"], "reward_money": 10000, "reward_xp": 200},
+    "2-2": {"name": "2-2: Xung đột Titan", "enemies": ["mecha_1", "mecha_1", "mecha_2"], "reward_money": 12000, "reward_xp": 250},
+    "2-3": {"name": "2-3: Đế vương sụp đổ (Boss)", "enemies": ["beast_2", "beast_boss"], "reward_money": 25000, "reward_xp": 500},
+    "3-1": {"name": "3-1: Bầu trời cơ khí", "enemies": ["mecha_2", "mecha_2", "beast_2"], "reward_money": 18000, "reward_xp": 350},
+    "3-2": {"name": "3-2: Vũ khí hủy diệt (Boss)", "enemies": ["mecha_1", "mecha_boss"], "reward_money": 40000, "reward_xp": 800},
+    "4-1": {"name": "Chung Cuộc: Luật Giả (Raid Boss)", "enemies": ["god_boss"], "reward_money": 100000, "reward_xp": 2000}
+}
+
+# =====================================================================
+# KALLEN FANTASY - HỆ THỐNG DATABASE ĐỘC LẬP
+# =====================================================================
+# Tạo collection riêng cho Kallen Fantasy để không đụng chạm tới data Kinh tế
+kf_col = db["kallen_fantasy"]
+KF_CACHE = {}
+
+def load_kf_profile(user_id):
+    """Tải hồ sơ Kallen Fantasy của người chơi"""
+    user_id = str(user_id)
+    if user_id not in KF_CACHE:
+        doc = kf_col.find_one({"_id": user_id})
+        if doc:
+            KF_CACHE[user_id] = doc
+        else:
+            KF_CACHE[user_id] = {}
+            
+    defaults = {
+        "level": 1,
+        "exp": 0,
+        "stamina": 100, # Năng lượng để đi ải
+        "max_stamina": 100,
+        "last_stamina_regen": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "crystals": 0, # Đơn vị nạp thẻ quay Gacha (Pha lê)
+        "current_suit": "imayoh",
+        "unlocked_suits": ["imayoh"],
+        "inventory_weapons": ["wp_usp"],
+        "equipped_weapon": "wp_usp",
+        "inventory_stigmata": [],
+        "equipped_stigmata": {"T": None, "M": None, "B": None},
+        "cleared_stages": [],
+        "abyss_floor": 1
+    }
+    
+    for k, v in defaults.items():
+        if k not in KF_CACHE[user_id]:
+            KF_CACHE[user_id][k] = v
+            
+    # Hồi thể lực (1 stamina / 5 phút)
+    last_regen = datetime.strptime(KF_CACHE[user_id]["last_stamina_regen"], "%Y-%m-%d %H:%M:%S")
+    now = datetime.now()
+    delta = now - last_regen
+    minutes_passed = int(delta.total_seconds() / 60)
+    
+    if minutes_passed >= 5:
+        stamina_to_add = minutes_passed // 5
+        KF_CACHE[user_id]["stamina"] = min(KF_CACHE[user_id]["max_stamina"], KF_CACHE[user_id]["stamina"] + stamina_to_add)
+        # Cập nhật lại mốc thời gian hồi (trừ đi phần lẻ chưa đủ 5 phút)
+        leftover_seconds = int(delta.total_seconds()) % 300
+        new_regen_time = now - timedelta(seconds=leftover_seconds)
+        KF_CACHE[user_id]["last_stamina_regen"] = new_regen_time.strftime("%Y-%m-%d %H:%M:%S")
+        save_kf_profile(user_id)
+
+    return KF_CACHE[user_id]
+
+def save_kf_profile(user_id):
+    """Lưu hồ sơ Kallen Fantasy"""
+    user_id = str(user_id)
+    if user_id in KF_CACHE:
+        kf_col.update_one(
+            {"_id": user_id},
+            {"$set": KF_CACHE[user_id]},
+            upsert=True
+        )
+
+# =====================================================================
+# KALLEN FANTASY - CHỈ SỐ NHÂN VẬT & LOGIC KHẮC HỆ
+# =====================================================================
+def calculate_kallen_stats(user_id):
+    """Tính toán tổng chỉ số của Valkyrie bao gồm Base + Weapon + Stigmata"""
+    p = load_kf_profile(user_id)
+    suit = KALLEN_BATTLESUITS[p["current_suit"]]
+    
+    total_hp = suit["base_hp"]
+    total_atk = suit["base_atk"]
+    total_def = suit["base_def"]
+    total_crt = suit["base_crt"]
+    
+    # Cộng chỉ số vũ khí
+    if p["equipped_weapon"]:
+        wp = KALLEN_WEAPONS[p["equipped_weapon"]]
+        total_atk += wp["atk"]
+        total_crt += wp["crt"]
+        
+    # Cộng chỉ số vết thánh (Stigmata)
+    equipped_stig = p["equipped_stigmata"]
+    for pos in ["T", "M", "B"]:
+        stig_id = equipped_stig[pos]
+        if stig_id:
+            stig = KALLEN_STIGMATA[stig_id]
+            total_hp += stig["hp"]
+            total_atk += stig["atk"]
+            total_def += stig["def"]
+            total_crt += stig["crt"]
+            
+    return {
+        "suit": suit,
+        "hp": int(total_hp * (1 + (p["level"] - 1) * 0.1)), # Tăng 10% stats mỗi cấp
+        "atk": int(total_atk * (1 + (p["level"] - 1) * 0.1)),
+        "def": int(total_def * (1 + (p["level"] - 1) * 0.1)),
+        "crt": int(total_crt * (1 + (p["level"] - 1) * 0.1)),
+    }
+
+def get_type_advantage(attacker_type, defender_type):
+    """
+    Hệ thống khắc hệ:
+    MECH khắc BIO, BIO khắc PSY, PSY khắc MECH.
+    Khắc hệ: Sát thương x1.3
+    Bị khắc: Sát thương x0.7
+    Bằng hệ: Sát thương x1.0
+    """
+    if attacker_type == "MECH" and defender_type == "BIO": return 1.3
+    if attacker_type == "BIO" and defender_type == "PSY": return 1.3
+    if attacker_type == "PSY" and defender_type == "MECH": return 1.3
+    
+    if attacker_type == "BIO" and defender_type == "MECH": return 0.7
+    if attacker_type == "PSY" and defender_type == "BIO": return 0.7
+    if attacker_type == "MECH" and defender_type == "PSY": return 0.7
+    
+    return 1.0
+
+# =====================================================================
+# KALLEN FANTASY - GIAO DIỆN LỆNH & GACHA (TIẾP TẾ)
+# =====================================================================
+@bot.group(invoke_without_command=True, aliases=['kf', 'honkai'])
+async def kallen(ctx):
+    """Trung tâm chỉ huy Hyperion của Kallen Fantasy"""
+    p = load_kf_profile(ctx.author.id)
+    stats = calculate_kallen_stats(ctx.author.id)
+    suit = stats["suit"]
+    
+    embed = discord.Embed(
+        title="🌌 KALLEN FANTASY - HYPERION BRIDGE",
+        description=f"Thuyền trưởng: **{ctx.author.name}**\nCấp độ: **Lv.{p['level']}** | Thể lực: **{p['stamina']}/{p['max_stamina']}** ⚡ | Pha lê: **{p['crystals']:,}** 💎",
+        color=discord.Color.purple()
+    )
+    
+    embed.add_field(
+        name="Đang xuất chiến", 
+        value=f"**{suit['emoji']} {suit['name']}**", 
+        inline=False
+    )
+    embed.add_field(
+        name="Chỉ số chiến đấu",
+        value=f"❤️ HP: {stats['hp']} | ⚔️ ATK: {stats['atk']}\n🛡️ DEF: {stats['def']} | 💥 CRT: {stats['crt']}",
+        inline=False
+    )
+    
+    wp_name = KALLEN_WEAPONS[p["equipped_weapon"]]["name"] if p["equipped_weapon"] else "Tay Không"
+    stig_t = KALLEN_STIGMATA[p["equipped_stigmata"]["T"]]["name"] if p["equipped_stigmata"]["T"] else "Trống"
+    stig_m = KALLEN_STIGMATA[p["equipped_stigmata"]["M"]]["name"] if p["equipped_stigmata"]["M"] else "Trống"
+    stig_b = KALLEN_STIGMATA[p["equipped_stigmata"]["B"]]["name"] if p["equipped_stigmata"]["B"] else "Trống"
+    
+    embed.add_field(
+        name="Trang bị",
+        value=f"🔫 Vũ khí: {wp_name}\n💠 Vết thánh (T): {stig_t}\n💠 Vết thánh (M): {stig_m}\n💠 Vết thánh (B): {stig_b}",
+        inline=False
+    )
+    
+    cmds = (
+        "`k kallen gacha` • Vào kênh Tiếp Tế (Dùng Pha lê)\n"
+        "`k kallen doipha` • Đổi Tiền 💰 sang Pha lê 💎\n"
+        "`k kallen story` • Đi Cốt truyện\n"
+        "`k kallen abyss` • Leo tháp Vực Sâu"
+    )
+    embed.add_field(name="Bảng Điều Khiển", value=cmds, inline=False)
+    
+    await ctx.reply(embed=embed, mention_author=False)
+
+@kallen.command()
+async def doipha(ctx, amount: int):
+    """Đổi tiền server sang Pha lê Kallen Fantasy (Tỷ giá 1000 💰 = 1 💎)"""
+    if amount <= 0: return await ctx.reply("Nhập số lớn hơn 0.")
+    
+    user_id = str(ctx.author.id)
+    u_data = load_user(user_id)
+    cost = amount * 1000
+    
+    if u_data.get("money", 0) < cost:
+        return await ctx.reply(f"⚠️ Sếp cần {cost:,} 💰 để đổi lấy {amount:,} Pha lê 💎. Đi cày thêm nhé!")
+        
+    u_data["money"] -= cost
+    save_user(user_id)
+    
+    p = load_kf_profile(user_id)
+    p["crystals"] += amount
+    save_kf_profile(user_id)
+    
+    await ctx.reply(f"✅ Đã nạp thành công **{amount:,} Pha lê 💎** vào Kallen Fantasy. Thuyền trưởng hãy đi Gacha ngay!")
+
+class KallenGachaView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.author = author
+
+    @discord.ui.button(label="Quay x1 (280 💎)", style=discord.ButtonStyle.primary, emoji="📦")
+    async def roll_1(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.process_gacha(interaction, 1)
+
+    @discord.ui.button(label="Quay x10 (2800 💎)", style=discord.ButtonStyle.danger, emoji="🎁")
+    async def roll_10(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.process_gacha(interaction, 10)
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id: return False
+        return True
+
+    async def process_gacha(self, interaction: discord.Interaction, times: int):
+        user_id = str(interaction.user.id)
+        p = load_kf_profile(user_id)
+        cost = 280 * times
+        
+        if p["crystals"] < cost:
+            return await interaction.response.send_message(f"⚠️ Thuyền trưởng không đủ Pha lê! Cần {cost} 💎.", ephemeral=True)
+            
+        p["crystals"] -= cost
+        results = []
+        
+        # Pool Gacha
+        all_weapons = list(KALLEN_WEAPONS.keys())
+        all_stigmatas = list(KALLEN_STIGMATA.keys())
+        all_suits = list(KALLEN_BATTLESUITS.keys())
+        
+        for _ in range(times):
+            roll = random.uniform(0, 100)
+            if roll <= 1.5: # 1.5% ra Giáp S
+                suit = "sixth_serenade"
+                if suit not in p["unlocked_suits"]:
+                    p["unlocked_suits"].append(suit)
+                    results.append(f"🌟 **GIÁP VALKYRIE S:** {KALLEN_BATTLESUITS[suit]['name']}")
+                else:
+                    results.append(f"🌟 Giáp S (Đã có, chuyển thành 1000 Pha lê)")
+                    p["crystals"] += 1000
+            elif roll <= 5.0: # 3.5% ra Vũ khí / Vết thánh 5 sao
+                pool = [k for k, v in KALLEN_WEAPONS.items() if v["rarity"] == 5] + [k for k, v in KALLEN_STIGMATA.items() if v["rarity"] == 5]
+                item = random.choice(pool)
+                if item in KALLEN_WEAPONS:
+                    p["inventory_weapons"].append(item)
+                    results.append(f"🔶 **Vũ Khí 5★:** {KALLEN_WEAPONS[item]['name']}")
+                else:
+                    p["inventory_stigmata"].append(item)
+                    results.append(f"💠 **Vết Thánh 5★:** {KALLEN_STIGMATA[item]['name']}")
+            elif roll <= 15.0: # 10% ra Giáp A
+                suit = "sundenjager"
+                if suit not in p["unlocked_suits"]:
+                    p["unlocked_suits"].append(suit)
+                    results.append(f"⭐ **GIÁP VALKYRIE A:** {KALLEN_BATTLESUITS[suit]['name']}")
+                else:
+                    results.append(f"⭐ Giáp A (Đã có, chuyển thành 280 Pha lê)")
+                    p["crystals"] += 280
+            elif roll <= 45.0: # 30% Đồ 4 sao
+                pool = [k for k, v in KALLEN_WEAPONS.items() if v["rarity"] == 4]
+                item = random.choice(pool)
+                p["inventory_weapons"].append(item)
+                results.append(f"🟦 Vũ Khí 4★: {KALLEN_WEAPONS[item]['name']}")
+            else: # Rác 3 sao
+                pool = [k for k, v in KALLEN_WEAPONS.items() if v["rarity"] <= 3] + [k for k, v in KALLEN_STIGMATA.items() if v["rarity"] == 3]
+                item = random.choice(pool)
+                if item in KALLEN_WEAPONS:
+                    p["inventory_weapons"].append(item)
+                    results.append(f"⬜ Vũ Khí 3★: {KALLEN_WEAPONS[item]['name']}")
+                else:
+                    p["inventory_stigmata"].append(item)
+                    results.append(f"⬜ Vết Thánh 3★: {KALLEN_STIGMATA[item]['name']}")
+                    
+        save_kf_profile(user_id)
+        
+        desc = "\n".join(results)
+        embed = discord.Embed(title="📦 KẾT QUẢ TIẾP TẾ", description=desc, color=discord.Color.gold())
+        embed.set_footer(text=f"Pha lê còn lại: {p['crystals']} 💎")
+        
+        await interaction.response.edit_message(embed=embed, view=self)
+
+@kallen.command()
+async def gacha(ctx):
+    """Mở giao diện Tiếp tế (Gacha) của Kallen Fantasy"""
+    embed = discord.Embed(
+        title="📦 KÊNH TIẾP TẾ KALLEN",
+        description="Chào mừng Thuyền trưởng đến với Trung Tâm Tiếp Tế.\nHãy dùng Pha Lê 💎 để triệu hồi Giáp Valkyrie, Vũ khí và Vết thánh mới!",
+        color=discord.Color.blue()
+    )
+    await ctx.reply(embed=embed, view=KallenGachaView(ctx.author), mention_author=False)
+    # =====================================================================
+# KALLEN FANTASY - HỆ THỐNG QUẢN LÝ TRANG BỊ (EQUIP)
+# =====================================================================
+@kallen.command()
+async def equip(ctx, category: str, item_id: str):
+    """
+    Trang bị Valkyrie, Vũ khí hoặc Vết thánh
+    Cách dùng: 
+    - k kallen equip suit <id>
+    - k kallen equip wp <id>
+    - k kallen equip stig_<T/M/B> <id>
+    """
+    user_id = str(ctx.author.id)
+    p = load_kf_profile(user_id)
+    category = category.lower()
+    
+    if category == "suit":
+        if item_id not in KALLEN_BATTLESUITS:
+            return await ctx.reply("⚠️ Tên Giáp Valkyrie không tồn tại.")
+        if item_id not in p["unlocked_suits"]:
+            return await ctx.reply("⚠️ Thuyền trưởng chưa mở khóa Giáp Valkyrie này (Vui lòng đi Gacha).")
+        p["current_suit"] = item_id
+        save_kf_profile(user_id)
+        return await ctx.reply(f"✅ Đã xuất chiến Giáp Valkyrie: **{KALLEN_BATTLESUITS[item_id]['name']}**")
+        
+    elif category == "wp":
+        if item_id not in KALLEN_WEAPONS:
+            return await ctx.reply("⚠️ Mã Vũ khí không tồn tại.")
+        if item_id not in p["inventory_weapons"]:
+            return await ctx.reply("⚠️ Thuyền trưởng không sở hữu Vũ khí này.")
+        p["equipped_weapon"] = item_id
+        save_kf_profile(user_id)
+        return await ctx.reply(f"✅ Đã trang bị Vũ khí: **{KALLEN_WEAPONS[item_id]['name']}**")
+        
+    elif category in ["stig_t", "stig_m", "stig_b"]:
+        pos = category.split("_")[1].upper()
+        if item_id not in KALLEN_STIGMATA:
+            return await ctx.reply("⚠️ Mã Vết thánh không tồn tại.")
+        if item_id not in p["inventory_stigmata"]:
+            return await ctx.reply("⚠️ Thuyền trưởng không sở hữu Vết thánh này.")
+        if KALLEN_STIGMATA[item_id]["type"] != pos:
+            return await ctx.reply(f"⚠️ Vết thánh này không phải mảnh ({pos}).")
+            
+        p["equipped_stigmata"][pos] = item_id
+        save_kf_profile(user_id)
+        return await ctx.reply(f"✅ Đã lắp Vết thánh mảnh ({pos}): **{KALLEN_STIGMATA[item_id]['name']}**")
+        
+    else:
+        await ctx.reply("⚠️ Sai cú pháp. Dùng: `suit`, `wp`, `stig_t`, `stig_m`, `stig_b`.")
+
+# =====================================================================
+# KALLEN FANTASY - LÕI CHIẾN ĐẤU (COMBAT UI & LOGIC)
+# =====================================================================
+class KallenCombatView(discord.ui.View):
+    """Hệ thống Nút Bấm Xử Lý Chiến Đấu Theo Lượt"""
+    def __init__(self, author, player_stats, stage_data, p_profile):
+        super().__init__(timeout=300) # Timeout 5 phút cho một trận
+        self.author = author
+        self.p_stats = player_stats
+        self.stage = stage_data
+        self.p_profile = p_profile
+        
+        # Chỉ số khởi đầu của Player
+        self.p_hp = self.p_stats["hp"]
+        self.p_max_hp = self.p_stats["hp"]
+        self.p_sp = 0 # Khởi đầu với 0 SP
+        self.p_evade_cooldown = 0
+        
+        # Danh sách quái vật trong ải
+        self.enemy_list = self.stage["enemies"].copy()
+        self.current_enemy_idx = 0
+        self.load_enemy()
+
+    def load_enemy(self):
+        """Tải dữ liệu quái vật hiện tại"""
+        if self.current_enemy_idx < len(self.enemy_list):
+            enemy_id = self.enemy_list[self.current_enemy_idx]
+            base_enemy = KALLEN_ENEMIES[enemy_id]
+            # Copy để không làm thay đổi data gốc
+            self.e_data = {
+                "name": base_enemy["name"],
+                "type": base_enemy["type"],
+                "hp": base_enemy["hp"],
+                "max_hp": base_enemy["hp"],
+                "atk": base_enemy["atk"],
+                "def": base_enemy["def"],
+                "sp_drop": base_enemy["sp_drop"]
+            }
+            return True
+        return False
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("⚠️ Không thể can thiệp vào trận chiến của người khác!", ephemeral=True)
+            return False
+        return True
+
+    def calculate_damage(self, dmg_multiplier, is_crit_allowed=True):
+        """Hàm tính toán sát thương người chơi đánh vào quái"""
+        base_atk = self.p_stats["atk"]
+        enemy_def = self.e_data["def"]
+        
+        # Hệ số khắc hệ
+        type_adv = get_type_advantage(self.p_stats["suit"]["type"], self.e_data["type"])
+        
+        # Tính bạo kích (Crit)
+        is_crit = False
+        crit_mult = 1.0
+        if is_crit_allowed:
+            crit_chance = min(100, self.p_stats["crt"])
+            if random.uniform(0, 100) <= crit_chance:
+                is_crit = True
+                crit_mult = 2.0 # Sát thương bạo kích mặc định x2
+                
+        # Công thức sát thương giảm trừ phòng ngự cơ bản
+        raw_dmg = (base_atk * dmg_multiplier * type_adv * crit_mult) - (enemy_def * 0.5)
+        final_dmg = int(max(10, raw_dmg)) # Ít nhất gây 10 dmg
+        
+        return final_dmg, is_crit, type_adv
+
+    def enemy_turn(self):
+        """Lượt của quái vật tấn công người chơi"""
+        if self.e_data["hp"] <= 0:
+            return 0, "Quái vật đã bị tiêu diệt, không thể tấn công!"
+            
+        type_adv = get_type_advantage(self.e_data["type"], self.p_stats["suit"]["type"])
+        raw_dmg = (self.e_data["atk"] * type_adv) - (self.p_stats["def"] * 0.5)
+        final_dmg = int(max(5, raw_dmg))
+        
+        self.p_hp -= final_dmg
+        return final_dmg, f"💥 **{self.e_data['name']}** phản công gây **{final_dmg}** sát thương!"
+
+    async def update_battle_ui(self, interaction: discord.Interaction, combat_log: str):
+        """Cập nhật Giao diện sau mỗi lượt đánh"""
+        # Kiểm tra chết quái
+        if self.e_data["hp"] <= 0:
+            self.p_sp += self.e_data["sp_drop"] # Nhận SP khi giết quái
+            combat_log += f"\n💀 **{self.e_data['name']}** đã bị hạ gục! Nhận {self.e_data['sp_drop']} SP."
+            self.current_enemy_idx += 1
+            
+            if not self.load_enemy():
+                # Hoàn thành ải
+                return await self.win_stage(interaction, combat_log)
+            else:
+                combat_log += f"\n⚠️ **CẢNH BÁO:** Kẻ địch tiếp theo [**{self.e_data['name']}**] xuất hiện!"
+
+        # Kiểm tra người chơi chết
+        if self.p_hp <= 0:
+            return await self.lose_stage(interaction, combat_log)
+
+        # Giảm hồi chiêu Né
+        if self.p_evade_cooldown > 0:
+            self.p_evade_cooldown -= 1
+
+        # Cập nhật thanh máu
+        p_hp_bar = make_progress_bar(max(0, self.p_hp), self.p_max_hp, 10)
+        e_hp_bar = make_progress_bar(max(0, self.e_data["hp"]), self.e_data["max_hp"], 10)
+        
+        embed = discord.Embed(
+            title=f"⚔️ {self.stage['name'].upper()}",
+            description=combat_log,
+            color=discord.Color.red()
+        )
+        
+        # Info Valkyrie
+        suit = self.p_stats["suit"]
+        embed.add_field(
+            name=f"Thuyền trưởng {self.author.name}\n{suit['emoji']} {suit['name']}",
+            value=f"❤️ HP: {max(0, self.p_hp)}/{self.p_max_hp}\n`{p_hp_bar}`\n⚡ SP: {self.p_sp}",
+            inline=True
+        )
+        embed.add_field(name="VS", value="⚡", inline=True)
+        # Info Enemy
+        type_icon = "🔺" if get_type_advantage(suit["type"], self.e_data["type"]) > 1 else ("🔻" if get_type_advantage(suit["type"], self.e_data["type"]) < 1 else "➖")
+        embed.add_field(
+            name=f"Kẻ địch {self.current_enemy_idx + 1}/{len(self.enemy_list)}\n👹 {self.e_data['name']} ({self.e_data['type']}) {type_icon}",
+            value=f"❤️ HP: {max(0, self.e_data['hp'])}/{self.e_data['max_hp']}\n`{e_hp_bar}`",
+            inline=True
+        )
+
+        # Khóa nút Ultimate nếu không đủ SP, Khóa Né nếu đang CD
+        self.btn_ult.disabled = self.p_sp < suit["ult_sp_cost"]
+        self.btn_evade.disabled = self.p_evade_cooldown > 0
+
+        if interaction.response.is_done():
+            await interaction.message.edit(embed=embed, view=self)
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
+
+    async def win_stage(self, interaction: discord.Interaction, combat_log: str):
+        """Xử lý khi vượt ải thành công"""
+        for child in self.children:
+            child.disabled = True
+            
+        user_id = str(self.author.id)
+        user_data = load_user(user_id)
+        
+        # Nhận thưởng
+        money_reward = self.stage["reward_money"]
+        xp_reward = self.stage["reward_xp"]
+        
+        user_data["money"] += money_reward
+        self.p_profile["exp"] += xp_reward
+        
+        # Level up logic đơn giản cho KF Profile
+        if self.p_profile["exp"] >= self.p_profile["level"] * 500:
+            self.p_profile["exp"] -= self.p_profile["level"] * 500
+            self.p_profile["level"] += 1
+            combat_log += f"\n🆙 Cấp Thuyền Trưởng tăng lên **Lv.{self.p_profile['level']}**!"
+            
+        save_user(user_id)
+        save_kf_profile(user_id)
+        
+        embed = discord.Embed(
+            title="🎉 VƯỢT ẢI THÀNH CÔNG!",
+            description=f"{combat_log}\n\n🎁 **PHẦN THƯỞNG:**\n💰 {money_reward:,} VNĐ\n✨ {xp_reward} KF-EXP",
+            color=discord.Color.green()
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.stop()
+
+    async def lose_stage(self, interaction: discord.Interaction, combat_log: str):
+        """Xử lý khi Valkyrie gục ngã"""
+        for child in self.children:
+            child.disabled = True
+            
+        embed = discord.Embed(
+            title="💀 NHIỆM VỤ THẤT BẠI",
+            description=f"{combat_log}\n\nValkyrie của bạn đã gục ngã. Thể lực đã mất sẽ không được hoàn trả. Hãy nâng cấp trang bị và thử lại!",
+            color=discord.Color.dark_grey()
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
+        self.stop()
+
+    # --- ĐỊNH NGHĨA CÁC NÚT BẤM KỸ NĂNG ---
+
+    @discord.ui.button(label="Đánh Thường", style=discord.ButtonStyle.primary, custom_id="btn_atk")
+    async def btn_atk(self, interaction: discord.Interaction, button: discord.ui.Button):
+        suit = self.p_stats["suit"]
+        dmg, is_crit, t_adv = self.calculate_damage(suit["skill_basic_dmg"])
+        self.e_data["hp"] -= dmg
+        self.p_sp += 5 # Đánh thường hồi 5 SP
+        
+        crit_txt = " (💥 **BẠO KÍCH**)" if is_crit else ""
+        log = f"🗡️ Dùng **{suit['skill_basic_name']}** gây **{dmg}** ST{crit_txt}."
+        
+        e_dmg, e_log = self.enemy_turn()
+        log += f"\n{e_log}"
+        
+        await self.update_battle_ui(interaction, log)
+
+    @discord.ui.button(label="Combo (Nhánh)", style=discord.ButtonStyle.success, custom_id="btn_combo")
+    async def btn_combo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        suit = self.p_stats["suit"]
+        dmg, is_crit, t_adv = self.calculate_damage(suit["skill_combo_dmg"])
+        self.e_data["hp"] -= dmg
+        self.p_sp += 2
+        
+        crit_txt = " (💥 **BẠO KÍCH**)" if is_crit else ""
+        log = f"⚔️ Tung đòn Nhánh **{suit['skill_combo_name']}** gây **{dmg}** ST{crit_txt}."
+        
+        e_dmg, e_log = self.enemy_turn()
+        log += f"\n{e_log}"
+        
+        await self.update_battle_ui(interaction, log)
+
+    @discord.ui.button(label="Tất Sát (Ulti)", style=discord.ButtonStyle.danger, custom_id="btn_ult")
+    async def btn_ult(self, interaction: discord.Interaction, button: discord.ui.Button):
+        suit = self.p_stats["suit"]
+        if self.p_sp < suit["ult_sp_cost"]:
+            return await interaction.response.send_message("⚠️ Không đủ Năng lượng (SP)!", ephemeral=True)
+            
+        self.p_sp -= suit["ult_sp_cost"]
+        dmg, is_crit, t_adv = self.calculate_damage(suit["skill_ult_dmg"])
+        self.e_data["hp"] -= dmg
+        
+        crit_txt = " (💥 **BẠO KÍCH**)" if is_crit else ""
+        log = f"🔥 Kích hoạt Tất Sát **{suit['skill_ult_name']}** gây lượng sát thương khủng khiếp **{dmg}** ST{crit_txt}!"
+        
+        # Ulti thường có i-frame, địch không đánh lại trong turn này (nếu chưa chết)
+        if self.e_data["hp"] > 0:
+            log += f"\n🛡️ Đối phương bị choáng ngợp bởi chiêu Tất sát, bỏ qua lượt!"
+            
+        await self.update_battle_ui(interaction, log)
+
+    @discord.ui.button(label="Né Cực Hạn", style=discord.ButtonStyle.secondary, custom_id="btn_evade")
+    async def btn_evade(self, interaction: discord.Interaction, button: discord.ui.Button):
+        suit = self.p_stats["suit"]
+        if self.p_evade_cooldown > 0:
+            return await interaction.response.send_message("⚠️ Kỹ năng Né đang hồi chiêu!", ephemeral=True)
+            
+        self.p_evade_cooldown = 3 # Cooldown 3 lượt
+        self.p_sp += 15 # Né thành công hồi nhiều SP
+        
+        # Địch tấn công nhưng bị né
+        type_adv = get_type_advantage(self.e_data["type"], self.p_stats["suit"]["type"])
+        raw_dmg = (self.e_data["atk"] * type_adv) - (self.p_stats["def"] * 0.5)
+        e_dmg = int(max(5, raw_dmg))
+        
+        log = f"💨 Kích hoạt **{suit['evade_name']}**! Né hoàn toàn **{e_dmg}** sát thương từ địch, hồi 15 SP."
+        await self.update_battle_ui(interaction, log)
+
+# =====================================================================
+# KALLEN FANTASY - LỆNH GỌI CỐT TRUYỆN (STORY)
+# =====================================================================
+@kallen.command()
+async def story(ctx, stage_id: str = None):
+    """
+    Đi ải cốt truyện Kallen Fantasy
+    Cách dùng: k kallen story <Mã Ải> (VD: 1-1, 1-2)
+    Gõ 'k kallen story list' để xem danh sách ải.
+    """
+    user_id = str(ctx.author.id)
+    p = load_kf_profile(user_id)
+    
+    if stage_id is None or stage_id.lower() == "list":
+        embed = discord.Embed(title="📜 DANH SÁCH ẢI CỐT TRUYỆN", color=discord.Color.dark_purple())
+        desc = ""
+        for s_id, s_data in KALLEN_STAGES.items():
+            status = "✅" if s_id in p["cleared_stages"] else "🔒"
+            desc += f"{status} **Ải {s_id}**: {s_data['name']} (Thưởng: {s_data['reward_money']:,} 💰)\n"
+        embed.description = desc
+        embed.set_footer(text="Dùng lệnh: k kallen story <mã ải> để xuất kích (Tốn 10 Thể lực)")
+        return await ctx.reply(embed=embed, mention_author=False)
+
+    if stage_id not in KALLEN_STAGES:
+        return await ctx.reply("⚠️ Mã ải không tồn tại. Gõ `k kallen story list` để xem.")
+        
+    if p["stamina"] < 10:
+        return await ctx.reply(f"⚠️ Thể lực hiện tại ({p['stamina']}/100) không đủ để xuất kích (Cần 10 ⚡).")
+        
+    # Trừ thể lực
+    p["stamina"] -= 10
+    save_kf_profile(user_id)
+    
+    stage_data = KALLEN_STAGES[stage_id]
+    stats = calculate_kallen_stats(user_id)
+    
+    embed_start = discord.Embed(
+        title=f"🚀 XUẤT KÍCH: {stage_data['name']}",
+        description="Đang tải dữ liệu chiến trường... Hyperion, sẵn sàng!",
+        color=discord.Color.blue()
+    )
+    msg = await ctx.reply(embed=embed_start, mention_author=False)
+    await asyncio.sleep(2)
+    
+    # Kích hoạt giao diện chiến đấu
+    view = KallenCombatView(ctx.author, stats, stage_data, p)
+    
+    # Tạo log khởi đầu mồi
+    initial_log = f"Bắt đầu ải: {stage_data['name']}. Kẻ địch đã xuất hiện!"
+    
+    # Gắn view vào hàm cập nhật để tạo embed đầu tiên
+    await view.update_battle_ui(ctx, initial_log)
+    
+    # Gán msg để view có thể edit (nếu cần xử lý ngoài hàm interaction)
+    view.message = msg
+    # =====================================================================
+# KALLEN FANTASY - CHẾ ĐỘ VỰC SÂU (ABYSS - LEO THÁP VÔ TẬN)
+# =====================================================================
+def generate_abyss_enemy(floor_level):
+    """Tạo ra quái vật Vực Sâu với chỉ số tăng tiến theo tầng"""
+    # Loại bỏ các boss rườm rà, chỉ lấy quái thường hoặc boss nhỏ để làm base
+    enemy_pool = [e for k, e in KALLEN_ENEMIES.items() if "god_boss" not in k]
+    base_enemy = random.choice(enemy_pool)
+    
+    # Hệ số sức mạnh: Mỗi tầng tăng 15% chỉ số
+    multiplier = 1.0 + (floor_level * 0.15)
+    
+    return {
+        "name": f"{base_enemy['name']} (Tầng {floor_level})",
+        "type": base_enemy["type"],
+        "hp": int(base_enemy["hp"] * multiplier),
+        "max_hp": int(base_enemy["hp"] * multiplier),
+        "atk": int(base_enemy["atk"] * multiplier),
+        "def": int(base_enemy["def"] * multiplier),
+        "sp_drop": base_enemy["sp_drop"] + int(floor_level / 5)
+    }
+
+class AbyssCombatView(discord.ui.View):
+    """Hệ thống UI Chiến đấu vô tận cho Vực Sâu"""
+    def __init__(self, author, player_stats, p_profile):
+        super().__init__(timeout=300) # Cho phép 5 phút suy nghĩ mỗi lượt
+        self.author = author
+        self.p_stats = player_stats
+        self.p_profile = p_profile
+        
+        # Chỉ số người chơi
+        self.p_hp = self.p_stats["hp"]
+        self.p_max_hp = self.p_stats["hp"]
+        self.p_sp = 0 
+        self.p_evade_cooldown = 0
+        
+        # Thông tin Vực Sâu
+        self.current_floor = 1
+        self.e_data = generate_abyss_enemy(self.current_floor)
+        self.crystals_earned = 0
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("⚠️ Chỗ người ta đang leo tháp, đừng bấm phá!", ephemeral=True)
+            return False
+        return True
+
+    def calculate_damage(self, dmg_multiplier, is_crit_allowed=True):
+        base_atk = self.p_stats["atk"]
+        enemy_def = self.e_data["def"]
+        type_adv = get_type_advantage(self.p_stats["suit"]["type"], self.e_data["type"])
+        
+        is_crit = False
+        crit_mult = 1.0
+        if is_crit_allowed:
+            crit_chance = min(100, self.p_stats["crt"])
+            if random.uniform(0, 100) <= crit_chance:
+                is_crit = True
+                crit_mult = 2.0 
+                
+        raw_dmg = (base_atk * dmg_multiplier * type_adv * crit_mult) - (enemy_def * 0.5)
+        return int(max(10, raw_dmg)), is_crit, type_adv
+
+    def enemy_turn(self):
+        if self.e_data["hp"] <= 0:
+            return 0, "Quái vật đã tan biến..."
+            
+        type_adv = get_type_advantage(self.e_data["type"], self.p_stats["suit"]["type"])
+        raw_dmg = (self.e_data["atk"] * type_adv) - (self.p_stats["def"] * 0.5)
+        final_dmg = int(max(5, raw_dmg))
+        
+        self.p_hp -= final_dmg
+        return final_dmg, f"💥 **{self.e_data['name']}** vung vũ khí gây **{final_dmg}** ST!"
+
+    async def update_battle_ui(self, interaction: discord.Interaction, combat_log: str):
+        # Nếu quái chết -> Lên tầng mới
+        if self.e_data["hp"] <= 0:
+            self.p_sp += self.e_data["sp_drop"]
+            crystal_drop = random.randint(5, 15) + int(self.current_floor / 2)
+            self.crystals_earned += crystal_drop
+            
+            combat_log += f"\n✅ Vượt Tầng {self.current_floor}! Rớt {crystal_drop} 💎."
+            
+            # Hồi 10% HP cho Valkyrie khi qua ải
+            heal_amount = int(self.p_max_hp * 0.1)
+            self.p_hp = min(self.p_max_hp, self.p_hp + heal_amount)
+            combat_log += f" Valkyrie được hồi {heal_amount} HP."
+            
+            self.current_floor += 1
+            self.e_data = generate_abyss_enemy(self.current_floor)
+            combat_log += f"\n👹 **CẢNH BÁO:** {self.e_data['name']} xuất hiện!"
+
+        # Nếu người chơi chết -> Tổng kết tháp
+        if self.p_hp <= 0:
+            for child in self.children:
+                child.disabled = True
+                
+            user_id = str(self.author.id)
+            self.p_profile["crystals"] += self.crystals_earned
+            if self.current_floor > self.p_profile.get("abyss_floor", 0):
+                self.p_profile["abyss_floor"] = self.current_floor
+                
+            save_kf_profile(user_id)
+            
+            embed_lose = discord.Embed(
+                title="💀 KẾT THÚC CHUỖI SINH TỒN VỰC SÂU",
+                description=f"{combat_log}\n\nValkyrie đã gục ngã tại **Tầng {self.current_floor}**.\n\n"
+                            f"🎁 **TỔNG KẾT PHẦN THƯỞNG:**\n"
+                            f"💎 Nhận được: **{self.crystals_earned:,} Pha lê**\n"
+                            f"🏆 Kỷ lục cao nhất của bạn: **Tầng {self.p_profile['abyss_floor']}**",
+                color=discord.Color.dark_grey()
+            )
+            await interaction.response.edit_message(embed=embed_lose, view=self)
+            self.stop()
+            return
+
+        if self.p_evade_cooldown > 0:
+            self.p_evade_cooldown -= 1
+
+        p_hp_bar = make_progress_bar(max(0, self.p_hp), self.p_max_hp, 10)
+        e_hp_bar = make_progress_bar(max(0, self.e_data["hp"]), self.e_data["max_hp"], 10)
+        
+        embed = discord.Embed(
+            title=f"🌋 VỰC SÂU ABYSS - TẦNG {self.current_floor}",
+            description=combat_log,
+            color=discord.Color.dark_red()
+        )
+        
+        suit = self.p_stats["suit"]
+        embed.add_field(
+            name=f"{suit['emoji']} {suit['name']}",
+            value=f"❤️ HP: {max(0, self.p_hp)}/{self.p_max_hp}\n`{p_hp_bar}`\n⚡ SP: {self.p_sp} | Thu thập: {self.crystals_earned} 💎",
+            inline=True
+        )
+        embed.add_field(name="VS", value="⚡", inline=True)
+        type_icon = "🔺" if get_type_advantage(suit["type"], self.e_data["type"]) > 1 else ("🔻" if get_type_advantage(suit["type"], self.e_data["type"]) < 1 else "➖")
+        embed.add_field(
+            name=f"👹 {self.e_data['name']} {type_icon}",
+            value=f"❤️ HP: {max(0, self.e_data['hp'])}/{self.e_data['max_hp']}\n`{e_hp_bar}`",
+            inline=True
+        )
+
+        self.btn_ult.disabled = self.p_sp < suit["ult_sp_cost"]
+        self.btn_evade.disabled = self.p_evade_cooldown > 0
+
+        if interaction.response.is_done():
+            await interaction.message.edit(embed=embed, view=self)
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Đánh Thường", style=discord.ButtonStyle.primary, custom_id="btn_atk")
+    async def btn_atk(self, interaction: discord.Interaction, button: discord.ui.Button):
+        suit = self.p_stats["suit"]
+        dmg, is_crit, t_adv = self.calculate_damage(suit["skill_basic_dmg"])
+        self.e_data["hp"] -= dmg
+        self.p_sp += 5 
+        
+        crit_txt = " (💥)" if is_crit else ""
+        log = f"🗡️ Dùng **{suit['skill_basic_name']}** gây **{dmg}** ST{crit_txt}."
+        
+        e_dmg, e_log = self.enemy_turn()
+        log += f"\n{e_log}"
+        
+        await self.update_battle_ui(interaction, log)
+
+    @discord.ui.button(label="Combo (Nhánh)", style=discord.ButtonStyle.success, custom_id="btn_combo")
+    async def btn_combo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        suit = self.p_stats["suit"]
+        dmg, is_crit, t_adv = self.calculate_damage(suit["skill_combo_dmg"])
+        self.e_data["hp"] -= dmg
+        self.p_sp += 2
+        
+        crit_txt = " (💥)" if is_crit else ""
+        log = f"⚔️ Tung đòn Nhánh **{suit['skill_combo_name']}** gây **{dmg}** ST{crit_txt}."
+        
+        e_dmg, e_log = self.enemy_turn()
+        log += f"\n{e_log}"
+        
+        await self.update_battle_ui(interaction, log)
+
+    @discord.ui.button(label="Tất Sát (Ulti)", style=discord.ButtonStyle.danger, custom_id="btn_ult")
+    async def btn_ult(self, interaction: discord.Interaction, button: discord.ui.Button):
+        suit = self.p_stats["suit"]
+        if self.p_sp < suit["ult_sp_cost"]:
+            return await interaction.response.send_message("⚠️ Không đủ Năng lượng (SP)!", ephemeral=True)
+            
+        self.p_sp -= suit["ult_sp_cost"]
+        dmg, is_crit, t_adv = self.calculate_damage(suit["skill_ult_dmg"])
+        self.e_data["hp"] -= dmg
+        
+        crit_txt = " (💥)" if is_crit else ""
+        log = f"🔥 Kích hoạt **{suit['skill_ult_name']}** gây **{dmg}** ST{crit_txt}!"
+        
+        if self.e_data["hp"] > 0:
+            log += f"\n🛡️ Kẻ địch bị choáng ngợp, bỏ qua lượt!"
+            
+        await self.update_battle_ui(interaction, log)
+
+    @discord.ui.button(label="Né Cực Hạn", style=discord.ButtonStyle.secondary, custom_id="btn_evade")
+    async def btn_evade(self, interaction: discord.Interaction, button: discord.ui.Button):
+        suit = self.p_stats["suit"]
+        if self.p_evade_cooldown > 0:
+            return await interaction.response.send_message("⚠️ Kỹ năng Né đang hồi chiêu!", ephemeral=True)
+            
+        self.p_evade_cooldown = 3
+        self.p_sp += 15 
+        
+        type_adv = get_type_advantage(self.e_data["type"], self.p_stats["suit"]["type"])
+        raw_dmg = (self.e_data["atk"] * type_adv) - (self.p_stats["def"] * 0.5)
+        e_dmg = int(max(5, raw_dmg))
+        
+        log = f"💨 Dùng **{suit['evade_name']}**! Né được **{e_dmg}** sát thương, hồi 15 SP."
+        await self.update_battle_ui(interaction, log)
+
+@kallen.command()
+async def abyss(ctx):
+    """
+    Gọi chế độ Vực Sâu (Abyss) leo tháp vô tận
+    Tốn 20 Thể lực, leo càng cao nhận càng nhiều Pha lê
+    """
+    user_id = str(ctx.author.id)
+    p = load_kf_profile(user_id)
+    
+    if p["stamina"] < 20:
+        return await ctx.reply(f"⚠️ Thể lực hiện tại ({p['stamina']}/100) không đủ để vào Vực Sâu (Cần 20 ⚡).")
+        
+    p["stamina"] -= 20
+    save_kf_profile(user_id)
+    
+    stats = calculate_kallen_stats(user_id)
+    
+    embed_start = discord.Embed(
+        title="🌋 VỰC SÂU VÔ TẬN - MỞ CỔNG",
+        description="Chào mừng đến Vực Sâu. Quái vật ở đây mạnh lên không ngừng. Bạn sẽ trụ được bao lâu?\n\n*Đang dịch chuyển Valkyrie...*",
+        color=discord.Color.dark_red()
+    )
+    msg = await ctx.reply(embed=embed_start, mention_author=False)
+    await asyncio.sleep(2)
+    
+    view = AbyssCombatView(ctx.author, stats, p)
+    initial_log = f"Cửa Vực Sâu mở ra. {view.e_data['name']} lao về phía bạn!"
+    
+    await view.update_battle_ui(ctx, initial_log)
+    view.message = msg
 # =====================================================================
 # SỰ KIỆN HỆ THỐNG LÕI CỦA BOT (ON_MESSAGE, ON_READY)
 # =====================================================================
