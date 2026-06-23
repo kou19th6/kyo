@@ -585,7 +585,7 @@ class ExpView(discord.ui.View):
         self.add_item(ExpSelect())
     async def interaction_check(self, interaction: discord.Interaction): return interaction.user.id == self.author.id
     class NhanSinhGameView(discord.ui.View):
-    def __init__(self, author, stats):
+        def __init__(self, author, stats):
         super().__init__(timeout=180)
         self.author = author
         self.stats = stats
