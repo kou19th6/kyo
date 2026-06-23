@@ -1152,14 +1152,6 @@ async def world_simulation_task():
         )
     print("✅ [HỆ THỐNG] Đã hoàn tất cập nhật chu kỳ 1 giờ.")
 
-@world_simulation_task.before_loop
-async def before_world_simulation():
-    await bot.wait_until_ready()
-
-# Bật task khởi chạy ngầm
-world_simulation_task.start()
-
-
 # ---------------------------------------------------------------------
 # 2. GIAO DIỆN CỬA HÀNG ĐẠI GIA (SHOPPING UI)
 # ---------------------------------------------------------------------
