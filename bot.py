@@ -2367,42 +2367,391 @@ async def tra(ctx, amount: str):
     u["money"] -= amt_pay; u["debt"] -= amt_pay; save_user(ctx.author.id)
     await ctx.reply(embed=discord.Embed(description=f"✅ Đã trả **{amt_pay:,} 💰** nợ.\nDư nợ còn: **{u['debt']:,} 💰**", color=discord.Color.green()), mention_author=False)
 
+# =====================================================================
+# [ĐẠI CẬP NHẬT] HỆ THỐNG SÀN CHỨNG KHOÁN & DOANH NGHIỆP VĨ MÔ
+# =====================================================================
+
+def get_next_hour_timestamp():
+    """Lấy thời gian đếm ngược đến đầu giờ tiếp theo (vd: 14:00, 15:00)"""
+    now = datetime.now()
+    next_hour = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
+    return int(next_hour.timestamp())
+
+# Kho cổ phiếu mặc định (Hơn 20 mã đa dạng vũ trụ)
+DEFAULT_STOCKS = [
+    {"_id": "VNM", "name": "Vinamilk Việt Nam", "price": 65000, "trend": "up", "history": []},
+    {"_id": "FLC", "name": "Tập đoàn BĐS FLC", "price": 4500, "trend": "down", "history": []},
+    {"_id": "MHY", "name": "Mihoyo Hoyoverse", "price": 150000, "trend": "up", "history": []},
+    {"_id": "AIC", "name": "Công Nghiệp Endfield", "price": 85000, "trend": "up", "history": []},
+    {"_id": "BTC", "name": "Bitcoin Crypto", "price": 1200000, "trend": "up", "history": []},
+    {"_id": "TSA", "name": "Đại học Bách Khoa", "price": 30000, "trend": "up", "history": []},
+    {"_id": "AAPL", "name": "Apple Táo Khuyết", "price": 450000, "trend": "up", "history": []},
+    {"_id": "TSLA", "name": "Tesla Xe Điện", "price": 250000, "trend": "down", "history": []},
+    {"_id": "VNG", "name": "VinaGame Corp", "price": 75000, "trend": "up", "history": []},
+    {"_id": "FPT", "name": "Tập Đoàn FPT", "price": 95000, "trend": "up", "history": []},
+    {"_id": "DOGE", "name": "Shiba Doge Coin", "price": 1500, "trend": "up", "history": []},
+    {"_id": "NVDA", "name": "Nvidia Chip AI", "price": 850000, "trend": "up", "history": []},
+    {"_id": "TGC", "name": "Trà Đá Vỉa Hè", "price": 2000, "trend": "down", "history": []},
+    {"_id": "VIX", "name": "VinGroup", "price": 60000, "trend": "up", "history": []},
+    {"_id": "FB", "name": "Meta Facebook", "price": 320000, "trend": "down", "history": []},
+    {"_id": "TIK", "name": "Tóp Tóp Global", "price": 210000, "trend": "up", "history": []},
+    {"_id": "QSB", "name": "Quán Cơm Sườn", "price": 8000, "trend": "up", "history": []},
+    {"_id": "SHB", "name": "Ngân hàng SHB", "price": 12000, "trend": "down", "history": []}
+]
+
+class StockPaginationView(discord.ui.View):
+    """Giao diện Sàn chứng khoán có phân trang và đếm ngược"""
+    def __init__(self, author, stocks_list):
+        super().__init__(timeout=120)
+        self.author = author
+        self.stocks = stocks_list
+        self.current_page = 0
+        self.max_page = math.ceil(len(self.stocks) / 6) - 1 # Hiển thị 6 mã 1 trang cho đỡ rối
+        self.update_buttons()
+
+    def update_buttons(self):
+        self.btn_prev.disabled = self.current_page == 0
+        self.btn_next.disabled = self.current_page >= self.max_page
+
+    def generate_embed(self):
+        start_idx = self.current_page * 6
+        end_idx = start_idx + 6
+        page_stocks = self.stocks[start_idx:end_idx]
+        
+        next_update = get_next_hour_timestamp()
+        
+        embed = discord.Embed(
+            title="📈 SÀN GIAO DỊCH CHỨNG KHOÁN QUỐC TẾ", 
+            description=f"⏳ **Làm mới thị trường vào:** <t:{next_update}:R>\n"
+                        f"*(Tất cả giá trị sẽ dao động, có nguy cơ phá sản nếu cắm đầu quá sâu)*\n\n"
+                        f"🛒 Mua: `k ck buy <MÃ> <Số lượng>`\n"
+                        f"💸 Bán: `k ck sell <MÃ> <Số lượng>`\n"
+                        f"🏢 Lên sàn: `k cty ipo <MÃ>` (Dành cho cty 50 Triệu)", 
+            color=discord.Color.teal()
+        )
+        
+        for s in page_stocks:
+            code = s["_id"]
+            price = s.get("price", 0)
+            
+            # Cảnh báo mã rác
+            if price <= 2000:
+                trend_icon = "💀 RÁC / SẮP HỦY NIÊM YẾT"
+            else:
+                trend_icon = "🟩 Đang bay" if s.get("trend") == "up" else "🟥 Rớt thảm"
+                
+            embed.add_field(
+                name=f"🏢 {code} - {s['name']}", 
+                value=f"💵 Giá hiện tại: **{price:,} 💰** / CP\n📊 Xu hướng: {trend_icon}", 
+                inline=False
+            )
+            
+        embed.set_footer(text=f"Trang {self.current_page + 1}/{self.max_page + 1} | Đại gia phố Wall")
+        return embed
+
+    async def interaction_check(self, interaction: discord.Interaction): 
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("⚠️ Nhìn thôi cấm giành bấm của đại gia!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Trang Trước", style=discord.ButtonStyle.primary, emoji="◀️")
+    async def btn_prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.generate_embed(), view=self)
+
+    @discord.ui.button(label="Trang Sau", style=discord.ButtonStyle.primary, emoji="▶️")
+    async def btn_next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.generate_embed(), view=self)
+
+
+# ---------------------------------------------------------------------
+# LỆNH CHỨNG KHOÁN CỐT LÕI (MUA/BÁN/XEM SÀN)
+# ---------------------------------------------------------------------
 @bot.group(invoke_without_command=True, aliases=['ck'])
 async def chungkhoan(ctx):
     all_stocks = list(stocks_col.find())
-    if not all_stocks: return await ctx.reply("Sàn chứng khoán bảo trì!")
     
-    embed = discord.Embed(title="📈 SÀN GIAO DỊCH PHỐ WALL", description="🛒 `k ck buy <MÃ> <Số lượng>`\n💸 `k ck sell <MÃ> <Số lượng>`", color=discord.Color.teal())
-    for s in all_stocks:
-        trd = "🟩 Lên" if s.get("trend") == "up" else "🟥 Xuống"
-        embed.add_field(name=f"🏢 {s['_id']} - {s['name']}", value=f"Giá: **{s.get('price',0):,} 💰** ({trd})", inline=False)
+    # Auto bơm data nếu db trống (Không bao giờ báo bảo trì nữa)
+    if not all_stocks: 
+        stocks_col.insert_many(DEFAULT_STOCKS)
+        all_stocks = DEFAULT_STOCKS
         
+    view = StockPaginationView(ctx.author, all_stocks)
+    msg_embed = view.generate_embed()
+    
+    # Kẹp thêm danh mục đầu tư cá nhân vào cuối
     u = load_user(ctx.author.id)
     stk = u.get("stocks", {})
-    txt = "Chưa đầu tư mã nào." if not stk else "\n".join([f"🔸 {c}: {q} Cổ Phiếu" for c, q in stk.items() if q > 0])
-    embed.add_field(name="🎒 Ví Đầu Tư Của Bạn", value=txt, inline=False)
-    await ctx.reply(embed=embed, mention_author=False)
+    txt = "Chưa đầu tư mã nào. Hãy mua ngay để đu đỉnh!" if not stk else "\n".join([f"🔸 {c}: {q} Cổ Phiếu (Trị giá: {stocks_col.find_one({'_id': c}).get('price', 0) * q:,} 💰)" for c, q in stk.items() if q > 0])
+    msg_embed.add_field(name="🎒 Ví Đầu Tư Của Bạn", value=txt, inline=False)
+    
+    await ctx.reply(embed=msg_embed, view=view, mention_author=False)
 
 @chungkhoan.command()
 async def buy(ctx, code: str, qty: int):
     code = code.upper()
     stock = stocks_col.find_one({"_id": code})
-    if not stock: return await ctx.reply("⚠️ Mã này không tồn tại!")
-    if qty <= 0: return await ctx.reply("⚠️ Mua số lượng âm à?")
     
-    total = stock.get("price", 0) * qty
+    if not stock: return await ctx.reply("⚠️ Sàn làm gì có mã này! Gõ lệnh `k ck` để xem danh sách.")
+    if qty <= 0: return await ctx.reply("⚠️ Mua số lượng âm định hack tiền hệ thống à?")
+    
+    price = stock.get("price", 0)
+    if price < 500:
+        return await ctx.reply("🛑 Cổ phiếu này rớt giá thê thảm, Ủy ban Chứng khoán đã khóa giao dịch chiều MUA!")
+
+    total = price * qty
     u = load_user(ctx.author.id)
-    if u.get("money", 0) < total: return await ctx.reply(f"⚠️ Thiếu lúa! Cần **{total:,} 💰**.")
+    if u.get("money", 0) < total: 
+        return await ctx.reply(f"⚠️ Thẻ đen rỗng tuếch! Cần **{total:,} 💰** để khớp lệnh MUA này.")
         
     u["money"] -= total
-    # Úp bô
-    if total >= 50000000 and random.uniform(0, 100) <= 8.0:
+    
+    # ==========================================
+    # CƠ CHẾ RUG PULL (ÚP BÔ) KHỐC LIỆT
+    # ==========================================
+    if total >= 100000000 and random.uniform(0, 100) <= 8.0:
         save_user(ctx.author.id)
-        return await ctx.reply(embed=discord.Embed(title="🚨 RUG PULL - ÚP BÔ CHỨNG KHOÁN!", description=f"CEO của **{code}** ôm tiền trốn ra nước ngoài! Bốc hơi **{total:,} 💰**!", color=discord.Color.red()))
         
+        # Hủy niêm yết cổ phiếu luôn
+        stocks_col.delete_one({"_id": code})
+        
+        embed = discord.Embed(
+            title="🚨 RUG PULL - VỠ BONG BÓNG CHỨNG KHOÁN!", 
+            description=f"TIN SỐC! Thấy bạn vừa ném **{total:,} 💰** vào mua mã **{code}**...\n\n"
+                        f"CEO của công ty này đã làm giả sổ sách, lập tức ôm toàn bộ tiền rút ruột công ty và trốn sang Mỹ bằng phi cơ riêng!\n"
+                        f"Mã **{code}** bị Ủy ban Chứng khoán hủy niêm yết vĩnh viễn. Bạn mất trắng số tiền vừa đầu tư!", 
+            color=discord.Color.red()
+        )
+        embed.set_image(url=GIF_LINKS["rugpull"])
+        return await ctx.reply(embed=embed, mention_author=False)
+        
+    # Giao dịch bình thường
     u["stocks"][code] = u.get("stocks", {}).get(code, 0) + qty
     save_user(ctx.author.id)
-    await ctx.reply(embed=discord.Embed(description=f"✅ MUA thành công **{qty} {code}** (Tổng chi: {total:,} 💰).", color=discord.Color.green()))
+    await ctx.reply(embed=discord.Embed(description=f"✅ Lệnh MUA khớp! Bạn đã nạp **{qty} cổ phiếu {code}** vào ví (Tổng chi: **{total:,} 💰**).", color=discord.Color.green()))
+
+@chungkhoan.command()
+async def sell(ctx, code: str, qty: int):
+    code = code.upper()
+    stock = stocks_col.find_one({"_id": code})
+    
+    if not stock: return await ctx.reply("⚠️ Mã này bị hủy niêm yết hoặc không tồn tại!")
+    if qty <= 0: return await ctx.reply("⚠️ Nhập sai số lượng bán.")
+    
+    u = load_user(ctx.author.id)
+    my_qty = u.get("stocks", {}).get(code, 0)
+    
+    if my_qty < qty: 
+        return await ctx.reply(f"⚠️ Bạn chỉ có **{my_qty}** cổ phiếu {code} thôi, định bán khống lùa gà à!")
+        
+    # Kỹ năng Trading buff giá bán (Mỗi cấp +2% lợi nhuận)
+    buff = 1 + (u.get("skills", {}).get("trading", 1) * 0.02)
+    gain = int(stock.get("price", 0) * qty * buff)
+    
+    u["stocks"][code] -= qty
+    if u["stocks"][code] == 0: del u["stocks"][code]
+    u["money"] += gain
+    save_user(ctx.author.id)
+    
+    await ctx.reply(embed=discord.Embed(description=f"✅ Lệnh BÁN khớp! Đẩy đi **{qty} {code}** thu về **{gain:,} 💰** *(Đã tính buff Kỹ năng Thương nhân)*.", color=discord.Color.gold()))
+
+
+# ---------------------------------------------------------------------
+# LỆNH QUẢN TRỊ DOANH NGHIỆP TƯ NHÂN
+# ---------------------------------------------------------------------
+@bot.group(invoke_without_command=True, aliases=['cty', 'congty'])
+async def company(ctx):
+    u = load_user(ctx.author.id)
+    comp_id = u.get("company")
+    
+    if not comp_id:
+        embed = discord.Embed(
+            title="🏢 CỤC SỞ HỮU TRÍ TUỆ & DOANH NGHIỆP", 
+            description="Bạn hiện đang làm thuê cuốc mướn, không có doanh nghiệp nào đứng tên.\n\n"
+                        "💡 **Mở Công Ty:** Gõ lệnh `k cty tao <Tên Công Ty>`\n"
+                        "*(Lệ phí cấp giấy phép kinh doanh: 500,000 💰)*", 
+            color=discord.Color.dark_grey()
+        )
+        return await ctx.reply(embed=embed, mention_author=False)
+        
+    comp = companies_col.find_one({"_id": comp_id})
+    if not comp:
+        u["company"] = None; save_user(ctx.author.id)
+        return await ctx.reply("🛑 Công ty của bạn đã phá sản sụp đổ. Vui lòng lập công ty mới!")
+        
+    # Lấy thông tin chức vụ
+    my_role_id = comp["members"].get(str(ctx.author.id), "nhanvien")
+    role_name = comp["roles"].get(my_role_id, "Nhân Viên Mèn")
+    
+    embed = discord.Embed(title=f"🏢 TẬP ĐOÀN ĐA QUỐC GIA: {comp['name'].upper()}", color=discord.Color.gold())
+    embed.add_field(name="💰 Quỹ Hoạt Động", value=f"**{comp['treasury']:,} 💰**", inline=True)
+    embed.add_field(name="👥 Quy Mô Nhân Sự", value=f"**{len(comp['members'])} Thành viên**", inline=True)
+    
+    status_ipo = f"Đã lên sàn CK (Mã: {comp.get('stock_code')})" if comp.get("is_ipo") else "Chưa niêm yết"
+    embed.add_field(name="Trạng Thái", value=f"**{status_ipo}**", inline=True)
+    embed.add_field(name="Thẻ Nhân Viên Của Bạn", value=f"👑 **{role_name}**", inline=False)
+    
+    cmds = ("**Thao tác cơ bản:**\n"
+            "`k cty gop <tiền>` • Bơm tiền vào quỹ cty\n"
+            "`k cty roi` • Từ chức, ném thẻ vào mặt sếp\n\n")
+            
+    if my_role_id in ["boss", "quanly"]:
+        cmds += ("**Quyền Quản Lý:**\n"
+                 "`k cty tuyen @user` • Ký hợp đồng lao động\n"
+                 "`k cty duoi @user` • Đuổi cổ nhân viên\n\n")
+                 
+    if my_role_id == "boss":
+        cmds += ("**Quyền Chủ Tịch Tối Cao:**\n"
+                 "`k cty rut <tiền>` • Rút lõi công trình (Rút quỹ)\n"
+                 "`k cty doitencty <tên>` • Đổi tên Tập đoàn\n"
+                 "`k cty doitenchuc <boss/quanly/nhanvien> <tên>` • Custom chức vụ\n"
+                 "`k cty chucvu @user <boss/quanly/nhanvien>` • Thăng chức/Giáng chức\n"
+                 "`k cty ipo <MÃ>` • Niêm yết cổ phiếu lên Sàn (Cần 50 Triệu quỹ)")
+                 
+    embed.add_field(name="Bảng Lệnh Hành Động", value=cmds, inline=False)
+    await ctx.reply(embed=embed, mention_author=False)
+
+@company.command()
+async def tao(ctx, *, name: str):
+    uid = str(ctx.author.id)
+    u = load_user(uid)
+    
+    if u.get("company"): 
+        return await ctx.reply("⚠️ Lòng tham vô đáy! Bạn đã thuộc biên chế công ty khác rồi, không được mở thêm!")
+        
+    if u.get("money", 0) < 500000: 
+        return await ctx.reply("⚠️ Lệ phí làm giấy phép kinh doanh là **500,000 💰**. Cày thêm lúa đi sếp!")
+    
+    u["money"] -= 500000
+    u["company"] = uid
+    save_user(uid)
+    
+    new_comp = {
+        "_id": uid,
+        "name": name,
+        "treasury": 0,
+        "members": {uid: "boss"},
+        "roles": {"boss": "Chủ Tịch HĐQT", "quanly": "Tổng Giám Đốc", "nhanvien": "Thực Tập Sinh"},
+        "is_ipo": False,
+        "stock_code": None
+    }
+    
+    companies_col.insert_one(new_comp)
+    await ctx.reply(embed=discord.Embed(title="🎉 KHAI TRƯƠNG HỒNG PHÁT", description=f"Cắt băng khánh thành! Chúc mừng {ctx.author.mention} đã chính thức lên chức Chủ Tịch của Tập đoàn **{name}**!", color=discord.Color.green()), mention_author=False)
+
+@company.command()
+async def doitenchuc(ctx, role_id: str, *, new_role_name: str):
+    uid = str(ctx.author.id)
+    comp_id = load_user(uid).get("company")
+    if not comp_id: return
+    
+    comp = companies_col.find_one({"_id": comp_id})
+    if comp["members"].get(uid) != "boss": 
+        return await ctx.reply("⚠️ Gầm gừ cái gì? Chỉ Chủ Tịch mới có quyền định đoạt tên chức vụ!")
+    
+    role_id = role_id.lower()
+    if role_id not in ["boss", "quanly", "nhanvien"]: 
+        return await ctx.reply("⚠️ Gõ sai mã chức vụ rồi! Chỉ nhận: `boss`, `quanly`, `nhanvien`.\nVD: `k cty doitenchuc nhanvien Nô Lệ Tư Bản`")
+        
+    comp["roles"][role_id] = new_role_name
+    companies_col.update_one({"_id": comp_id}, {"$set": {"roles": comp["roles"]}})
+    await ctx.reply(f"✅ Đã đóng dấu đỏ! Chức vụ `{role_id}` từ nay sẽ được gọi là: **{new_role_name}**.")
+
+@company.command()
+async def gop(ctx, amount: int):
+    if amount <= 0: return await ctx.reply("⚠️ Góp số âm để rút ruột công ty à?")
+    uid = str(ctx.author.id)
+    u = load_user(uid)
+    comp_id = u.get("company")
+    if not comp_id: return await ctx.reply("Bạn chưa vào công ty nào!")
+    
+    if u.get("money", 0) < amount: return await ctx.reply("⚠️ Cà thẻ thất bại! Ví bạn không đủ tiền.")
+        
+    u["money"] -= amount
+    save_user(uid)
+    
+    comp = companies_col.find_one({"_id": comp_id})
+    comp["treasury"] += amount
+    companies_col.update_one({"_id": comp_id}, {"$set": {"treasury": comp["treasury"]}})
+    
+    # Nếu công ty đã IPO, vốn tăng thì giá cổ phiếu cũng tăng theo tỉ lệ nhỏ
+    if comp.get("is_ipo") and comp.get("stock_code"):
+        code = comp["stock_code"]
+        stock = stocks_col.find_one({"_id": code})
+        if stock:
+            new_p = stock["price"] + int(amount / 5000) # Góp 5M thì giá cp tăng 1000đ
+            stocks_col.update_one({"_id": code}, {"$set": {"price": new_p, "trend": "up"}})
+            
+    await ctx.reply(f"✅ Cống hiến vĩ đại! Bạn vừa bơm **{amount:,} 💰** vào quỹ đen công ty.")
+
+@company.command()
+async def rut(ctx, amount: int):
+    if amount <= 0: return await ctx.reply("⚠️ Rút số âm?")
+    uid = str(ctx.author.id)
+    u = load_user(uid)
+    comp_id = u.get("company")
+    if not comp_id: return
+    
+    comp = companies_col.find_one({"_id": comp_id})
+    if comp["members"].get(uid) != "boss": return await ctx.reply("⚠️ Chống lệnh à! Chỉ Chủ Tịch mới được quyền đụng vào ngân khố!")
+    if comp["treasury"] < amount: return await ctx.reply("⚠️ Quỹ công ty cạn kiệt, không đủ tiền để rút!")
+        
+    comp["treasury"] -= amount
+    u["money"] += amount
+    
+    save_user(uid)
+    companies_col.update_one({"_id": comp_id}, {"$set": {"treasury": comp["treasury"]}})
+    await ctx.reply(f"📤 Đã rút lõi công trình thành công **{amount:,} 💰** bỏ vào túi riêng.")
+
+@company.command()
+async def ipo(ctx, stock_code: str):
+    uid = str(ctx.author.id)
+    comp_id = load_user(uid).get("company")
+    if not comp_id: return
+    
+    comp = companies_col.find_one({"_id": comp_id})
+    if comp["members"].get(uid) != "boss": 
+        return await ctx.reply("⚠️ Vượt quyền! Chỉ Chủ Tịch mới được ra quyết định Lên Sàn.")
+    if comp.get("is_ipo"): 
+        return await ctx.reply("⚠️ Tập đoàn này đã niêm yết cổ phiếu rồi sếp ơi!")
+    if comp["treasury"] < 50000000: 
+        return await ctx.reply("⚠️ Tài chính yếu kém! Quỹ công ty phải đạt ít nhất **50,000,000 💰** mới đủ điều kiện kiểm duyệt IPO.")
+    
+    stock_code = stock_code.upper()
+    if len(stock_code) < 3 or len(stock_code) > 5: 
+        return await ctx.reply("⚠️ Mã cổ phiếu phải từ 3 đến 5 ký tự viết hoa. VD: `k cty ipo VNG`")
+    
+    if stocks_col.find_one({"_id": stock_code}): 
+        return await ctx.reply("⚠️ Mã cổ phiếu này đã bị tập đoàn khác đăng ký bản quyền!")
+        
+    # Tạo cổ phiếu mới trên sàn ảo
+    base_price = int(comp["treasury"] / 1000) # Ví dụ: Quỹ 50M -> Giá CP 50,000
+    
+    new_stock = {
+        "_id": stock_code,
+        "name": comp["name"],
+        "price": base_price,
+        "trend": "up",
+        "history": [base_price]
+    }
+    stocks_col.insert_one(new_stock)
+    
+    # Đánh dấu cty đã lên sàn
+    companies_col.update_one({"_id": comp_id}, {"$set": {"is_ipo": True, "stock_code": stock_code}})
+    
+    embed = discord.Embed(
+        title="📈 ĐÁNH CHUÔNG LÊN SÀN CHỨNG KHOÁN!", 
+        description=f"Thời khắc lịch sử! Tập đoàn **{comp['name']}** đã chính thức IPO thành công!\n\n"
+                    f"🏷️ Mã niêm yết: **{stock_code}**\n"
+                    f"💵 Giá khởi điểm: **{base_price:,} 💰 / Cổ phiếu**\n\n"
+                    f"Từ giờ mọi người trong server có thể dùng lệnh `k ck buy {stock_code}` để đầu tư vào công ty bạn!", 
+        color=discord.Color.green()
+    )
+    await ctx.reply(embed=embed)
 
 @chungkhoan.command()
 async def sell(ctx, code: str, qty: int):
