@@ -1045,7 +1045,7 @@ async def chungkhoan(ctx):
     if not inventory_str: inventory_str = "Ví đầu tư của bạn đang trống trơn."
     embed.add_field(name="🎒 Cổ phiếu bạn đang nắm giữ", value=inventory_str, inline=False)
     await ctx.reply(embed=embed, mention_author=False)
-    @chungkhoan.command()
+ @chungkhoan.command()
 async def buy(ctx, code: str, qty: int):
     code = code.upper()
     all_stocks = get_all_stocks()
