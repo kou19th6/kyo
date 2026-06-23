@@ -14,6 +14,270 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix=['K ', 'k ', 'K', 'k'], intents=intents)
+# Xóa lệnh help mặc định để dùng giao diện custom
+bot.remove_command('help')
+
+# =====================================================================
+# QUẢN LÝ TRẠNG THÁI & KHO ẢNH GIF ĐỘNG
+# =====================================================================
+gamble_cooldowns = {} 
+nhansinh_cooldowns = {} 
+dang_choi_nhansinh = [] 
+cty_cooldowns = {}
+work_cooldowns = {} 
+
+GIF_LINKS = {
+    "jail": "https://media.giphy.com/media/uG3lKkAuh53wKxY0l9/giphy.gif",
+    "bank": "https://media.giphy.com/media/xTiTnqUxyWbsAXq7Ju/giphy.gif",
+    "rob_success": "https://media.giphy.com/media/Y2ZUWLrTy63j9T6qrK/giphy.gif",
+    "rob_fail": "https://media.giphy.com/media/RYjnzPS8u0jAs/giphy.gif",
+    "mine": "https://media.giphy.com/media/26ufj1Xj9Vn6QO6vC/giphy.gif",
+    "gacha": "https://media.giphy.com/media/3o7TKoHNJTWWLgljYQ/giphy.gif",
+    "casino": "https://media.giphy.com/media/l4hLA4ALhloJt2Tny/giphy.gif",
+    "marry": "https://media.giphy.com/media/l41JRsph73VokN6ik/giphy.gif",
+    "daily": "https://media.giphy.com/media/67ThRZlYBvibtdF9JH/giphy.gif",
+    "rank": "https://media.giphy.com/media/LdOyjZ7io5Msw/giphy.gif",
+    "fight": "https://media.giphy.com/media/3o7TKsWbXJMIdURvkk/giphy.gif",
+    "rugpull": "https://media.giphy.com/media/3o6gDWzmToltqKtvRo/giphy.gif" # GIF Cổ phiếu bỏ trốn
+}
+
+# =====================================================================
+# KẾT NỐI MONGODB VÀ HỆ THỐNG BỘ ĐỆM (CACHE)
+# =====================================================================
+MONGO_URI = "mongodb+srv://jakinat101084_db_user:Lam17722@cluster0.y6jqmz8.mongodb.net/?appName=Cluster0"
+
+mongo_client = pymongo.MongoClient(MONGO_URI)
+db = mongo_client["DiscordBotDB"]
+
+users_col = db["users"]   
+config_col = db["config"] 
+companies_col = db["companies"]
+
+DB_CACHE = {}
+CONFIG_CACHE = {}
+COMPANY_CACHE = {}
+
+def load_user(user_id):
+    """Tải dữ liệu người chơi, khởi tạo mặc định nếu là người mới"""
+    user_id = str(user_id)
+    
+    if user_id not in DB_CACHE:
+        document = users_col.find_one({"_id": user_id})
+        if document:
+            DB_CACHE[user_id] = document
+        else:
+            DB_CACHE[user_id] = {}
+            
+    defaults = {
+        "xp": 0, 
+        "level": 1, 
+        "money": 0, 
+        "bank": 0,
+        "title": "Dân Đáy Xã Hội 🧱", 
+        "assets": [], 
+        "pets": {}, 
+        "company": None, 
+        "stocks": {}, 
+        "jail_time": None,
+        "spouse": None
+    }
+    
+    for key, value in defaults.items():
+        if key not in DB_CACHE[user_id]: 
+            DB_CACHE[user_id][key] = value
+            
+    return DB_CACHE[user_id]
+
+def save_user(user_id):
+    """Lưu dữ liệu người chơi lên Database"""
+    user_id = str(user_id)
+    if user_id in DB_CACHE: 
+        users_col.update_one(
+            {"_id": user_id}, 
+            {"$set": DB_CACHE[user_id]}, 
+            upsert=True
+        )
+
+def load_server_config(server_id):
+    """Tải cấu hình Server"""
+    server_id = str(server_id)
+    if server_id not in CONFIG_CACHE:
+        document = config_col.find_one({"_id": server_id})
+        if document:
+            CONFIG_CACHE[server_id] = document
+        else:
+            CONFIG_CACHE[server_id] = {}
+    return CONFIG_CACHE[server_id]
+
+def load_company(company_id):
+    """Tải dữ liệu Công ty"""
+    company_id = str(company_id)
+    if company_id not in COMPANY_CACHE:
+        document = companies_col.find_one({"_id": company_id})
+        if document: 
+            COMPANY_CACHE[company_id] = document
+        else: 
+            return None
+    return COMPANY_CACHE[company_id]
+
+def save_company(company_id):
+    """Lưu dữ liệu Công ty lên Database"""
+    company_id = str(company_id)
+    if company_id in COMPANY_CACHE: 
+        companies_col.update_one(
+            {"_id": company_id}, 
+            {"$set": COMPANY_CACHE[company_id]}, 
+            upsert=True
+        )
+
+# =====================================================================
+# HÀM KIỂM TRA TỔNG THỂ VÀ BỔ TRỢ
+# =====================================================================
+@bot.check
+async def global_jail_and_channel_check(ctx):
+    """Kiểm tra đi tù và giới hạn kênh trước mọi lệnh"""
+    if ctx.author.guild_permissions.administrator or ctx.command.name == "help": 
+        return True
+        
+    user_data = load_user(ctx.author.id)
+    jail_time_str = user_data.get("jail_time")
+    
+    if jail_time_str:
+        jail_end = datetime.strptime(jail_time_str, "%Y-%m-%d %H:%M:%S")
+        if datetime.now() < jail_end:
+            embed = discord.Embed(
+                title="🚨 BÁO ĐỘNG ĐỎ!", 
+                description=f"{ctx.author.mention} đang bóc lịch trong trại giam!\n\n⏳ Mãn hạn tù: <t:{int(jail_end.timestamp())}:R>\n\nHãy tự vấn lương tâm rồi quay lại sau nhé!", 
+                color=discord.Color.red()
+            )
+            embed.set_thumbnail(url=GIF_LINKS["jail"])
+            await ctx.reply(embed=embed, mention_author=False)
+            return False
+        else:
+            user_data["jail_time"] = None
+            save_user(ctx.author.id)
+            
+    if ctx.guild:
+        server_config = load_server_config(ctx.guild.id)
+        allowed_channels = server_config.get("allowed_channels", [])
+        if allowed_channels and ctx.channel.id not in allowed_channels: 
+            return False
+            
+    return True
+
+def make_progress_bar(current_value, total_value, bar_length=12):
+    progress_blocks = int((current_value / total_value) * bar_length)
+    empty_blocks = bar_length - progress_blocks
+    return "🟩" * progress_blocks + "⬛" * empty_blocks
+
+async def check_gamble_conditions(ctx, amount_str):
+    """Kiểm tra điều kiện cờ bạc siêu khắt khe"""
+    user_id = str(ctx.author.id)
+    current_time = datetime.now()
+    
+    if user_id in gamble_cooldowns:
+        time_difference = (current_time - gamble_cooldowns[user_id]).total_seconds()
+        if time_difference < 4:
+            time_left = int(4 - time_difference)
+            embed_cooldown = discord.Embed(
+                description=f"⏳ Tay mỏi rồi! Đợi {time_left}s nữa hẵng lắc tiếp sếp ơi!", 
+                color=discord.Color.orange()
+            )
+            await ctx.reply(embed=embed_cooldown, mention_author=False)
+            return None, None
+            
+    user_data = load_user(user_id)
+    
+    if user_data.get("money", 0) <= 0:
+        embed_bankrupt = discord.Embed(
+            description="💸 Kẻ tổn thương lại muốn tổn thương sòng bạc à? Tiền trong ví không có một xu mà đòi cá cược!", 
+            color=discord.Color.red()
+        )
+        await ctx.reply(embed=embed_bankrupt, mention_author=False)
+        return None, None
+        
+    try: 
+        if amount_str.lower() == "all":
+            bet_amount = user_data["money"] if user_data["money"] <= 500000 else 500000
+        else:
+            bet_amount = int(amount_str)
+    except ValueError: 
+        embed_error = discord.Embed(description="⚠️ Nhập số tiền sai định dạng!", color=discord.Color.red())
+        await ctx.reply(embed=embed_error, mention_author=False)
+        return None, None
+        
+    if bet_amount <= 0 or bet_amount > user_data["money"]: 
+        embed_poor = discord.Embed(description=f"⚠️ Sếp chỉ có **{user_data['money']:,} 💰** trong ví thôi!", color=discord.Color.red())
+        await ctx.reply(embed=embed_poor, mention_author=False)
+        return None, None
+        
+    if bet_amount > 500000: 
+        embed_max_bet = discord.Embed(description="🛑 Nhà cái quy định max cược là **500,000 💰** thôi!", color=discord.Color.red())
+        await ctx.reply(embed=embed_max_bet, mention_author=False)
+        return None, None
+        
+    return user_data, bet_amount
+
+# =====================================================================
+# KHO DỮ LIỆU ĐỒ SỘ (CỬA HÀNG & GACHA)
+# =====================================================================
+SHOP_ITEMS = {
+    "title_1": {"type": "title", "name": "Kẻ Lưu Đày 🛖", "price": 10000, "emoji": "🏷️"},
+    "title_2": {"type": "title", "name": "Tiểu Thương 🏪", "price": 50000, "emoji": "🏷️"},
+    "title_3": {"type": "title", "name": "Phú Nông 🌾", "price": 200000, "emoji": "🏷️"},
+    "title_4": {"type": "title", "name": "Đại Gia 💸", "price": 1000000, "emoji": "🏷️"},
+    "title_5": {"type": "title", "name": "Tỷ Phú 💎", "price": 5000000, "emoji": "🏷️"},
+    "title_6": {"type": "title", "name": "Thần Tài 🧧", "price": 20000000, "emoji": "🏷️"},
+    "title_7": {"type": "title", "name": "Kẻ Thống Trị Vũ Trụ 🌌", "price": 100000000, "emoji": "👑"},
+    
+    "vehicle_1": {"type": "vehicle", "name": "Xe Đạp Địa Hình 🚲", "price": 15000, "emoji": "🚲"},
+    "vehicle_2": {"type": "vehicle", "name": "Honda SH 150i 🏍️", "price": 300000, "emoji": "🏍️"},
+    "vehicle_3": {"type": "vehicle", "name": "Toyota Camry 🚗", "price": 2000000, "emoji": "🚗"},
+    "vehicle_4": {"type": "vehicle", "name": "Mercedes G63 🚙", "price": 8000000, "emoji": "🚙"},
+    "vehicle_5": {"type": "vehicle", "name": "Lamborghini Aventador 🏎️", "price": 25000000, "emoji": "🏎️"},
+    "vehicle_6": {"type": "vehicle", "name": "Du Thuyền Hạng Sang 🛥️", "price": 150000000, "emoji": "🛥️"},
+    "vehicle_7": {"type": "vehicle", "name": "Trạm Không Gian UFO 🛸", "price": 900000000, "emoji": "🛸"},
+    
+    "house_1": {"type": "house", "name": "Nhà Trọ Ẩm Thấp ⛺", "price": 50000, "emoji": "⛺"},
+    "house_2": {"type": "house", "name": "Chung Cư Mini 🏢", "price": 500000, "emoji": "🏢"},
+    "house_3": {"type": "house", "name": "Nhà Phố 3 Tầng 🏘️", "price": 5000000, "emoji": "🏘️"},
+    "house_4": {"type": "house", "name": "Biệt Thự Hồ Tây 🏡", "price": 30000000, "emoji": "🏡"},
+    "house_5": {"type": "house", "name": "Lâu Đài Cổ Tích 🏰", "price": 150000000, "emoji": "🏰"},
+    "house_6": {"type": "house", "name": "Đảo Tư Nhân Maldives 🏝️", "price": 600000000, "emoji": "🏝️"},
+    "house_7": {"type": "house", "name": "Hành Tinh Namek 🪐", "price": 2000000000, "emoji": "🪐"}
+}
+
+PET_RATES = {
+    "common": {"rate": 70.0, "pool": ["Gà Con 🐥", "Chó Cỏ 🐕", "Mèo Mướp 🐈", "Lợn Đất 🐖", "Cáo Nhỏ 🦊", "Chuột Đồng 🐁"]},
+    "rare": {"rate": 20.0, "pool": ["Sói Tuyết 🐺", "Gấu Xám 🐻", "Đại Bàng 🦅", "Báo Gấm 🐆"]},
+    "epic": {"rate": 7.0, "pool": ["Sư Tử Lửa 🦁", "Khỉ Đột Khổng Lồ 🦍", "Bạch Hổ 🐅", "Tê Giác Thiết Giáp 🦏"]},
+    "legendary": {"rate": 2.5, "pool": ["Rồng Đỏ Hủy Diệt 🐉", "Kỳ Lân Ánh Sáng 🦄", "Phượng Hoàng Lửa 🦚", "Thủy Quái Leviathan 🐙"]},
+    "mythic": {"rate": 0.5, "pool": ["Thần Long Hoàng Kim 🐲", "Hắc Ám Cự Thú 🦇", "Mèo Thần Tài Siêu Cấp 😻", "Godzilla Vĩ Đại 🦖"]}
+}
+
+def get_asset_price(asset_name):
+    for item_key, item_data in SHOP_ITEMS.items():
+        if item_data["name"] == asset_name: 
+            return int(item_data["price"] * 0.7)
+    return 1000
+
+def get_pet_sell_price(pet_name):
+    for rarity, data in PET_RATES.items():
+        if pet_name in data["pool"]:
+            if rarity == "common": return 5000      
+            if rarity == "rare": return 20000       
+            if rarity == "epic": return 150000      
+            if rarity == "legendary": return 800000 
+            if rarity == "mythic": return 10000000   
+    return 1000
+
+# =====================================================================
+# THIẾT LẬP CƠ BẢN CỦA BOT
+# =====================================================================
+intents = discord.Intents.default()
+intents.message_content = True
+
+bot = commands.Bot(command_prefix=['K ', 'k ', 'K', 'k'], intents=intents)
 # Xóa lệnh help mặc định của Discord để dùng lệnh help custom siêu đẹp
 bot.remove_command('help')
 
