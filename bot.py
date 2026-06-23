@@ -2534,31 +2534,6 @@ async def buy(ctx, code: str, qty: int):
     save_user(ctx.author.id)
     await ctx.reply(embed=discord.Embed(description=f"✅ Lệnh MUA khớp! Bạn đã nạp **{qty} cổ phiếu {code}** vào ví (Tổng chi: **{total:,} 💰**).", color=discord.Color.green()))
 
-@chungkhoan.command()
-async def sell(ctx, code: str, qty: int):
-    code = code.upper()
-    stock = stocks_col.find_one({"_id": code})
-    
-    if not stock: return await ctx.reply("⚠️ Mã này bị hủy niêm yết hoặc không tồn tại!")
-    if qty <= 0: return await ctx.reply("⚠️ Nhập sai số lượng bán.")
-    
-    u = load_user(ctx.author.id)
-    my_qty = u.get("stocks", {}).get(code, 0)
-    
-    if my_qty < qty: 
-        return await ctx.reply(f"⚠️ Bạn chỉ có **{my_qty}** cổ phiếu {code} thôi, định bán khống lùa gà à!")
-        
-    # Kỹ năng Trading buff giá bán (Mỗi cấp +2% lợi nhuận)
-    buff = 1 + (u.get("skills", {}).get("trading", 1) * 0.02)
-    gain = int(stock.get("price", 0) * qty * buff)
-    
-    u["stocks"][code] -= qty
-    if u["stocks"][code] == 0: del u["stocks"][code]
-    u["money"] += gain
-    save_user(ctx.author.id)
-    
-    await ctx.reply(embed=discord.Embed(description=f"✅ Lệnh BÁN khớp! Đẩy đi **{qty} {code}** thu về **{gain:,} 💰** *(Đã tính buff Kỹ năng Thương nhân)*.", color=discord.Color.gold()))
-
 
 # ---------------------------------------------------------------------
 # LỆNH QUẢN TRỊ DOANH NGHIỆP TƯ NHÂN
@@ -2753,8 +2728,8 @@ async def ipo(ctx, stock_code: str):
     )
     await ctx.reply(embed=embed)
 
-@chungkhoan.command()
-async def sell(ctx, code: str, qty: int):
+
+async de@chungkhoan.command()f sell(ctx, code: str, qty: int):
     code = code.upper()
     stock = stocks_col.find_one({"_id": code})
     if not stock: return await ctx.reply("⚠️ Mã này không tồn tại!")
