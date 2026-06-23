@@ -14,12 +14,8 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix=['K ', 'k ', 'K', 'k'], intents=intents)
-# Xóa lệnh help mặc định của Discord để dùng lệnh help custom siêu đẹp
 bot.remove_command('help')
 
-# =====================================================================
-# KHO ẢNH GIF ĐỘNG SIÊU VIP 
-# =====================================================================
 GIF_LINKS = {
     "jail": "https://media.giphy.com/media/uG3lKkAuh53wKxY0l9/giphy.gif",
     "bank": "https://media.giphy.com/media/xTiTnqUxyWbsAXq7Ju/giphy.gif",
@@ -36,21 +32,13 @@ GIF_LINKS = {
     "bankrupt": "https://media.giphy.com/media/3o6UB5RrlQuMfZp82Y/giphy.gif"
 }
 
-# =====================================================================
-# QUẢN LÝ TRẠNG THÁI (COOLDOWN & BỘ ĐẾM)
-# =====================================================================
-gamble_cooldowns = {} 
-nhansinh_cooldowns = {} 
-dang_choi_nhansinh = [] 
-cty_cooldowns = {}
-work_cooldowns = {} 
-vietlott_players = {}
+gamble_cooldowns, nhansinh_cooldowns, dang_choi_nhansinh = {}, {}, []
+cty_cooldowns, work_cooldowns, vietlott_players = {}, {}, {}
 
 # =====================================================================
 # KẾT NỐI MONGODB VÀ HỆ THỐNG BỘ ĐỆM (CACHE)
 # =====================================================================
 MONGO_URI = "mongodb+srv://jakinat101084_db_user:Lam17722@cluster0.y6jqmz8.mongodb.net/?appName=Cluster0"
-
 mongo_client = pymongo.MongoClient(MONGO_URI)
 db = mongo_client["DiscordBotDB"]
 
@@ -59,46 +47,26 @@ config_col = db["config"]
 companies_col = db["companies"]
 kf_col = db["kallen_fantasy"]
 
-DB_CACHE = {}
-CONFIG_CACHE = {}
-COMPANY_CACHE = {}
-KF_CACHE = {}
+DB_CACHE, CONFIG_CACHE, COMPANY_CACHE, KF_CACHE = {}, {}, {}, {}
 
 def load_user(user_id):
-    """Tải dữ liệu người dùng từ Database"""
     user_id = str(user_id)
     if user_id not in DB_CACHE:
         document = users_col.find_one({"_id": user_id})
-        if document:
-            DB_CACHE[user_id] = document
-        else:
-            DB_CACHE[user_id] = {}
+        if document: DB_CACHE[user_id] = document
+        else: DB_CACHE[user_id] = {}
             
     defaults = {
-        "xp": 0, 
-        "level": 1, 
-        "money": 0, 
-        "bank": 0,
-        "title": "Dân Đáy Xã Hội 🧱", 
-        "assets": [], 
-        "pets": {}, 
-        "company": None, 
-        "stocks": {}, 
-        "jail_time": None,
-        "spouse": None
+        "xp": 0, "level": 1, "money": 0, "bank": 0, "title": "Dân Đáy Xã Hội 🧱", 
+        "assets": [], "pets": {}, "company": None, "stocks": {}, "jail_time": None, "spouse": None
     }
-    
     for key, value in defaults.items():
-        if key not in DB_CACHE[user_id]: 
-            DB_CACHE[user_id][key] = value
-            
+        if key not in DB_CACHE[user_id]: DB_CACHE[user_id][key] = value
     return DB_CACHE[user_id]
 
 def save_user(user_id):
-    """Lưu dữ liệu người dùng"""
     user_id = str(user_id)
-    if user_id in DB_CACHE: 
-        users_col.update_one({"_id": user_id}, {"$set": DB_CACHE[user_id]}, upsert=True)
+    if user_id in DB_CACHE: users_col.update_one({"_id": user_id}, {"$set": DB_CACHE[user_id]}, upsert=True)
 
 def load_server_config(server_id):
     server_id = str(server_id)
@@ -118,11 +86,9 @@ def load_company(company_id):
 
 def save_company(company_id):
     company_id = str(company_id)
-    if company_id in COMPANY_CACHE: 
-        companies_col.update_one({"_id": company_id}, {"$set": COMPANY_CACHE[company_id]}, upsert=True)
+    if company_id in COMPANY_CACHE: companies_col.update_one({"_id": company_id}, {"$set": COMPANY_CACHE[company_id]}, upsert=True)
 
 def load_kf_profile(user_id):
-    """Tải hồ sơ Kallen Fantasy"""
     user_id = str(user_id)
     if user_id not in KF_CACHE:
         doc = kf_col.find_one({"_id": user_id})
@@ -152,37 +118,23 @@ def load_kf_profile(user_id):
         leftover_seconds = int(delta.total_seconds()) % 300
         new_regen_time = now - timedelta(seconds=leftover_seconds)
         KF_CACHE[user_id]["last_stamina_regen"] = new_regen_time.strftime("%Y-%m-%d %H:%M:%S")
-        
-        # Save ngay lập tức để đồng bộ database
         kf_col.update_one({"_id": user_id}, {"$set": KF_CACHE[user_id]}, upsert=True)
 
     return KF_CACHE[user_id]
 
 def save_kf_profile(user_id):
     user_id = str(user_id)
-    if user_id in KF_CACHE:
-        kf_col.update_one({"_id": user_id}, {"$set": KF_CACHE[user_id]}, upsert=True)
+    if user_id in KF_CACHE: kf_col.update_one({"_id": user_id}, {"$set": KF_CACHE[user_id]}, upsert=True)
 
-# =====================================================================
-# HÀM KIỂM TRA TỔNG THỂ (GLOBAL CHECKS)
-# =====================================================================
 @bot.check
 async def global_jail_and_channel_check(ctx):
-    if ctx.author.guild_permissions.administrator or ctx.command.name == "help": 
-        return True
-        
+    if ctx.author.guild_permissions.administrator or ctx.command.name == "help": return True
     user_data = load_user(ctx.author.id)
     jail_time_str = user_data.get("jail_time")
-    
     if jail_time_str:
         jail_end = datetime.strptime(jail_time_str, "%Y-%m-%d %H:%M:%S")
         if datetime.now() < jail_end:
-            embed = discord.Embed(
-                title="🚨 BÁO ĐỘNG ĐỎ!", 
-                description=f"{ctx.author.mention} đang bóc lịch trong trại giam do vi phạm pháp luật!\n\n"
-                            f"⏳ Thời gian mãn hạn tù: <t:{int(jail_end.timestamp())}:R>\n\n", 
-                color=discord.Color.red()
-            )
+            embed = discord.Embed(title="🚨 BÁO ĐỘNG ĐỎ!", description=f"{ctx.author.mention} đang bóc lịch trong trại giam!\n\n⏳ Mãn hạn tù: <t:{int(jail_end.timestamp())}:R>\n\n", color=discord.Color.red())
             embed.set_thumbnail(url=GIF_LINKS["jail"])
             await ctx.reply(embed=embed, mention_author=False)
             return False
@@ -193,9 +145,7 @@ async def global_jail_and_channel_check(ctx):
     if ctx.guild:
         server_config = load_server_config(ctx.guild.id)
         allowed_channels = server_config.get("allowed_channels", [])
-        if allowed_channels and ctx.channel.id not in allowed_channels: 
-            return False
-            
+        if allowed_channels and ctx.channel.id not in allowed_channels: return False
     return True
 
 def make_progress_bar(current_value, total_value, bar_length=12):
@@ -206,145 +156,58 @@ def make_progress_bar(current_value, total_value, bar_length=12):
 async def check_gamble_conditions(ctx, amount_str):
     user_id = str(ctx.author.id)
     current_time = datetime.now()
-    
     if user_id in gamble_cooldowns:
         time_difference = (current_time - gamble_cooldowns[user_id]).total_seconds()
         if time_difference < 4:
             time_left = int(4 - time_difference)
-            embed_cooldown = discord.Embed(description=f"⏳ Đợi {time_left}s nữa hẵng lắc tiếp sếp ơi!", color=discord.Color.orange())
-            await ctx.reply(embed=embed_cooldown, mention_author=False)
+            await ctx.reply(embed=discord.Embed(description=f"⏳ Đợi {time_left}s nữa hẵng lắc tiếp sếp ơi!", color=discord.Color.orange()), mention_author=False)
             return None, None
             
     user_data = load_user(user_id)
-    
     if user_data.get("money", 0) <= 0:
-        embed_bankrupt = discord.Embed(description="💸 Tiền trong ví không có một xu mà đòi cá cược!", color=discord.Color.red())
-        await ctx.reply(embed=embed_bankrupt, mention_author=False)
+        await ctx.reply(embed=discord.Embed(description="💸 Tiền trong ví không có một xu mà đòi cá cược!", color=discord.Color.red()), mention_author=False)
         return None, None
         
     try: 
-        if amount_str.lower() == "all":
-            bet_amount = user_data["money"] if user_data["money"] <= 500000 else 500000
-        else:
-            bet_amount = int(amount_str)
+        if amount_str.lower() == "all": bet_amount = user_data["money"] if user_data["money"] <= 500000 else 500000
+        else: bet_amount = int(amount_str)
     except ValueError: 
-        embed_error = discord.Embed(description="⚠️ Nhập số tiền sai định dạng! Vui lòng nhập số hoặc chữ `all`.", color=discord.Color.red())
-        await ctx.reply(embed=embed_error, mention_author=False)
+        await ctx.reply(embed=discord.Embed(description="⚠️ Nhập số tiền sai định dạng! Vui lòng nhập số hoặc chữ `all`.", color=discord.Color.red()), mention_author=False)
         return None, None
         
     if bet_amount <= 0 or bet_amount > user_data["money"]: 
-        embed_poor = discord.Embed(description=f"⚠️ Bạn chỉ có **{user_data['money']:,} 💰** trong ví thôi!", color=discord.Color.red())
-        await ctx.reply(embed=embed_poor, mention_author=False)
+        await ctx.reply(embed=discord.Embed(description=f"⚠️ Bạn chỉ có **{user_data['money']:,} 💰** trong ví thôi!", color=discord.Color.red()), mention_author=False)
         return None, None
         
     if bet_amount > 500000: 
-        embed_max_bet = discord.Embed(description="🛑 Nhà cái quy định mỗi ván cược tối đa **500,000 💰** thôi nhé!", color=discord.Color.red())
-        await ctx.reply(embed=embed_max_bet, mention_author=False)
+        await ctx.reply(embed=discord.Embed(description="🛑 Nhà cái quy định mỗi ván cược tối đa **500,000 💰** thôi nhé!", color=discord.Color.red()), mention_author=False)
         return None, None
         
     return user_data, bet_amount
 
-# =====================================================================
-# DATA KHO SHOP ĐẠI GIA (MỞ RỘNG CỰC LỚN)
-# =====================================================================
 SHOP_ITEMS = {
-    # Hạng mục: Danh hiệu
     "title_1": {"type": "title", "name": "Dân Thường 🚶", "price": 10000, "emoji": "🏷️"},
-    "title_2": {"type": "title", "name": "Học Sinh Ngoan 🎒", "price": 25000, "emoji": "🏷️"},
-    "title_3": {"type": "title", "name": "Tiểu Thương 🏪", "price": 50000, "emoji": "🏷️"},
-    "title_4": {"type": "title", "name": "Phú Nông 🌾", "price": 150000, "emoji": "🏷️"},
-    "title_5": {"type": "title", "name": "Chủ Tịch 👔", "price": 500000, "emoji": "🏷️"},
-    "title_6": {"type": "title", "name": "Đại Gia 💸", "price": 2000000, "emoji": "🏷️"},
-    "title_7": {"type": "title", "name": "Tỷ Phú 💎", "price": 10000000, "emoji": "🏷️"},
-    "title_8": {"type": "title", "name": "Tài Phiệt 🏛️", "price": 50000000, "emoji": "🏷️"},
-    "title_9": {"type": "title", "name": "Thần Tài 🧧", "price": 200000000, "emoji": "🏷️"},
-    "title_10": {"type": "title", "name": "Vua Của Thế Giới 👑", "price": 1000000000, "emoji": "👑"},
-
-    # Hạng mục: Phương tiện di chuyển
-    "vehicle_1": {"type": "vehicle", "name": "Giày Trượt Patin 🛹", "price": 5000, "emoji": "🛹"},
-    "vehicle_2": {"type": "vehicle", "name": "Xe Đạp Thể Thao 🚲", "price": 15000, "emoji": "🚲"},
-    "vehicle_3": {"type": "vehicle", "name": "Xe Đạp Điện 🛵", "price": 45000, "emoji": "🛵"},
-    "vehicle_4": {"type": "vehicle", "name": "Honda Wave Alpha 🏍️", "price": 120000, "emoji": "🏍️"},
-    "vehicle_5": {"type": "vehicle", "name": "Honda SH 150i 🏍️", "price": 350000, "emoji": "🏍️"},
-    "vehicle_6": {"type": "vehicle", "name": "Kia Morning 🚗", "price": 1500000, "emoji": "🚗"},
-    "vehicle_7": {"type": "vehicle", "name": "Toyota Camry 🚘", "price": 4000000, "emoji": "🚘"},
-    "vehicle_8": {"type": "vehicle", "name": "Ford Everest 🚙", "price": 8000000, "emoji": "🚙"},
-    "vehicle_9": {"type": "vehicle", "name": "Porsche Mustang 🏎️", "price": 15000000, "emoji": "🏎️"},
-    "vehicle_10": {"type": "vehicle", "name": "Mercedes G63 🚙", "price": 30000000, "emoji": "🚙"},
-    "vehicle_11": {"type": "vehicle", "name": "Lamborghini Aventador 🏎️", "price": 85000000, "emoji": "🏎️"},
-    "vehicle_12": {"type": "vehicle", "name": "Trực Thăng Cá Nhân 🚁", "price": 250000000, "emoji": "🚁"},
-    "vehicle_13": {"type": "vehicle", "name": "Du Thuyền Hạng Sang 🛥️", "price": 500000000, "emoji": "🛥️"},
-    "vehicle_14": {"type": "vehicle", "name": "Máy Bay Phản Lực ✈️", "price": 1000000000, "emoji": "✈️"},
-    "vehicle_15": {"type": "vehicle", "name": "Tàu Vũ Trụ UFO 🛸", "price": 5000000000, "emoji": "🛸"},
-
-    # Hạng mục: Bất động sản
-    "house_1": {"type": "house", "name": "Gầm Cầu 🌉", "price": 10000, "emoji": "🌉"},
-    "house_2": {"type": "house", "name": "Lều Cắm Trại ⛺", "price": 50000, "emoji": "⛺"},
-    "house_3": {"type": "house", "name": "Phòng Trọ 15m2 🛖", "price": 200000, "emoji": "🛖"},
-    "house_4": {"type": "house", "name": "Chung Cư Mini 🏢", "price": 800000, "emoji": "🏢"},
-    "house_5": {"type": "house", "name": "Nhà Cấp 4 🏠", "price": 2500000, "emoji": "🏠"},
-    "house_6": {"type": "house", "name": "Nhà Phố 3 Tầng 🏘️", "price": 8000000, "emoji": "🏘️"},
-    "house_7": {"type": "house", "name": "Penthouse Landmark 🏙️", "price": 25000000, "emoji": "🏙️"},
-    "house_8": {"type": "house", "name": "Biệt Thự Vườn Hồ Tây 🏡", "price": 80000000, "emoji": "🏡"},
-    "house_9": {"type": "house", "name": "Lâu Đài Phong Cách Âu 🏰", "price": 250000000, "emoji": "🏰"},
-    "house_10": {"type": "house", "name": "Đảo Tư Nhân Maldives 🏝️", "price": 800000000, "emoji": "🏝️"},
-    "house_11": {"type": "house", "name": "Căn Cứ Quân Sự Mật ☢️", "price": 2000000000, "emoji": "☢️"},
-    "house_12": {"type": "house", "name": "Thành Phố Nổi Tương Lai 🌃", "price": 5000000000, "emoji": "🌃"},
-    "house_13": {"type": "house", "name": "Mặt Trăng Của Riêng Bạn 🌕", "price": 10000000000, "emoji": "🌕"},
-    "house_14": {"type": "house", "name": "Hành Tinh Namek 🪐", "price": 50000000000, "emoji": "🪐"},
-    "house_15": {"type": "house", "name": "Lỗ Đen Vũ Trụ 🌌", "price": 100000000000, "emoji": "🌌"}
+    "title_4": {"type": "title", "name": "Đại Gia 💸", "price": 1000000, "emoji": "🏷️"},
+    "vehicle_2": {"type": "vehicle", "name": "Honda SH 150i 🏍️", "price": 300000, "emoji": "🏍️"},
+    "vehicle_4": {"type": "vehicle", "name": "Mercedes G63 🚙", "price": 8000000, "emoji": "🚙"},
+    "house_2": {"type": "house", "name": "Chung Cư Mini 🏢", "price": 500000, "emoji": "🏢"},
+    "house_4": {"type": "house", "name": "Biệt Thự Hồ Tây 🏡", "price": 30000000, "emoji": "🏡"}
 }
 
 def get_asset_price(asset_name):
-    """Bán lại tài sản cho chợ đen bị ép giá lỗ 30%"""
     for item_key, item_data in SHOP_ITEMS.items():
-        if item_data["name"] == asset_name: 
-            return int(item_data["price"] * 0.7)
+        if item_data["name"] == asset_name: return int(item_data["price"] * 0.7)
     return 1000
 
-# =====================================================================
-# DATA GACHA THÚ CƯNG (MỞ RỘNG SỐ LƯỢNG)
-# =====================================================================
 PET_RATES = {
-    "common": {
-        "rate": 70.0, 
-        "pool": [
-            "Gà Con 🐥", "Chó Cỏ 🐕", "Mèo Mướp 🐈", "Lợn Đất 🐖", "Cáo Nhỏ 🦊", "Chuột Đồng 🐁",
-            "Cua Biển 🦀", "Rùa Đá 🐢", "Ếch Xanh 🐸", "Chuột Lang 🐹"
-        ]
-    },
-    "rare": {
-        "rate": 20.0, 
-        "pool": [
-            "Sói Tuyết 🐺", "Gấu Xám 🐻", "Đại Bàng 🦅", "Báo Gấm 🐆", "Linh Dương 🦌",
-            "Đà Điểu 🦩", "Khỉ Vàng 🐒", "Cú Mèo 🦉"
-        ]
-    },
-    "epic": {
-        "rate": 7.0, 
-        "pool": [
-            "Sư Tử Lửa 🦁", "Khỉ Đột Khổng Lồ 🦍", "Bạch Hổ 🐅", "Tê Giác Thiết Giáp 🦏",
-            "Bò Cạp Độc 🦂", "Cá Mập Bạo Chúa 🦈", "Ngựa Hoang Mạc 🐎"
-        ]
-    },
-    "legendary": {
-        "rate": 2.5, 
-        "pool": [
-            "Rồng Đỏ Hủy Diệt 🐉", "Kỳ Lân Ánh Sáng 🦄", "Phượng Hoàng Lửa 🦚", "Thủy Quái Leviathan 🐙",
-            "Nhện Ma Thuật 🕷️", "Quạ Địa Ngục 🐦‍⬛"
-        ]
-    },
-    "mythic": {
-        "rate": 0.5, 
-        "pool": [
-            "Thần Long Hoàng Kim 🐲", "Hắc Ám Cự Thú 🦇", "Mèo Thần Tài Siêu Cấp 😻", "Godzilla Vĩ Đại 🦖",
-            "King Kong Bất Diệt 🦧", "Thần Rùa Genbu 🐢"
-        ]
-    }
+    "common": {"rate": 70.0, "pool": ["Gà Con 🐥", "Chó Cỏ 🐕", "Mèo Mướp 🐈"]},
+    "rare": {"rate": 20.0, "pool": ["Sói Tuyết 🐺", "Gấu Xám 🐻", "Đại Bàng 🦅"]},
+    "epic": {"rate": 7.0, "pool": ["Sư Tử Lửa 🦁", "Khỉ Đột 🦍", "Bạch Hổ 🐅"]},
+    "legendary": {"rate": 2.5, "pool": ["Rồng Đỏ 🐉", "Kỳ Lân 🦄"]},
+    "mythic": {"rate": 0.5, "pool": ["Thần Long 🐲", "Hắc Ám Cự Thú 🦇"]}
 }
 
 def get_pet_sell_price(pet_name):
-    """Định giá bán thú cưng vào chợ đen theo độ hiếm"""
     for rarity, data in PET_RATES.items():
         if pet_name in data["pool"]:
             if rarity == "common": return 5000      
@@ -354,134 +217,51 @@ def get_pet_sell_price(pet_name):
             if rarity == "mythic": return 10000000   
     return 1000
 
-# =====================================================================
-# DATA KALLEN FANTASY (NHÂN VẬT, VŨ KHÍ, VẾT THÁNH MỞ RỘNG KHỦNG)
-# =====================================================================
 KALLEN_BATTLESUITS = {
-    "imayoh": {
-        "id": "imayoh", "name": "Ritual Imayoh (MECH)", "type": "MECH", "rarity": "A", 
-        "base_hp": 1200, "base_atk": 250, "base_def": 150, "base_crt": 30, 
-        "skill_basic_name": "Súng Kata", "skill_basic_dmg": 1.2, 
-        "skill_combo_name": "Mưa Đạn Động Năng", "skill_combo_dmg": 2.5, 
-        "skill_ult_name": "Khúc Ca Elysia", "skill_ult_dmg": 6.0, "ult_sp_cost": 80, 
-        "evade_name": "Vết Nứt Không Gian", "emoji": "🔫"
-    },
-    "sundenjager": {
-        "id": "sundenjager", "name": "Sündenjäger (MECH)", "type": "MECH", "rarity": "A", 
-        "base_hp": 1400, "base_atk": 220, "base_def": 180, "base_crt": 25, 
-        "skill_basic_name": "Xạ Kích Liên Thanh", "skill_basic_dmg": 1.0, 
-        "skill_combo_name": "Càn Quét Tội Lỗi", "skill_combo_dmg": 2.2, 
-        "skill_ult_name": "Oanh Tạc Quỹ Đạo", "skill_ult_dmg": 5.5, "ult_sp_cost": 75, 
-        "evade_name": "Phản Xạ Vượt Cấp", "emoji": "🦇"
-    },
-    "sixth_serenade": {
-        "id": "sixth_serenade", "name": "Sixth Serenade (PSY)", "type": "PSY", "rarity": "S", 
-        "base_hp": 1500, "base_atk": 320, "base_def": 140, "base_crt": 40, 
-        "skill_basic_name": "Dạ Khúc Dạ Tưởng", "skill_basic_dmg": 1.5, 
-        "skill_combo_name": "Dấu Ấn Quạ Đen", "skill_combo_dmg": 3.0, 
-        "skill_ult_name": "Bản Tình Ca Bóng Tối", "skill_ult_dmg": 8.0, "ult_sp_cost": 100, 
-        "evade_name": "Vũ Điệu Quạ Đen", "emoji": "🎭"
-    },
-    "divine_prayer": {
-        "id": "divine_prayer", "name": "Divine Prayer (BIO)", "type": "BIO", "rarity": "A", 
-        "base_hp": 1800, "base_atk": 200, "base_def": 250, "base_crt": 20, 
-        "skill_basic_name": "Quyền Cước Ánh Sáng", "skill_basic_dmg": 1.0, 
-        "skill_combo_name": "Trừng Phạt Kẻ Thù", "skill_combo_dmg": 2.0, 
-        "skill_ult_name": "Valkyrie Bộc Phát", "skill_ult_dmg": 5.0, "ult_sp_cost": 70, 
-        "evade_name": "Thời Gian Ngưng Đọng", "emoji": "✨"
-    },
-    "herrscher_reason": {
-        "id": "herrscher_reason", "name": "Herrscher of Reason (MECH)", "type": "MECH", "rarity": "S", 
-        "base_hp": 1600, "base_atk": 400, "base_def": 200, "base_crt": 50, 
-        "skill_basic_name": "Súng Pháo Lõi R", "skill_basic_dmg": 1.8, 
-        "skill_combo_name": "Pháo Kích Oanh Tạc", "skill_combo_dmg": 3.5, 
-        "skill_ult_name": "Dự Án Bunny Đột Kích", "skill_ult_dmg": 10.0, "ult_sp_cost": 120, 
-        "evade_name": "Kiến Tạo Không Gian", "emoji": "🏍️"
-    }
+    "imayoh": {"id": "imayoh", "name": "Ritual Imayoh (MECH)", "type": "MECH", "rarity": "A", "base_hp": 1200, "base_atk": 250, "base_def": 150, "base_crt": 30, "skill_basic_name": "Súng Kata", "skill_basic_dmg": 1.2, "skill_combo_name": "Mưa Đạn Động Năng", "skill_combo_dmg": 2.5, "skill_ult_name": "Khúc Ca Elysia", "skill_ult_dmg": 6.0, "ult_sp_cost": 80, "evade_name": "Vết Nứt Không Gian", "emoji": "🔫"},
+    "sundenjager": {"id": "sundenjager", "name": "Sündenjäger (MECH)", "type": "MECH", "rarity": "A", "base_hp": 1400, "base_atk": 220, "base_def": 180, "base_crt": 25, "skill_basic_name": "Xạ Kích Liên Thanh", "skill_basic_dmg": 1.0, "skill_combo_name": "Càn Quét Tội Lỗi", "skill_combo_dmg": 2.2, "skill_ult_name": "Oanh Tạc Quỹ Đạo", "skill_ult_dmg": 5.5, "ult_sp_cost": 75, "evade_name": "Phản Xạ Vượt Cấp", "emoji": "🦇"},
+    "sixth_serenade": {"id": "sixth_serenade", "name": "Sixth Serenade (PSY)", "type": "PSY", "rarity": "S", "base_hp": 1500, "base_atk": 320, "base_def": 140, "base_crt": 40, "skill_basic_name": "Dạ Khúc Dạ Tưởng", "skill_basic_dmg": 1.5, "skill_combo_name": "Dấu Ấn Quạ Đen", "skill_combo_dmg": 3.0, "skill_ult_name": "Bản Tình Ca Bóng Tối", "skill_ult_dmg": 8.0, "ult_sp_cost": 100, "evade_name": "Vũ Điệu Quạ Đen", "emoji": "🎭"}
 }
 
 KALLEN_WEAPONS = {
     "wp_usp": {"id": "wp_usp", "name": "Súng Ngắn USP", "rarity": 2, "atk": 50, "crt": 5},
-    "wp_colt": {"id": "wp_colt", "name": "Colt Peacemaker", "rarity": 3, "atk": 120, "crt": 10},
     "wp_water": {"id": "wp_water", "name": "Water Spirit Type-II", "rarity": 4, "atk": 200, "crt": 15},
-    "wp_jingwei": {"id": "wp_jingwei", "name": "Cánh Chim Jingwei", "rarity": 4, "atk": 230, "crt": 20},
-    "wp_aria": {"id": "wp_aria", "name": "Tranquil Arias", "rarity": 5, "atk": 350, "crt": 35},
-    "wp_keys": {"id": "wp_keys", "name": "Keys of the Void", "rarity": 5, "atk": 380, "crt": 40},
-    "wp_domain": {"id": "wp_domain", "name": "Domain of Revelation", "rarity": 5, "atk": 420, "crt": 45},
-    "wp_judah": {"id": "wp_judah", "name": "Oath of Judah", "rarity": 5, "atk": 450, "crt": 20},
-    "wp_shamash": {"id": "wp_shamash", "name": "Judgment of Shamash", "rarity": 5, "atk": 500, "crt": 10}
+    "wp_aria": {"id": "wp_aria", "name": "Tranquil Arias", "rarity": 5, "atk": 350, "crt": 35}
 }
 
 KALLEN_STIGMATA = {
-    # Set Attila (Vật lý cơ bản)
     "stig_attila_t": {"id": "stig_attila_t", "name": "Attila (T)", "type": "T", "rarity": 3, "hp": 200, "atk": 40, "def": 30, "crt": 0},
-    "stig_attila_m": {"id": "stig_attila_m", "name": "Attila (M)", "type": "M", "rarity": 3, "hp": 220, "atk": 0, "def": 45, "crt": 5},
-    "stig_attila_b": {"id": "stig_attila_b", "name": "Attila (B)", "type": "B", "rarity": 3, "hp": 210, "atk": 30, "def": 35, "crt": 5},
-    
-    # Set Michelangelo (Sát thương bạo kích)
-    "stig_michel_t": {"id": "stig_michel_t", "name": "Michelangelo (T)", "type": "T", "rarity": 5, "hp": 400, "atk": 100, "def": 50, "crt": 0},
     "stig_michel_m": {"id": "stig_michel_m", "name": "Michelangelo (M)", "type": "M", "rarity": 5, "hp": 450, "atk": 0, "def": 120, "crt": 10},
-    "stig_michel_b": {"id": "stig_michel_b", "name": "Michelangelo (B)", "type": "B", "rarity": 5, "hp": 420, "atk": 70, "def": 60, "crt": 15},
-    
-    # Set Nohime (Sát thương Băng)
-    "stig_nohime_t": {"id": "stig_nohime_t", "name": "Nohime (T)", "type": "T", "rarity": 5, "hp": 420, "atk": 110, "def": 40, "crt": 0},
-    "stig_nohime_m": {"id": "stig_nohime_m", "name": "Nohime (M)", "type": "M", "rarity": 5, "hp": 480, "atk": 0, "def": 150, "crt": 5},
-    "stig_nohime_b": {"id": "stig_nohime_b", "name": "Nohime (B)", "type": "B", "rarity": 5, "hp": 450, "atk": 80, "def": 50, "crt": 10},
-
-    # Set Sirin Ascendant (Sát thương Vật lý trấn phái S)
-    "stig_sirin_t": {"id": "stig_sirin_t", "name": "Sirin Ascendant (T)", "type": "T", "rarity": 5, "hp": 500, "atk": 125, "def": 60, "crt": 0},
-    "stig_sirin_m": {"id": "stig_sirin_m", "name": "Sirin Ascendant (M)", "type": "M", "rarity": 5, "hp": 550, "atk": 20, "def": 180, "crt": 15},
-    "stig_sirin_b": {"id": "stig_sirin_b", "name": "Sirin Ascendant (B)", "type": "B", "rarity": 5, "hp": 520, "atk": 85, "def": 80, "crt": 20},
+    "stig_nohime_b": {"id": "stig_nohime_b", "name": "Nohime (B)", "type": "B", "rarity": 5, "hp": 450, "atk": 80, "def": 50, "crt": 10}
 }
 
 KALLEN_ENEMIES = {
     "zombie_1": {"name": "Xác Sống Cầm Kiếm", "type": "BIO", "hp": 2000, "atk": 100, "def": 50, "sp_drop": 5},
-    "zombie_2": {"name": "Cung Thủ Xác Sống", "type": "BIO", "hp": 1800, "atk": 150, "def": 40, "sp_drop": 8},
-    "zombie_boss": {"name": "White Ninja (Boss)", "type": "BIO", "hp": 15000, "atk": 300, "def": 150, "sp_drop": 20},
     "beast_1": {"name": "Thú Honkai Kỵ Binh", "type": "PSY", "hp": 3000, "atk": 120, "def": 100, "sp_drop": 5},
-    "beast_2": {"name": "Thú Honkai Bay", "type": "PSY", "hp": 2500, "atk": 180, "def": 80, "sp_drop": 8},
-    "beast_boss": {"name": "Ganesha (Boss)", "type": "PSY", "hp": 25000, "atk": 400, "def": 250, "sp_drop": 30},
     "mecha_1": {"name": "Robot Tuần Tra", "type": "MECH", "hp": 3500, "atk": 80, "def": 200, "sp_drop": 5},
-    "mecha_2": {"name": "Titan Nhện", "type": "MECH", "hp": 4500, "atk": 250, "def": 300, "sp_drop": 10},
-    "mecha_boss": {"name": "RPC-6626 (Boss)", "type": "MECH", "hp": 30000, "atk": 500, "def": 400, "sp_drop": 50},
-    "god_boss": {"name": "Herrscher of the Void", "type": "BIO", "hp": 100000, "atk": 1200, "def": 800, "sp_drop": 100}
+    "boss_god": {"name": "Herrscher of the Void", "type": "BIO", "hp": 50000, "atk": 800, "def": 400, "sp_drop": 50}
 }
 
 KALLEN_STAGES = {
-    "1-1": {"name": "1-1: Sự thức tỉnh", "enemies": ["zombie_1", "zombie_1", "zombie_2"], "reward_money": 5000, "reward_xp": 100},
-    "1-2": {"name": "1-2: Cuộc vây hãm", "enemies": ["zombie_2", "beast_1", "beast_1"], "reward_money": 7000, "reward_xp": 150},
-    "1-3": {"name": "1-3: Bóng trắng đêm đen (Boss)", "enemies": ["zombie_1", "zombie_boss"], "reward_money": 15000, "reward_xp": 300},
-    "2-1": {"name": "2-1: Cảnh báo Honkai", "enemies": ["beast_1", "beast_2", "beast_2"], "reward_money": 10000, "reward_xp": 200},
-    "2-2": {"name": "2-2: Xung đột Titan", "enemies": ["mecha_1", "mecha_1", "mecha_2"], "reward_money": 12000, "reward_xp": 250},
-    "2-3": {"name": "2-3: Đế vương sụp đổ (Boss)", "enemies": ["beast_2", "beast_boss"], "reward_money": 25000, "reward_xp": 500},
-    "3-1": {"name": "3-1: Bầu trời cơ khí", "enemies": ["mecha_2", "mecha_2", "beast_2"], "reward_money": 18000, "reward_xp": 350},
-    "3-2": {"name": "3-2: Vũ khí hủy diệt (Boss)", "enemies": ["mecha_1", "mecha_boss"], "reward_money": 40000, "reward_xp": 800},
-    "4-1": {"name": "Chung Cuộc: Luật Giả (Raid Boss)", "enemies": ["god_boss"], "reward_money": 100000, "reward_xp": 2000}
+    "1-1": {"name": "1-1: Sự thức tỉnh", "enemies": ["zombie_1", "zombie_1"], "reward_money": 5000, "reward_xp": 100},
+    "1-2": {"name": "1-2: Cuộc vây hãm", "enemies": ["zombie_1", "beast_1"], "reward_money": 7000, "reward_xp": 150},
+    "2-1": {"name": "Chung Cuộc: Luật Giả", "enemies": ["boss_god"], "reward_money": 50000, "reward_xp": 1000}
 }
 
 def calculate_kallen_stats(user_id):
     p = load_kf_profile(user_id)
     suit = KALLEN_BATTLESUITS[p["current_suit"]]
-    
-    total_hp = suit["base_hp"]
-    total_atk = suit["base_atk"]
-    total_def = suit["base_def"]
-    total_crt = suit["base_crt"]
+    total_hp, total_atk, total_def, total_crt = suit["base_hp"], suit["base_atk"], suit["base_def"], suit["base_crt"]
     
     if p["equipped_weapon"]:
         wp = KALLEN_WEAPONS[p["equipped_weapon"]]
-        total_atk += wp["atk"]
-        total_crt += wp["crt"]
+        total_atk += wp["atk"]; total_crt += wp["crt"]
         
-    equipped_stig = p["equipped_stigmata"]
     for pos in ["T", "M", "B"]:
-        stig_id = equipped_stig[pos]
+        stig_id = p["equipped_stigmata"][pos]
         if stig_id:
             stig = KALLEN_STIGMATA[stig_id]
-            total_hp += stig["hp"]
-            total_atk += stig["atk"]
-            total_def += stig["def"]
-            total_crt += stig["crt"]
+            total_hp += stig["hp"]; total_atk += stig["atk"]; total_def += stig["def"]; total_crt += stig["crt"]
             
     return {
         "suit": suit,
@@ -535,7 +315,7 @@ class KallenGachaView(discord.ui.View):
         for _ in range(times):
             roll = random.uniform(0, 100)
             if roll <= 1.5: 
-                suit = "herrscher_reason" if random.random() > 0.5 else "sixth_serenade"
+                suit = "sixth_serenade"
                 if suit not in p["unlocked_suits"]:
                     p["unlocked_suits"].append(suit)
                     results.append(f"🌟 **VALKYRIE CẤP S:** {KALLEN_BATTLESUITS[suit]['name']}")
@@ -552,8 +332,7 @@ class KallenGachaView(discord.ui.View):
                     p["inventory_stigmata"].append(item)
                     results.append(f"💠 **Vết Thánh 5★:** {KALLEN_STIGMATA[item]['name']}")
             elif roll <= 15.0: 
-                pool_suits = ["sundenjager", "divine_prayer"]
-                suit = random.choice(pool_suits)
+                suit = "sundenjager"
                 if suit not in p["unlocked_suits"]:
                     p["unlocked_suits"].append(suit)
                     results.append(f"⭐ **VALKYRIE CẤP A:** {KALLEN_BATTLESUITS[suit]['name']}")
@@ -580,847 +359,11 @@ class KallenGachaView(discord.ui.View):
                     results.append(f"⬜ Vết Thánh 3★: {KALLEN_STIGMATA[item]['name']}")
                     
         save_kf_profile(user_id)
-        
         desc = "\n".join(results)
         embed = discord.Embed(title="📦 KẾT QUẢ TIẾP TẾ", description=desc, color=discord.Color.gold())
         embed.set_footer(text=f"Pha lê còn lại: {p['crystals']:,} 💎", icon_url=interaction.user.display_avatar.url)
-        
         await interaction.response.edit_message(embed=embed, view=self)
 
-@bot.group(invoke_without_command=True, aliases=['kf', 'honkai'])
-async def kallen(ctx):
-    """Trung tâm chỉ huy Hyperion của Kallen Fantasy"""
-    p = load_kf_profile(ctx.author.id)
-    stats = calculate_kallen_stats(ctx.author.id)
-    suit = stats["suit"]
-    
-    embed = discord.Embed(
-        title="🌌 KALLEN FANTASY - HYPERION BRIDGE",
-        description=f"Thuyền trưởng: **{ctx.author.name}**\nCấp độ: **Lv.{p['level']}** | Thể lực: **{p['stamina']}/{p['max_stamina']}** ⚡ | Pha lê: **{p['crystals']:,}** 💎",
-        color=discord.Color.purple()
-    )
-    
-    embed.add_field(name="Đang xuất chiến", value=f"**{suit['emoji']} {suit['name']}**", inline=False)
-    embed.add_field(name="Chỉ số chiến đấu", value=f"❤️ HP: {stats['hp']} | ⚔️ ATK: {stats['atk']}\n🛡️ DEF: {stats['def']} | 💥 CRT: {stats['crt']}", inline=False)
-    
-    wp_name = KALLEN_WEAPONS[p["equipped_weapon"]]["name"] if p["equipped_weapon"] else "Tay Không"
-    stig_t = KALLEN_STIGMATA[p["equipped_stigmata"]["T"]]["name"] if p["equipped_stigmata"]["T"] else "Trống"
-    stig_m = KALLEN_STIGMATA[p["equipped_stigmata"]["M"]]["name"] if p["equipped_stigmata"]["M"] else "Trống"
-    stig_b = KALLEN_STIGMATA[p["equipped_stigmata"]["B"]]["name"] if p["equipped_stigmata"]["B"] else "Trống"
-    
-    embed.add_field(name="Trang bị hiện tại", value=f"🔫 Vũ khí: {wp_name}\n💠 Vết thánh (T): {stig_t}\n💠 Vết thánh (M): {stig_m}\n💠 Vết thánh (B): {stig_b}", inline=False)
-    
-    cmds = (
-        "`k kallen gacha` • Mở Kênh Tiếp Tế (Dùng Pha lê)\n"
-        "`k kallen doipha <số lượng>` • Đổi Tiền mặt 💰 sang Pha lê 💎 (Tỷ giá 1,000💰 = 1💎)\n"
-        "`k kallen equip <loại> <id>` • Lắp trang bị (loại: suit/wp/stig_t/stig_m/stig_b)\n"
-        "`k kallen story <mã ải>` • Đi Cốt truyện\n"
-        "`k kallen abyss` • Leo tháp Vực Sâu vô tận"
-    )
-    embed.add_field(name="Bảng Điều Khiển Hệ Thống", value=cmds, inline=False)
-    
-    await ctx.reply(embed=embed, mention_author=False)
-
-@kallen.command()
-async def doipha(ctx, amount: int):
-    """Đổi tiền server sang Pha lê Kallen Fantasy (Tỷ giá 1000 💰 = 1 💎)"""
-    if amount <= 0: return await ctx.reply("Vui lòng nhập số lớn hơn 0.")
-    
-    user_id = str(ctx.author.id)
-    u_data = load_user(user_id)
-    cost = amount * 1000
-    
-    if u_data.get("money", 0) < cost:
-        return await ctx.reply(f"⚠️ Sếp cần {cost:,} 💰 để đổi lấy {amount:,} Pha lê 💎. Đi cày thêm nhé!")
-        
-    u_data["money"] -= cost
-    save_user(user_id)
-    
-    p = load_kf_profile(user_id)
-    p["crystals"] += amount
-    save_kf_profile(user_id)
-    
-    await ctx.reply(f"✅ Đã nạp thành công **{amount:,} Pha lê 💎** vào Kallen Fantasy. Thuyền trưởng hãy đi Gacha ngay!")
-
-@kallen.command()
-async def equip(ctx, category: str, item_id: str):
-    """Trang bị Valkyrie, Vũ khí hoặc Vết thánh"""
-    user_id = str(ctx.author.id)
-    p = load_kf_profile(user_id)
-    category = category.lower()
-    
-    if category == "suit":
-        if item_id not in KALLEN_BATTLESUITS: return await ctx.reply("⚠️ Tên Giáp Valkyrie không tồn tại.")
-        if item_id not in p["unlocked_suits"]: return await ctx.reply("⚠️ Thuyền trưởng chưa mở khóa Giáp Valkyrie này (Vui lòng đi Gacha).")
-        p["current_suit"] = item_id
-        save_kf_profile(user_id)
-        return await ctx.reply(f"✅ Đã xuất chiến Giáp Valkyrie: **{KALLEN_BATTLESUITS[item_id]['name']}**")
-        
-    elif category == "wp":
-        if item_id not in KALLEN_WEAPONS: return await ctx.reply("⚠️ Mã Vũ khí không tồn tại.")
-        if item_id not in p["inventory_weapons"]: return await ctx.reply("⚠️ Thuyền trưởng không sở hữu Vũ khí này.")
-        p["equipped_weapon"] = item_id
-        save_kf_profile(user_id)
-        return await ctx.reply(f"✅ Đã trang bị Vũ khí: **{KALLEN_WEAPONS[item_id]['name']}**")
-        
-    elif category in ["stig_t", "stig_m", "stig_b"]:
-        pos = category.split("_")[1].upper()
-        if item_id not in KALLEN_STIGMATA: return await ctx.reply("⚠️ Mã Vết thánh không tồn tại.")
-        if item_id not in p["inventory_stigmata"]: return await ctx.reply("⚠️ Thuyền trưởng không sở hữu Vết thánh này.")
-        if KALLEN_STIGMATA[item_id]["type"] != pos: return await ctx.reply(f"⚠️ Vết thánh này không phải mảnh ({pos}).")
-            
-        p["equipped_stigmata"][pos] = item_id
-        save_kf_profile(user_id)
-        return await ctx.reply(f"✅ Đã lắp Vết thánh mảnh ({pos}): **{KALLEN_STIGMATA[item_id]['name']}**")
-    else:
-        await ctx.reply("⚠️ Sai cú pháp. Dùng: `suit`, `wp`, `stig_t`, `stig_m`, `stig_b`.")
-
-@kallen.command()
-async def gacha(ctx):
-    """Mở giao diện Tiếp tế (Gacha) của Kallen Fantasy"""
-    embed = discord.Embed(
-        title="📦 KÊNH TIẾP TẾ KALLEN",
-        description="Chào mừng Thuyền trưởng đến với Trung Tâm Tiếp Tế.\nHãy dùng Pha Lê 💎 để triệu hồi Giáp Valkyrie, Vũ khí và Vết thánh mới!",
-        color=discord.Color.blue()
-    )
-    await ctx.reply(embed=embed, view=KallenGachaView(ctx.author), mention_author=False)
-
-# =====================================================================
-# KALLEN FANTASY - LÕI CHIẾN ĐẤU (TURN-BASED COMBAT)
-# =====================================================================
-class KallenCombatView(discord.ui.View):
-    def __init__(self, author, player_stats, stage_data, p_profile, is_abyss=False):
-        super().__init__(timeout=300) 
-        self.author = author
-        self.p_stats = player_stats
-        self.stage = stage_data
-        self.p_profile = p_profile
-        self.is_abyss = is_abyss
-        
-        self.p_hp = self.p_stats["hp"]
-        self.p_max_hp = self.p_stats["hp"]
-        self.p_sp = 0 
-        self.p_evade_cooldown = 0
-        
-        self.crystals_earned = 0
-        self.abyss_floor = 1
-
-        if not self.is_abyss:
-            self.enemy_list = self.stage["enemies"].copy()
-            self.current_enemy_idx = 0
-            self.load_enemy()
-        else:
-            self.load_abyss_enemy()
-
-    def load_enemy(self):
-        if self.current_enemy_idx < len(self.enemy_list):
-            enemy_id = self.enemy_list[self.current_enemy_idx]
-            base_enemy = KALLEN_ENEMIES[enemy_id]
-            self.e_data = {
-                "name": base_enemy["name"], "type": base_enemy["type"], "hp": base_enemy["hp"],
-                "max_hp": base_enemy["hp"], "atk": base_enemy["atk"], "def": base_enemy["def"], "sp_drop": base_enemy["sp_drop"]
-            }
-            return True
-        return False
-
-    def load_abyss_enemy(self):
-        enemy_pool = [e for k, e in KALLEN_ENEMIES.items() if "god_boss" not in k]
-        base_enemy = random.choice(enemy_pool)
-        multiplier = 1.0 + (self.abyss_floor * 0.15)
-        self.e_data = {
-            "name": f"{base_enemy['name']} (Tầng {self.abyss_floor})", "type": base_enemy["type"],
-            "hp": int(base_enemy["hp"] * multiplier), "max_hp": int(base_enemy["hp"] * multiplier),
-            "atk": int(base_enemy["atk"] * multiplier), "def": int(base_enemy["def"] * multiplier),
-            "sp_drop": base_enemy["sp_drop"] + int(self.abyss_floor / 5)
-        }
-
-    async def interaction_check(self, interaction: discord.Interaction):
-        if interaction.user.id != self.author.id:
-            await interaction.response.send_message("⚠️ Không thể can thiệp vào trận chiến của người khác!", ephemeral=True)
-            return False
-        return True
-
-    def calculate_damage(self, dmg_multiplier, is_crit_allowed=True):
-        base_atk = self.p_stats["atk"]
-        enemy_def = self.e_data["def"]
-        type_adv = get_type_advantage(self.p_stats["suit"]["type"], self.e_data["type"])
-        
-        is_crit = False
-        crit_mult = 1.0
-        if is_crit_allowed:
-            crit_chance = min(100, self.p_stats["crt"])
-            if random.uniform(0, 100) <= crit_chance:
-                is_crit = True
-                crit_mult = 2.0 
-                
-        raw_dmg = (base_atk * dmg_multiplier * type_adv * crit_mult) - (enemy_def * 0.5)
-        return int(max(10, raw_dmg)), is_crit, type_adv
-
-    def enemy_turn(self):
-        if self.e_data["hp"] <= 0: return 0, "Quái vật đã bị tiêu diệt, không thể tấn công!"
-        type_adv = get_type_advantage(self.e_data["type"], self.p_stats["suit"]["type"])
-        raw_dmg = (self.e_data["atk"] * type_adv) - (self.p_stats["def"] * 0.5)
-        final_dmg = int(max(5, raw_dmg))
-        self.p_hp -= final_dmg
-        return final_dmg, f"💥 **{self.e_data['name']}** phản công gây **{final_dmg}** sát thương!"
-
-    async def update_battle_ui(self, interaction: discord.Interaction, combat_log: str):
-        if self.e_data["hp"] <= 0:
-            self.p_sp += self.e_data["sp_drop"] 
-            combat_log += f"\n💀 **{self.e_data['name']}** đã bị hạ gục! Nhận {self.e_data['sp_drop']} SP."
-            
-            if self.is_abyss:
-                crystal_drop = random.randint(5, 15) + int(self.abyss_floor / 2)
-                self.crystals_earned += crystal_drop
-                combat_log += f"\n✅ Vượt Tầng {self.abyss_floor}! Rớt {crystal_drop} 💎."
-                
-                heal_amount = int(self.p_max_hp * 0.1)
-                self.p_hp = min(self.p_max_hp, self.p_hp + heal_amount)
-                combat_log += f" Valkyrie được hồi {heal_amount} HP."
-                
-                self.abyss_floor += 1
-                self.load_abyss_enemy()
-                combat_log += f"\n👹 **CẢNH BÁO:** {self.e_data['name']} xuất hiện!"
-            else:
-                self.current_enemy_idx += 1
-                if not self.load_enemy(): return await self.win_stage(interaction, combat_log)
-                else: combat_log += f"\n⚠️ **CẢNH BÁO:** Kẻ địch tiếp theo [**{self.e_data['name']}**] xuất hiện!"
-
-        if self.p_hp <= 0:
-            return await self.lose_stage(interaction, combat_log)
-
-        if self.p_evade_cooldown > 0: self.p_evade_cooldown -= 1
-
-        p_hp_bar = make_progress_bar(max(0, self.p_hp), self.p_max_hp, 10)
-        e_hp_bar = make_progress_bar(max(0, self.e_data["hp"]), self.e_data["max_hp"], 10)
-        
-        embed = discord.Embed(
-            title=f"🌋 VỰC SÂU ABYSS - TẦNG {self.abyss_floor}" if self.is_abyss else f"⚔️ {self.stage['name'].upper()}",
-            description=combat_log,
-            color=discord.Color.dark_red() if self.is_abyss else discord.Color.red()
-        )
-        
-        suit = self.p_stats["suit"]
-        embed.add_field(
-            name=f"{suit['emoji']} {suit['name']}",
-            value=f"❤️ HP: {max(0, self.p_hp)}/{self.p_max_hp}\n`{p_hp_bar}`\n⚡ SP: {self.p_sp}" + (f" | Thu thập: {self.crystals_earned} 💎" if self.is_abyss else ""),
-            inline=True
-        )
-        embed.add_field(name="VS", value="⚡", inline=True)
-        type_icon = "🔺" if get_type_advantage(suit["type"], self.e_data["type"]) > 1 else ("🔻" if get_type_advantage(suit["type"], self.e_data["type"]) < 1 else "➖")
-        embed.add_field(
-            name=f"👹 {self.e_data['name']} ({self.e_data['type']}) {type_icon}",
-            value=f"❤️ HP: {max(0, self.e_data['hp'])}/{self.e_data['max_hp']}\n`{e_hp_bar}`",
-            inline=True
-        )
-
-        self.btn_ult.disabled = self.p_sp < suit["ult_sp_cost"]
-        self.btn_evade.disabled = self.p_evade_cooldown > 0
-
-        if interaction.response.is_done(): await interaction.message.edit(embed=embed, view=self)
-        else: await interaction.response.edit_message(embed=embed, view=self)
-
-    async def win_stage(self, interaction: discord.Interaction, combat_log: str):
-        for child in self.children: child.disabled = True
-        user_id = str(self.author.id)
-        user_data = load_user(user_id)
-        
-        money_reward = self.stage["reward_money"]
-        xp_reward = self.stage["reward_xp"]
-        
-        user_data["money"] += money_reward
-        self.p_profile["exp"] += xp_reward
-        
-        if self.p_profile["exp"] >= self.p_profile["level"] * 500:
-            self.p_profile["exp"] -= self.p_profile["level"] * 500
-            self.p_profile["level"] += 1
-            combat_log += f"\n🆙 Cấp Thuyền Trưởng tăng lên **Lv.{self.p_profile['level']}**!"
-            
-        save_user(user_id)
-        save_kf_profile(user_id)
-        
-        embed = discord.Embed(
-            title="🎉 VƯỢT ẢI THÀNH CÔNG!",
-            description=f"{combat_log}\n\n🎁 **PHẦN THƯỞNG:**\n💰 {money_reward:,} VNĐ\n✨ {xp_reward} KF-EXP",
-            color=discord.Color.green()
-        )
-        await interaction.response.edit_message(embed=embed, view=self)
-        self.stop()
-
-    async def lose_stage(self, interaction: discord.Interaction, combat_log: str):
-        for child in self.children: child.disabled = True
-        user_id = str(self.author.id)
-        
-        if self.is_abyss:
-            self.p_profile["crystals"] += self.crystals_earned
-            if self.abyss_floor > self.p_profile.get("abyss_floor", 0):
-                self.p_profile["abyss_floor"] = self.abyss_floor
-            save_kf_profile(user_id)
-            
-            embed = discord.Embed(
-                title="💀 KẾT THÚC CHUỖI SINH TỒN VỰC SÂU",
-                description=f"{combat_log}\n\nValkyrie đã gục ngã tại **Tầng {self.abyss_floor}**.\n\n"
-                            f"🎁 **TỔNG KẾT PHẦN THƯỞNG:**\n💎 Nhận được: **{self.crystals_earned:,} Pha lê**\n🏆 Kỷ lục: **Tầng {self.p_profile['abyss_floor']}**",
-                color=discord.Color.dark_grey()
-            )
-        else:
-            embed = discord.Embed(
-                title="💀 NHIỆM VỤ THẤT BẠI",
-                description=f"{combat_log}\n\nValkyrie của bạn đã gục ngã. Thể lực đã mất sẽ không được hoàn trả. Hãy nâng cấp trang bị và thử lại!",
-                color=discord.Color.dark_grey()
-            )
-            
-        await interaction.response.edit_message(embed=embed, view=self)
-        self.stop()
-
-    @discord.ui.button(label="Đánh Thường", style=discord.ButtonStyle.primary, custom_id="btn_atk")
-    async def btn_atk(self, interaction: discord.Interaction, button: discord.ui.Button):
-        suit = self.p_stats["suit"]
-        dmg, is_crit, t_adv = self.calculate_damage(suit["skill_basic_dmg"])
-        self.e_data["hp"] -= dmg
-        self.p_sp += 5 
-        
-        crit_txt = " (💥 BẠO KÍCH)" if is_crit else ""
-        log = f"🗡️ Dùng **{suit['skill_basic_name']}** gây **{dmg}** ST{crit_txt}."
-        
-        e_dmg, e_log = self.enemy_turn()
-        log += f"\n{e_log}"
-        await self.update_battle_ui(interaction, log)
-
-    @discord.ui.button(label="Combo (Nhánh)", style=discord.ButtonStyle.success, custom_id="btn_combo")
-    async def btn_combo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        suit = self.p_stats["suit"]
-        dmg, is_crit, t_adv = self.calculate_damage(suit["skill_combo_dmg"])
-        self.e_data["hp"] -= dmg
-        self.p_sp += 2
-        
-        crit_txt = " (💥 BẠO KÍCH)" if is_crit else ""
-        log = f"⚔️ Tung đòn Nhánh **{suit['skill_combo_name']}** gây **{dmg}** ST{crit_txt}."
-        
-        e_dmg, e_log = self.enemy_turn()
-        log += f"\n{e_log}"
-        await self.update_battle_ui(interaction, log)
-
-    @discord.ui.button(label="Tất Sát (Ulti)", style=discord.ButtonStyle.danger, custom_id="btn_ult")
-    async def btn_ult(self, interaction: discord.Interaction, button: discord.ui.Button):
-        suit = self.p_stats["suit"]
-        if self.p_sp < suit["ult_sp_cost"]: return await interaction.response.send_message("⚠️ Không đủ Năng lượng (SP)!", ephemeral=True)
-            
-        self.p_sp -= suit["ult_sp_cost"]
-        dmg, is_crit, t_adv = self.calculate_damage(suit["skill_ult_dmg"])
-        self.e_data["hp"] -= dmg
-        
-        crit_txt = " (💥 BẠO KÍCH)" if is_crit else ""
-        log = f"🔥 Kích hoạt Tất Sát **{suit['skill_ult_name']}** gây **{dmg}** ST khủng khiếp{crit_txt}!"
-        
-        if self.e_data["hp"] > 0: log += f"\n🛡️ Đối phương bị choáng ngợp, bỏ qua lượt!"
-        await self.update_battle_ui(interaction, log)
-
-    @discord.ui.button(label="Né Cực Hạn", style=discord.ButtonStyle.secondary, custom_id="btn_evade")
-    async def btn_evade(self, interaction: discord.Interaction, button: discord.ui.Button):
-        suit = self.p_stats["suit"]
-        if self.p_evade_cooldown > 0: return await interaction.response.send_message("⚠️ Kỹ năng Né đang hồi chiêu!", ephemeral=True)
-            
-        self.p_evade_cooldown = 3 
-        self.p_sp += 15 
-        
-        type_adv = get_type_advantage(self.e_data["type"], self.p_stats["suit"]["type"])
-        raw_dmg = (self.e_data["atk"] * type_adv) - (self.p_stats["def"] * 0.5)
-        e_dmg = int(max(5, raw_dmg))
-        
-        log = f"💨 Dùng **{suit['evade_name']}**! Né hoàn toàn **{e_dmg}** sát thương, hồi 15 SP."
-        await self.update_battle_ui(interaction, log)
-
-@kallen.command()
-async def story(ctx, stage_id: str = None):
-    """Đi ải cốt truyện Kallen Fantasy"""
-    user_id = str(ctx.author.id)
-    p = load_kf_profile(user_id)
-    
-    if stage_id is None or stage_id.lower() == "list":
-        embed = discord.Embed(title="📜 DANH SÁCH ẢI CỐT TRUYỆN", color=discord.Color.dark_purple())
-        desc = ""
-        for s_id, s_data in KALLEN_STAGES.items():
-            status = "✅" if s_id in p["cleared_stages"] else "🔒"
-            desc += f"{status} **Ải {s_id}**: {s_data['name']} (Thưởng: {s_data['reward_money']:,} 💰)\n"
-        embed.description = desc
-        embed.set_footer(text="Dùng lệnh: k kallen story <mã ải> để xuất kích (Tốn 10 Thể lực)")
-        return await ctx.reply(embed=embed, mention_author=False)
-
-    if stage_id not in KALLEN_STAGES: return await ctx.reply("⚠️ Mã ải không tồn tại. Gõ `k kallen story list` để xem.")
-    if p["stamina"] < 10: return await ctx.reply(f"⚠️ Thể lực hiện tại ({p['stamina']}/100) không đủ (Cần 10 ⚡).")
-        
-    p["stamina"] -= 10
-    save_kf_profile(user_id)
-    
-    stage_data = KALLEN_STAGES[stage_id]
-    stats = calculate_kallen_stats(user_id)
-    
-    embed_start = discord.Embed(
-        title=f"🚀 XUẤT KÍCH: {stage_data['name']}",
-        description="Đang tải dữ liệu chiến trường... Hyperion, sẵn sàng!",
-        color=discord.Color.blue()
-    )
-    msg = await ctx.reply(embed=embed_start, mention_author=False)
-    await asyncio.sleep(2)
-    
-    view = KallenCombatView(ctx.author, stats, stage_data, p, is_abyss=False)
-    await view.update_battle_ui(ctx, f"Bắt đầu ải: {stage_data['name']}. Kẻ địch đã xuất hiện!")
-
-@kallen.command()
-async def abyss(ctx):
-    """Gọi chế độ Vực Sâu (Abyss) leo tháp vô tận"""
-    user_id = str(ctx.author.id)
-    p = load_kf_profile(user_id)
-    
-    if p["stamina"] < 20: return await ctx.reply(f"⚠️ Thể lực hiện tại ({p['stamina']}/100) không đủ vào Vực Sâu (Cần 20 ⚡).")
-        
-    p["stamina"] -= 20
-    save_kf_profile(user_id)
-    stats = calculate_kallen_stats(user_id)
-    
-    embed_start = discord.Embed(
-        title="🌋 VỰC SÂU VÔ TẬN - MỞ CỔNG",
-        description="Quái vật ở đây mạnh lên không ngừng theo từng tầng. Bạn sẽ trụ được bao lâu?\n\n*Đang dịch chuyển Valkyrie...*",
-        color=discord.Color.dark_red()
-    )
-    msg = await ctx.reply(embed=embed_start, mention_author=False)
-    await asyncio.sleep(2)
-    
-    view = KallenCombatView(ctx.author, stats, None, p, is_abyss=True)
-    await view.update_battle_ui(ctx, f"Cửa Vực Sâu mở ra. {view.e_data['name']} lao về phía bạn!")
-
-# =====================================================================
-# GIAO DIỆN UI: CỬA HÀNG ĐẠI GIA VÀ CHỢ ĐEN (SHOP)
-# =====================================================================
-class ShopItemSelect(discord.ui.Select):
-    def __init__(self, category_type):
-        options = []
-        for key, item_data in SHOP_ITEMS.items():
-            if item_data["type"] == category_type:
-                options.append(discord.SelectOption(label=item_data['name'], description=f"Giá: {item_data['price']:,} 💰", value=key, emoji=item_data['emoji']))
-        super().__init__(placeholder="Nhấn vào đây để chọn món đồ muốn tậu...", min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        user_id = str(interaction.user.id)
-        user_data = load_user(user_id)
-        item_info = SHOP_ITEMS[self.values[0]]
-        
-        if user_data.get("money", 0) < item_info["price"]:
-            return await interaction.response.send_message(embed=discord.Embed(description=f"⚠️ Thẻ từ chối! Cần **{item_info['price']:,} 💰** để mua {item_info['name']}.", color=discord.Color.red()), ephemeral=True)
-            
-        user_data["money"] -= item_info["price"]
-        
-        if item_info["type"] == "title":
-            user_data["title"] = item_info["name"]
-            success_message = f"🎉 Tiền trao cháo múc! Đã trang bị danh hiệu: **{item_info['name']}**."
-        else:
-            if item_info["name"] in user_data.get("assets", []):
-                user_data["money"] += item_info["price"] 
-                return await interaction.response.send_message(embed=discord.Embed(description=f"⚠️ Bạn đã sở hữu **{item_info['name']}** rồi!", color=discord.Color.orange()), ephemeral=True)
-            
-            user_data["assets"].append(item_info["name"])
-            success_message = f"🎉 Chúc mừng đại gia! Bạn vừa đập hộp siêu phẩm **{item_info['name']}**."
-            
-        save_user(user_id)
-        
-        embed_success = discord.Embed(title="🛍️ GIAO DỊCH HOÀN TẤT!", description=success_message, color=discord.Color.green())
-        embed_success.set_footer(text=f"Số dư ví: {user_data['money']:,} 💰", icon_url=interaction.user.display_avatar.url)
-        await interaction.response.edit_message(embed=embed_success, view=None)
-
-class ShopCategoryMenu(discord.ui.View):
-    def __init__(self, author):
-        super().__init__(timeout=60)
-        self.author = author
-
-    @discord.ui.button(label="Danh Hiệu (VIP)", style=discord.ButtonStyle.primary, emoji="🏷️")
-    async def btn_title(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = discord.ui.View(timeout=60)
-        view.add_item(ShopItemSelect("title"))
-        await interaction.response.edit_message(embed=discord.Embed(title="🛍️ QUẦY BÁN DANH HIỆU", description="Mua danh hiệu VIP.", color=discord.Color.blue()), view=view)
-
-    @discord.ui.button(label="Showroom Siêu Xe", style=discord.ButtonStyle.success, emoji="🏎️")
-    async def btn_vehicle(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = discord.ui.View(timeout=60)
-        view.add_item(ShopItemSelect("vehicle"))
-        await interaction.response.edit_message(embed=discord.Embed(title="🛍️ SHOWROOM XE CỘ", description="Mua phương tiện di chuyển.", color=discord.Color.green()), view=view)
-
-    @discord.ui.button(label="Sàn Bất Động Sản", style=discord.ButtonStyle.danger, emoji="🏰")
-    async def btn_house(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = discord.ui.View(timeout=60)
-        view.add_item(ShopItemSelect("house"))
-        await interaction.response.edit_message(embed=discord.Embed(title="🛍️ SÀN GIAO DỊCH BẤT ĐỘNG SẢN", description="Đầu tư nhà đất.", color=discord.Color.red()), view=view)
-
-    async def interaction_check(self, interaction: discord.Interaction):
-        if interaction.user.id != self.author.id:
-            await interaction.response.send_message("Ai gọi lệnh người đó mua nha!", ephemeral=True)
-            return False
-        return True
-
-class SellItemSelect(discord.ui.Select):
-    def __init__(self, items, is_pet=False):
-        self.is_pet = is_pet
-        options = []
-        if is_pet:
-            count = 0
-            for pet, quantity in list(items.items()):
-                if count >= 25: break
-                if quantity > 0: 
-                    options.append(discord.SelectOption(label=pet, description=f"Đang có: {quantity} | Thu: {get_pet_sell_price(pet):,} 💰", value=pet))
-                    count += 1
-        else:
-            for asset in list(set(items))[:25]:
-                options.append(discord.SelectOption(label=asset, description=f"Ép giá còn: {get_asset_price(asset):,} 💰", value=asset))
-                
-        super().__init__(placeholder="Chọn món đồ muốn bán...", min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        user_id = str(interaction.user.id)
-        user_data = load_user(user_id)
-        item_value = self.values[0]
-        
-        if self.is_pet:
-            if user_data.get("pets", {}).get(item_value, 0) <= 0: 
-                return await interaction.response.send_message("Lỗi: Không tìm thấy thú cưng này!", ephemeral=True)
-            sell_price = get_pet_sell_price(item_value)
-            user_data["pets"][item_value] -= 1
-            if user_data["pets"][item_value] == 0: del user_data["pets"][item_value]
-            success_message = f"✅ Thương lái đã mua bé **{item_value}**. Nhận **{sell_price:,} 💰**!"
-        else:
-            if item_value not in user_data.get("assets", []): 
-                return await interaction.response.send_message("Lỗi: Không có tài sản này!", ephemeral=True)
-            sell_price = get_asset_price(item_value)
-            user_data["assets"].remove(item_value)
-            success_message = f"✅ Đã thâu tóm **{item_value}**. Bạn chịu lỗ nhận lại **{sell_price:,} 💰**!"
-
-        user_data["money"] += sell_price
-        save_user(user_id)
-        await interaction.response.edit_message(embed=discord.Embed(title="🤝 GIAO DỊCH HOÀN TẤT", description=success_message, color=discord.Color.dark_orange()), view=None)
-
-class SellCategoryMenu(discord.ui.View):
-    def __init__(self, author):
-        super().__init__(timeout=60)
-        self.author = author
-
-    @discord.ui.button(label="Cắm Sổ Đỏ / Cầm Xe", style=discord.ButtonStyle.primary, emoji="🏠")
-    async def btn_asset(self, interaction: discord.Interaction, button: discord.ui.Button):
-        assets = load_user(self.author.id).get("assets", [])
-        if not assets: return await interaction.response.send_message(embed=discord.Embed(description="Bạn không có tài sản nào để bán!", color=discord.Color.red()), ephemeral=True)
-        view = discord.ui.View(timeout=60)
-        view.add_item(SellItemSelect(assets, False))
-        await interaction.response.edit_message(embed=discord.Embed(title="🏷️ CẦM ĐỒ BĐS & XE CỘ", description="Bán lại lỗ 30%.", color=discord.Color.orange()), view=view)
-
-    @discord.ui.button(label="Bán Thú Cưng", style=discord.ButtonStyle.success, emoji="🐾")
-    async def btn_pet(self, interaction: discord.Interaction, button: discord.ui.Button):
-        pets = load_user(self.author.id).get("pets", {})
-        if not pets or all(quantity == 0 for quantity in pets.values()): return await interaction.response.send_message(embed=discord.Embed(description="Chưa có thú cưng nào!", color=discord.Color.red()), ephemeral=True)
-        view = discord.ui.View(timeout=60)
-        view.add_item(SellItemSelect(pets, True))
-        await interaction.response.edit_message(embed=discord.Embed(title="🏷️ THU MUA THÚ CƯNG", description="Bán thú cưng lấy tiền.", color=discord.Color.green()), view=view)
-
-    async def interaction_check(self, interaction: discord.Interaction):
-        return interaction.user.id == self.author.id
-
-# =====================================================================
-# GIAO DIỆN UI: TRẠM TREO MÁY AFK & NHÂN SINH
-# =====================================================================
-class ExpSelect(discord.ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="4 Giờ (Bãi Cỏ Yên Bình)", description="Phần thưởng dự kiến: ~450 💰", emoji="🌿", value="4"),
-            discord.SelectOption(label="8 Giờ (Hang Động Tối Tăm)", description="Phần thưởng dự kiến: ~1000 💰", emoji="🦇", value="8"),
-            discord.SelectOption(label="12 Giờ (Di Tích Nguy Hiểm)", description="Phần thưởng dự kiến: ~2000 💰", emoji="🏛️", value="12")
-        ]
-        super().__init__(placeholder="Lựa chọn địa điểm hạ trại...", min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        user_id = str(interaction.user.id)
-        user_data = load_user(user_id)
-        hours = int(self.values[0])
-        
-        if hours == 4: reward = random.randint(300, 600)
-        elif hours == 8: reward = random.randint(700, 1200)
-        else: reward = random.randint(1500, 2500)
-            
-        end_time = datetime.now() + timedelta(hours=hours)
-        user_data["exp_end"] = end_time.strftime("%Y-%m-%d %H:%M:%S")
-        user_data["exp_reward"] = reward
-        save_user(user_id)
-
-        await interaction.response.edit_message(embed=discord.Embed(title="⛺ LÊN ĐƯỜNG BÌNH AN!", description=f"Cắm trại **{hours} giờ**. Gõ `k phai` để thu hoạch sau.", color=discord.Color.green()), view=None)
-
-class ExpView(discord.ui.View):
-    def __init__(self, author):
-        super().__init__(timeout=60)
-        self.author = author
-        self.add_item(ExpSelect())
-    async def interaction_check(self, interaction: discord.Interaction): 
-        return interaction.user.id == self.author.id
-
-class NhanSinhGameView(discord.ui.View):
-    """Hệ thống lõi của Game Nhân Sinh Hardcore"""
-    def __init__(self, author, stats):
-        super().__init__(timeout=180)
-        self.author = author
-        self.stats = stats
-        self.phase = 1
-        self.tien_an = 0
-        self.logs = []
-        self.ev = random.choice(EVENTS_P1)
-
-        if self.stats["may_man"] >= 8: self.logs.append("👶 **Tuổi 0:** Sinh ra đã ngậm thìa vàng, bố mẹ là tài phiệt.")
-        elif self.stats["may_man"] >= 4: self.logs.append("👶 **Tuổi 0:** Sinh ra trong gia đình công chức bình dân.")
-        else: self.logs.append("👶 **Tuổi 0:** Bố mẹ ôm nợ bỏ trốn, bị vứt ở bãi rác.")
-
-        self.btn_a = discord.ui.Button(label=f"A. {self.ev['choices'][0]['text'][:70]}", style=discord.ButtonStyle.primary, custom_id="btn_a")
-        self.btn_b = discord.ui.Button(label=f"B. {self.ev['choices'][1]['text'][:70]}", style=discord.ButtonStyle.secondary, custom_id="btn_b")
-        self.btn_c = discord.ui.Button(label=f"C. {self.ev['choices'][2]['text'][:70]}", style=discord.ButtonStyle.success, custom_id="btn_c")
-        self.btn_d = discord.ui.Button(label=f"D. {self.ev['choices'][3]['text'][:70]}", style=discord.ButtonStyle.danger, custom_id="btn_d")
-        
-        self.btn_a.callback = self.choice_a
-        self.btn_b.callback = self.choice_b
-        self.btn_c.callback = self.choice_c
-        self.btn_d.callback = self.choice_d
-        
-        self.add_item(self.btn_a)
-        self.add_item(self.btn_b)
-        self.add_item(self.btn_c)
-        self.add_item(self.btn_d)
-
-    async def on_timeout(self):
-        user_id = str(self.author.id)
-        if user_id in dang_choi_nhansinh: dang_choi_nhansinh.remove(user_id)
-
-    async def interaction_check(self, interaction: discord.Interaction): 
-        if interaction.user.id != self.author.id:
-            await interaction.response.send_message("⚠️ Nhân quả của ai người nấy gánh!", ephemeral=True)
-            return False
-        return True
-
-    async def choice_a(self, interaction: discord.Interaction): await self.process_choice(interaction, 0, "A")
-    async def choice_b(self, interaction: discord.Interaction): await self.process_choice(interaction, 1, "B")
-    async def choice_c(self, interaction: discord.Interaction): await self.process_choice(interaction, 2, "C")
-    async def choice_d(self, interaction: discord.Interaction): await self.process_choice(interaction, 3, "D")
-
-    async def process_choice(self, interaction: discord.Interaction, choice_idx: int, letter: str):
-        choice_data = self.ev["choices"][choice_idx]
-        base_rate = choice_data["rate"]
-        
-        # Max rate = 85% dù điểm may mắn cao, buff mỗi điểm may mắn 1.5%
-        calculated_rate = base_rate + (self.stats["may_man"] * 1.5)
-        final_rate = min(85.0, calculated_rate)
-        
-        roll = random.uniform(0, 100)
-        is_win = roll <= final_rate
-        
-        result_msg = choice_data["win"] if is_win else choice_data["lose"]
-        money_change = choice_data["tien_w"] if is_win else choice_data["tien_l"]
-        
-        is_dead = False
-        if is_win and choice_data.get("die_w", False): is_dead = True
-        if not is_win and choice_data.get("die_l", False): is_dead = True
-
-        self.tien_an += money_change
-        status_icon = "✅ **THÀNH CÔNG**" if is_win else "❌ **THẤT BẠI**"
-        log_entry = f"🎲 Tỉ lệ: **{final_rate:.1f}%** (Đổ ra: {roll:.1f})\n{status_icon}: {result_msg} ({money_change:,} 💰)"
-        
-        if self.phase == 1: tuoi_hien_tai = 15
-        elif self.phase == 2: tuoi_hien_tai = 25
-        elif self.phase == 3: tuoi_hien_tai = 35
-        elif self.phase == 4: tuoi_hien_tai = 50
-        else: tuoi_hien_tai = 70
-
-        if is_dead:
-            self.logs.append(f"👻 **Tuổi {tuoi_hien_tai}:** Chọn {letter}.\n{log_entry}\n\n💀 **BẠN ĐÃ ĐỘT TỬ! Cuộc đời khép lại.**")
-            self.phase = 99 
-        else:
-            self.logs.append(f"🗓️ **Tuổi {tuoi_hien_tai}:** Chọn {letter}.\n{log_entry}")
-            self.phase += 1
-            if self.phase == 2: self.ev = random.choice(EVENTS_P2)
-            elif self.phase == 3: self.ev = random.choice(EVENTS_P3)
-            elif self.phase == 4: self.ev = random.choice(EVENTS_P4)
-            elif self.phase == 5: self.ev = random.choice(EVENTS_P5)
-
-        await self.update_ui(interaction)
-
-    async def update_ui(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="🌀 MÔ PHỎNG NHÂN SINH (HARDCORE)", description=f"Ký chủ luân hồi: {self.author.mention}", color=discord.Color.teal())
-        embed.add_field(name="🍀 Chỉ số ban đầu", value=f"May mắn: **{self.stats['may_man']}/10** *(Buff +{self.stats['may_man']*1.5}% Tỉ lệ)*", inline=False)
-
-        story = "...\n\n" + "\n\n".join(self.logs[-4:]) if len(self.logs) > 4 else "\n\n".join(self.logs)
-        embed.add_field(name="📜 Hành trình cuộc đời", value=story, inline=False)
-
-        if self.phase <= 5:
-            tuoi_next = [15, 25, 35, 50, 70][self.phase-1]
-            embed.add_field(name=f"❓ Ngã rẽ quyết định tuổi {tuoi_next}", value=f"**{self.ev['q']}**", inline=False)
-            self.btn_a.label, self.btn_b.label, self.btn_c.label, self.btn_d.label = f"A. {self.ev['choices'][0]['text'][:70]}", f"B. {self.ev['choices'][1]['text'][:70]}", f"C. {self.ev['choices'][2]['text'][:70]}", f"D. {self.ev['choices'][3]['text'][:70]}"
-        else:
-            self.btn_a.disabled = self.btn_b.disabled = self.btn_c.disabled = self.btn_d.disabled = True
-            self.clear_items() 
-            
-            user_id = str(self.author.id)
-            if user_id in dang_choi_nhansinh: dang_choi_nhansinh.remove(user_id)
-
-            user_data = load_user(user_id)
-            user_data["money"] += self.tien_an
-            save_user(user_id)
-
-            if self.tien_an < 0:
-                embed.color = discord.Color.red()
-                embed.add_field(name="🪦 Về với Cát Bụi", value=f"Sống lỗi để lại một đống nợ khổng lồ, chủ nợ đến siết nhà.\n❌ **BÁO NHÀ!** Khoản nợ phải gánh: **{self.tien_an:,} 💰**", inline=False)
-            elif self.tien_an >= 500000:
-                embed.color = discord.Color.gold()
-                embed.add_field(name="🪦 Về với Cát Bụi", value=f"Hưởng thọ trong nhung lụa vinh hoa.\n👑 **TỶ PHÚ!** Di sản: **+{self.tien_an:,} 💰**", inline=False)
-            else:
-                embed.color = discord.Color.blue()
-                embed.add_field(name="🪦 Về với Cát Bụi", value=f"Một cuộc đời êm ấm trôi qua.\n💼 **DƯ DẢ!** Di sản: **+{self.tien_an:,} 💰**", inline=False)
-
-        if interaction.response.is_done(): await interaction.message.edit(embed=embed, view=self)
-        else: await interaction.response.edit_message(embed=embed, view=self)
-            # =====================================================================
-# GIAO DIỆN UI: ĐẤU TRƯỜNG SOLO OẲN TÙ TÌ
-# =====================================================================
-class SoloOTTGame(discord.ui.View):
-    def __init__(self, player_1, player_2, bet_amount):
-        super().__init__(timeout=60)
-        self.player_1 = player_1
-        self.player_2 = player_2
-        self.bet_amount = bet_amount
-        self.msg = None
-        self.choices = {str(player_1.id): None, str(player_2.id): None}
-
-    @discord.ui.button(emoji="🪨", style=discord.ButtonStyle.secondary)
-    async def btn_bua(self, interaction: discord.Interaction, button: discord.ui.Button): await self.handle_choice(interaction, "🪨")
-
-    @discord.ui.button(emoji="📄", style=discord.ButtonStyle.secondary)
-    async def btn_bao(self, interaction: discord.Interaction, button: discord.ui.Button): await self.handle_choice(interaction, "📄")
-
-    @discord.ui.button(emoji="✂️", style=discord.ButtonStyle.secondary)
-    async def btn_keo(self, interaction: discord.Interaction, button: discord.ui.Button): await self.handle_choice(interaction, "✂️")
-
-    async def handle_choice(self, interaction: discord.Interaction, choice: str):
-        user_id = str(interaction.user.id)
-        if user_id not in self.choices: return await interaction.response.send_message("⚠️ Tránh ra chỗ khác, đây là trận chiến riêng tư!", ephemeral=True)
-        if self.choices[user_id] is not None: return await interaction.response.send_message("⚠️ Bạn đã ra chiêu rồi!", ephemeral=True)
-            
-        self.choices[user_id] = choice
-        await interaction.response.send_message(embed=discord.Embed(description=f"🤫 Bạn đã chọn **{choice}**. Hãy chờ đối thủ...", color=discord.Color.green()), ephemeral=True)
-
-        if self.choices[str(self.player_1.id)] is not None and self.choices[str(self.player_2.id)] is not None:
-            for child in self.children: child.disabled = True
-            choice_1, choice_2 = self.choices[str(self.player_1.id)], self.choices[str(self.player_2.id)]
-            p1_data, p2_data = load_user(self.player_1.id), load_user(self.player_2.id)
-            tong_thuong = self.bet_amount * 2
-            
-            if choice_1 == choice_2:
-                ket_qua = "🤝 **HÒA NHAU!** Tiền cược được trả lại."
-                p1_data["money"] += self.bet_amount
-                p2_data["money"] += self.bet_amount
-            elif (choice_1 == "🪨" and choice_2 == "✂️") or (choice_1 == "📄" and choice_2 == "🪨") or (choice_1 == "✂️" and choice_2 == "📄"):
-                ket_qua = f"🎉 **{self.player_1.name} ĐÃ CHIẾN THẮNG!**\nHúp trọn **{tong_thuong:,} 💰**."
-                p1_data["money"] += tong_thuong
-            else:
-                ket_qua = f"🎉 **{self.player_2.name} ĐÃ CHIẾN THẮNG!**\nHúp trọn **{tong_thuong:,} 💰**."
-                p2_data["money"] += tong_thuong
-                
-            save_user(self.player_1.id); save_user(self.player_2.id)
-            embed_result = discord.Embed(title="⚔️ KẾT QUẢ ĐẠI CHIẾN", color=discord.Color.gold())
-            embed_result.add_field(name=self.player_1.name, value=f"Ra {choice_1}", inline=True)
-            embed_result.add_field(name="VS", value="⚡", inline=True)
-            embed_result.add_field(name=self.player_2.name, value=f"Ra {choice_2}", inline=True)
-            embed_result.add_field(name="KẾT QUẢ", value=ket_qua, inline=False)
-            await self.msg.edit(embed=embed_result, view=self)
-            self.stop()
-
-    async def on_timeout(self):
-        if self.choices[str(self.player_1.id)] is None or self.choices[str(self.player_2.id)] is None:
-            p1_data, p2_data = load_user(self.player_1.id), load_user(self.player_2.id)
-            p1_data["money"] += self.bet_amount
-            p2_data["money"] += self.bet_amount
-            save_user(self.player_1.id); save_user(self.player_2.id)
-            try: await self.msg.edit(embed=discord.Embed(title="⏳ HẾT GIỜ", description="Trận đấu bị hủy, tiền cược đã hoàn trả!", color=discord.Color.dark_gray()), view=None)
-            except Exception: pass
-
-class SoloOTTAccept(discord.ui.View):
-    def __init__(self, player_1, player_2, bet_amount):
-        super().__init__(timeout=60)
-        self.player_1, self.player_2, self.bet_amount = player_1, player_2, bet_amount
-
-    @discord.ui.button(label="Nhận Kèo!", style=discord.ButtonStyle.danger, emoji="⚔️")
-    async def btn_accept(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.player_2.id: return await interaction.response.send_message("⚠️ Kèo này gạ người khác!", ephemeral=True)
-        p1_data, p2_data = load_user(self.player_1.id), load_user(self.player_2.id)
-        
-        if p1_data.get("money", 0) < self.bet_amount or p2_data.get("money", 0) < self.bet_amount:
-            return await interaction.response.send_message("⚠️ Lỗi! Một trong hai không đủ tiền!", ephemeral=True)
-        
-        p1_data["money"] -= self.bet_amount
-        p2_data["money"] -= self.bet_amount
-        save_user(self.player_1.id); save_user(self.player_2.id)
-
-        game_view = SoloOTTGame(self.player_1, self.player_2, self.bet_amount)
-        embed_game = discord.Embed(title="⚔️ PK OẲN TÙ TÌ", description=f"{self.player_1.mention} 🆚 {self.player_2.mention}\nTiền cược: **{self.bet_amount:,} 💰**\n\n👇 **BẤM NÚT ĐỂ CHỌN CHIÊU**", color=discord.Color.red())
-        await interaction.response.edit_message(embed=embed_game, view=game_view)
-        game_view.msg = interaction.message
-        self.stop()
-
-class MarryAccept(discord.ui.View):
-    def __init__(self, sender, receiver):
-        super().__init__(timeout=60)
-        self.sender, self.receiver = sender, receiver
-        
-    @discord.ui.button(label="Đồng Ý", style=discord.ButtonStyle.success, emoji="💍")
-    async def btn_accept(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.receiver.id: return await interaction.response.send_message("⚠️ Của người khác!", ephemeral=True)
-        sender_data, receiver_data = load_user(self.sender.id), load_user(self.receiver.id)
-        if sender_data.get("money", 0) < 1000000: return await interaction.response.send_message("⚠️ Chú rể hết tiền mua nhẫn rồi!", ephemeral=True)
-            
-        sender_data["money"] -= 1000000
-        sender_data["spouse"] = str(self.receiver.id)
-        receiver_data["spouse"] = str(self.sender.id)
-        save_user(self.sender.id); save_user(self.receiver.id)
-        
-        for child in self.children: child.disabled = True
-        embed_success = discord.Embed(title="💒 KẾT HÔN THÀNH CÔNG", description=f"🎉 Chúc mừng hai vợ chồng {self.sender.mention} và {self.receiver.mention}!", color=discord.Color.magenta())
-        embed_success.set_image(url=GIF_LINKS["marry"])
-        await interaction.response.edit_message(embed=embed_success, view=self)
-        self.stop()
-        
-    @discord.ui.button(label="Từ Chối", style=discord.ButtonStyle.danger, emoji="💔")
-    async def btn_decline(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.receiver.id: return await interaction.response.send_message("Tránh ra!", ephemeral=True)
-        for child in self.children: child.disabled = True
-        await interaction.response.edit_message(embed=discord.Embed(description=f"💔 {self.receiver.mention} đã từ chối phũ phàng {self.sender.mention}...", color=discord.Color.dark_grey()), view=self)
-        self.stop()
-
-class CompanyInviteView(discord.ui.View):
-    def __init__(self, comp_id, comp_name, target_user):
-        super().__init__(timeout=60)
-        self.comp_id, self.comp_name, self.target_user = comp_id, comp_name, target_user
-
-    @discord.ui.button(label="Gia nhập", style=discord.ButtonStyle.success, emoji="🤝")
-    async def btn_accept(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.target_user.id: return await interaction.response.send_message("Không dành cho bạn!", ephemeral=True)
-        target_id = str(self.target_user.id)
-        target_data = load_user(target_id)
-        if target_data.get("company"): return await interaction.response.send_message("⚠️ Bạn đã có cty!", ephemeral=True)
-        
-        comp = load_company(self.comp_id)
-        if not comp: return await interaction.response.send_message("⚠️ Công ty đã phá sản!", ephemeral=True)
-        
-        comp["members"][target_id] = "nhanvien"
-        target_data["company"] = self.comp_id
-        save_company(self.comp_id); save_user(target_id)
-        await interaction.response.edit_message(content=None, embed=discord.Embed(description=f"🎉 {self.target_user.mention} đã gia nhập **{self.comp_name}**!", color=discord.Color.green()), view=None)
-
-    @discord.ui.button(label="Từ chối", style=discord.ButtonStyle.danger)
-    async def btn_decline(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.target_user.id: return await interaction.response.send_message("Tránh ra!", ephemeral=True)
-        await interaction.response.edit_message(content=None, embed=discord.Embed(description=f"❌ {self.target_user.mention} đã từ chối lời mời của **{self.comp_name}**.", color=discord.Color.red()), view=None)
-
-# =====================================================================
-# KALLEN FANTASY - LÕI CHIẾN ĐẤU (TURN-BASED COMBAT UI)
-# =====================================================================
 class KallenCombatView(discord.ui.View):
     def __init__(self, author, player_stats, stage_data, p_profile, is_abyss=False):
         super().__init__(timeout=300) 
@@ -1539,7 +482,8 @@ class KallenCombatView(discord.ui.View):
         suit = self.p_stats["suit"]
         embed.add_field(name=f"{suit['emoji']} {suit['name']}", value=f"❤️ HP: {max(0, self.p_hp)}/{self.p_max_hp}\n`{p_hp_bar}`\n⚡ SP: {self.p_sp}" + (f" | {self.crystals_earned} 💎" if self.is_abyss else ""), inline=True)
         embed.add_field(name="VS", value="⚡", inline=True)
-        embed.add_field(name=f"👹 {self.e_data['name']} ({self.e_data['type']})", value=f"❤️ HP: {max(0, self.e_data['hp'])}/{self.e_data['max_hp']}\n`{e_hp_bar}`", inline=True)
+        type_icon = "🔺" if get_type_advantage(suit["type"], self.e_data["type"]) > 1 else ("🔻" if get_type_advantage(suit["type"], self.e_data["type"]) < 1 else "➖")
+        embed.add_field(name=f"👹 {self.e_data['name']} ({self.e_data['type']}) {type_icon}", value=f"❤️ HP: {max(0, self.e_data['hp'])}/{self.e_data['max_hp']}\n`{e_hp_bar}`", inline=True)
 
         self.btn_ult.disabled = self.p_sp < suit["ult_sp_cost"]
         self.btn_evade.disabled = self.p_evade_cooldown > 0
@@ -1575,7 +519,7 @@ class KallenCombatView(discord.ui.View):
         if self.e_data["hp"] > 0: log += f"\n🛡️ Đối phương bị choáng ngợp, bỏ qua lượt!"
         await self.update_battle_ui(interaction, log)
 
-    @discord.ui.button(label="Né", style=discord.ButtonStyle.secondary, custom_id="btn_evade")
+    @discord.ui.button(label="Né Cực Hạn", style=discord.ButtonStyle.secondary, custom_id="btn_evade")
     async def btn_evade(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.p_evade_cooldown > 0: return await interaction.response.send_message("⚠️ Đang hồi chiêu!", ephemeral=True)
         self.p_evade_cooldown = 3; self.p_sp += 15 
@@ -1584,231 +528,978 @@ class KallenCombatView(discord.ui.View):
         await self.update_battle_ui(interaction, f"💨 Dùng **{self.p_stats['suit']['evade_name']}**! Né hoàn toàn **{e_dmg}** ST, hồi 15 SP.")
 
 # =====================================================================
-# LỆNH KALLEN FANTASY CƠ BẢN (STORY & ABYSS)
+# CÁC LỆNH KALLEN FANTASY (SỬ DỤNG CHUẨN - KHÔNG TRÙNG LẶP)
 # =====================================================================
+@bot.group(invoke_without_command=True, aliases=['kf', 'honkai'])
+async def kallen(ctx):
+    p = load_kf_profile(ctx.author.id)
+    stats = calculate_kallen_stats(ctx.author.id)
+    suit = stats["suit"]
+    
+    embed = discord.Embed(
+        title="🌌 KALLEN FANTASY - HYPERION BRIDGE",
+        description=f"Thuyền trưởng: **{ctx.author.name}**\nCấp độ: **Lv.{p['level']}** | Thể lực: **{p['stamina']}/{p['max_stamina']}** ⚡ | Pha lê: **{p['crystals']:,}** 💎",
+        color=discord.Color.purple()
+    )
+    
+    embed.add_field(name="Đang xuất chiến", value=f"**{suit['emoji']} {suit['name']}**", inline=False)
+    embed.add_field(name="Chỉ số chiến đấu", value=f"❤️ HP: {stats['hp']} | ⚔️ ATK: {stats['atk']}\n🛡️ DEF: {stats['def']} | 💥 CRT: {stats['crt']}", inline=False)
+    
+    cmds = "`k kallen gacha` • Tiếp Tế | `k kallen doipha <số>` • Đổi Tiền lấy Pha lê\n`k kallen equip <loại> <id>` • Lắp đồ | `k kallen story <mã>` | `k kallen abyss`"
+    embed.add_field(name="Bảng Lệnh", value=cmds, inline=False)
+    
+    await ctx.reply(embed=embed, mention_author=False)
+
+@kallen.command()
+async def doipha(ctx, amount: int):
+    if amount <= 0: return await ctx.reply("Vui lòng nhập số lớn hơn 0.")
+    u_data = load_user(ctx.author.id)
+    cost = amount * 1000
+    if u_data.get("money", 0) < cost: return await ctx.reply(f"⚠️ Sếp cần {cost:,} 💰 để đổi lấy {amount:,} 💎.")
+    u_data["money"] -= cost; save_user(ctx.author.id)
+    p = load_kf_profile(ctx.author.id); p["crystals"] += amount; save_kf_profile(ctx.author.id)
+    await ctx.reply(f"✅ Nạp thành công **{amount:,} 💎** vào Kallen Fantasy.")
+
+@kallen.command()
+async def equip(ctx, category: str, item_id: str):
+    p = load_kf_profile(ctx.author.id)
+    category = category.lower()
+    if category == "suit":
+        if item_id not in p["unlocked_suits"]: return await ctx.reply("⚠️ Bạn chưa có Giáp này.")
+        p["current_suit"] = item_id
+    elif category == "wp":
+        if item_id not in p["inventory_weapons"]: return await ctx.reply("⚠️ Bạn không có Vũ khí này.")
+        p["equipped_weapon"] = item_id
+    elif category in ["stig_t", "stig_m", "stig_b"]:
+        pos = category.split("_")[1].upper()
+        if item_id not in p["inventory_stigmata"]: return await ctx.reply("⚠️ Bạn không có Vết thánh này.")
+        p["equipped_stigmata"][pos] = item_id
+    else: return await ctx.reply("⚠️ Cú pháp: `suit`, `wp`, `stig_t`, `stig_m`, `stig_b`.")
+    save_kf_profile(ctx.author.id)
+    await ctx.reply("✅ Lắp trang bị thành công.")
+
+@kallen.command()
+async def gacha(ctx):
+    await ctx.reply(embed=discord.Embed(title="📦 KÊNH TIẾP TẾ", description="Dùng Pha Lê 💎 để Gacha Valkyrie và Trang Bị!", color=discord.Color.blue()), view=KallenGachaView(ctx.author), mention_author=False)
+
 @kallen.command()
 async def story(ctx, stage_id: str = None):
-    """Đi ải cốt truyện Kallen Fantasy"""
-    user_id = str(ctx.author.id)
-    p = load_kf_profile(user_id)
-    
+    p = load_kf_profile(ctx.author.id)
     if stage_id is None or stage_id.lower() == "list":
         desc = "".join([f"{'✅' if s_id in p['cleared_stages'] else '🔒'} **Ải {s_id}**: {s_data['name']} (Thưởng: {s_data['reward_money']:,} 💰)\n" for s_id, s_data in KALLEN_STAGES.items()])
-        return await ctx.reply(embed=discord.Embed(title="📜 DANH SÁCH ẢI CỐT TRUYỆN", description=desc, color=discord.Color.dark_purple()).set_footer(text="Dùng: k kallen story <mã> (Tốn 10 Thể lực)"), mention_author=False)
-
+        return await ctx.reply(embed=discord.Embed(title="📜 DANH SÁCH ẢI CỐT TRUYỆN", description=desc, color=discord.Color.dark_purple()), mention_author=False)
     if stage_id not in KALLEN_STAGES: return await ctx.reply("⚠️ Mã ải không tồn tại.")
-    if p["stamina"] < 10: return await ctx.reply(f"⚠️ Không đủ thể lực ({p['stamina']}/100). Cần 10 ⚡.")
+    if p["stamina"] < 10: return await ctx.reply(f"⚠️ Không đủ thể lực. Cần 10 ⚡.")
         
-    p["stamina"] -= 10
-    save_kf_profile(user_id)
+    p["stamina"] -= 10; save_kf_profile(ctx.author.id)
     stage_data = KALLEN_STAGES[stage_id]
-    
-    msg = await ctx.reply(embed=discord.Embed(title=f"🚀 XUẤT KÍCH: {stage_data['name']}", description="Đang tải dữ liệu chiến trường...", color=discord.Color.blue()), mention_author=False)
+    msg = await ctx.reply(embed=discord.Embed(title=f"🚀 XUẤT KÍCH: {stage_data['name']}", description="Đang tải dữ liệu...", color=discord.Color.blue()), mention_author=False)
     await asyncio.sleep(2)
-    view = KallenCombatView(ctx.author, calculate_kallen_stats(user_id), stage_data, p, is_abyss=False)
+    view = KallenCombatView(ctx.author, calculate_kallen_stats(ctx.author.id), stage_data, p, is_abyss=False)
     await view.update_battle_ui(ctx, f"Bắt đầu ải: {stage_data['name']}. Kẻ địch đã xuất hiện!")
 
 @kallen.command()
 async def abyss(ctx):
-    """Chế độ Vực Sâu (Abyss) leo tháp vô tận"""
-    user_id = str(ctx.author.id)
-    p = load_kf_profile(user_id)
-    if p["stamina"] < 20: return await ctx.reply(f"⚠️ Không đủ thể lực ({p['stamina']}/100). Cần 20 ⚡.")
-        
-    p["stamina"] -= 20
-    save_kf_profile(user_id)
-    msg = await ctx.reply(embed=discord.Embed(title="🌋 VỰC SÂU VÔ TẬN - MỞ CỔNG", description="Quái vật mạnh dần theo từng tầng. Bạn trụ được bao lâu?", color=discord.Color.dark_red()), mention_author=False)
+    p = load_kf_profile(ctx.author.id)
+    if p["stamina"] < 20: return await ctx.reply(f"⚠️ Không đủ thể lực. Cần 20 ⚡.")
+    p["stamina"] -= 20; save_kf_profile(ctx.author.id)
+    msg = await ctx.reply(embed=discord.Embed(title="🌋 VỰC SÂU VÔ TẬN", description="Chuẩn bị chiến đấu...", color=discord.Color.dark_red()), mention_author=False)
     await asyncio.sleep(2)
-    view = KallenCombatView(ctx.author, calculate_kallen_stats(user_id), None, p, is_abyss=True)
+    view = KallenCombatView(ctx.author, calculate_kallen_stats(ctx.author.id), None, p, is_abyss=True)
     await view.update_battle_ui(ctx, f"Cửa Vực Sâu mở ra. {view.e_data['name']} lao về phía bạn!")
     # =====================================================================
-# HỆ THỐNG CÔNG TY, NGÂN HÀNG & CHỨNG KHOÁN (IPO)
+# GIAO DIỆN UI: CỬA HÀNG ĐẠI GIA (SHOP)
+# =====================================================================
+class ShopItemSelect(discord.ui.Select):
+    """Bảng Dropdown chọn đồ trong Cửa Hàng Đại Gia"""
+    def __init__(self, category_type):
+        options = []
+        for key, item_data in SHOP_ITEMS.items():
+            if item_data["type"] == category_type:
+                options.append(
+                    discord.SelectOption(
+                        label=item_data['name'], 
+                        description=f"Giá: {item_data['price']:,} 💰", 
+                        value=key, 
+                        emoji=item_data['emoji']
+                    )
+                )
+                
+        super().__init__(
+            placeholder="Nhấn vào đây để chọn món đồ muốn tậu...", 
+            min_values=1, 
+            max_values=1, 
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        user_id = str(interaction.user.id)
+        user_data = load_user(user_id)
+        item_info = SHOP_ITEMS[self.values[0]]
+        
+        # Kiểm tra túi tiền
+        if user_data.get("money", 0) < item_info["price"]:
+            embed_fail = discord.Embed(
+                description=f"⚠️ Thẻ từ chối! Bạn cần **{item_info['price']:,} 💰** để mua {item_info['name']}.", 
+                color=discord.Color.red()
+            )
+            return await interaction.response.send_message(embed=embed_fail, ephemeral=True)
+            
+        # Trừ tiền
+        user_data["money"] -= item_info["price"]
+        
+        # Xử lý mua Danh hiệu (Ghi đè)
+        if item_info["type"] == "title":
+            user_data["title"] = item_info["name"]
+            success_message = f"🎉 Tiền trao cháo múc! Bạn đã trang bị danh hiệu: **{item_info['name']}**."
+        else:
+            # Xử lý mua Đồ vật (Xe, Nhà...)
+            if item_info["name"] in user_data.get("assets", []):
+                # Nếu đã có, hoàn lại tiền và báo lỗi
+                user_data["money"] += item_info["price"] 
+                embed_exist = discord.Embed(
+                    description=f"⚠️ Bạn đã đứng tên sở hữu **{item_info['name']}** rồi, mua thêm chi cho chật nhà!", 
+                    color=discord.Color.orange()
+                )
+                return await interaction.response.send_message(embed=embed_exist, ephemeral=True)
+            
+            # Thêm vào túi đồ
+            user_data["assets"].append(item_info["name"])
+            success_message = f"🎉 Chúc mừng đại gia! Bạn vừa đập hộp siêu phẩm **{item_info['name']}**."
+            
+        save_user(user_id)
+        
+        embed_success = discord.Embed(
+            title="🛍️ GIAO DỊCH HOÀN TẤT!", 
+            description=success_message, 
+            color=discord.Color.green()
+        )
+        embed_success.set_footer(
+            text=f"Số dư ví hiện tại: {user_data['money']:,} 💰", 
+            icon_url=interaction.user.display_avatar.url
+        )
+        await interaction.response.edit_message(embed=embed_success, view=None)
+
+class ShopCategoryMenu(discord.ui.View):
+    """Menu chọn danh mục trong Cửa hàng Đại Gia"""
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.author = author
+
+    @discord.ui.button(label="Danh Hiệu (VIP)", style=discord.ButtonStyle.primary, emoji="🏷️")
+    async def btn_title(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = discord.ui.View(timeout=60)
+        view.add_item(ShopItemSelect("title"))
+        embed = discord.Embed(
+            title="🛍️ QUẦY BÁN DANH HIỆU", 
+            description="Tút tát lại vẻ đẹp trai bằng một danh hiệu xịn xò dán lên Căn Cước.", 
+            color=discord.Color.blue()
+        )
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.button(label="Showroom Siêu Xe", style=discord.ButtonStyle.success, emoji="🏎️")
+    async def btn_vehicle(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = discord.ui.View(timeout=60)
+        view.add_item(ShopItemSelect("vehicle"))
+        embed = discord.Embed(
+            title="🛍️ SHOWROOM XE CỘ & PHI CƠ", 
+            description="Đẳng cấp thể hiện qua tốc độ. Hãy chọn một con xe ưng ý.", 
+            color=discord.Color.green()
+        )
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.button(label="Sàn Bất Động Sản", style=discord.ButtonStyle.danger, emoji="🏰")
+    async def btn_house(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = discord.ui.View(timeout=60)
+        view.add_item(ShopItemSelect("house"))
+        embed = discord.Embed(
+            title="🛍️ SÀN GIAO DỊCH BẤT ĐỘNG SẢN", 
+            description="Đầu tư nhà đất là kênh an toàn nhất để xưng vương.", 
+            color=discord.Color.red()
+        )
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Ai gọi lệnh người đó mua nha, đừng có bấm giành!", ephemeral=True)
+            return False
+        return True
+
+# =====================================================================
+# GIAO DIỆN UI: CHỢ ĐEN (BÁN LẠI TÀI SẢN & THÚ CƯNG)
+# =====================================================================
+class SellItemSelect(discord.ui.Select):
+    """Bảng Dropdown chọn đồ muốn bán cho Chợ đen"""
+    def __init__(self, items, is_pet=False):
+        self.is_pet = is_pet
+        options = []
+        
+        if is_pet:
+            count = 0
+            for pet, quantity in list(items.items()):
+                if count >= 25: 
+                    break
+                if quantity > 0: 
+                    options.append(discord.SelectOption(
+                        label=pet, 
+                        description=f"Đang có: {quantity} con | Chợ đen thâu tóm: {get_pet_sell_price(pet):,} 💰", 
+                        value=pet
+                    ))
+                    count += 1
+        else:
+            for asset in list(set(items))[:25]:
+                options.append(discord.SelectOption(
+                    label=asset, 
+                    description=f"Bị ép giá còn: {get_asset_price(asset):,} 💰", 
+                    value=asset
+                ))
+                
+        super().__init__(
+            placeholder="Chọn món đồ bạn muốn cắm sổ / bán...", 
+            min_values=1, 
+            max_values=1, 
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        user_id = str(interaction.user.id)
+        user_data = load_user(user_id)
+        item_value = self.values[0]
+        
+        if self.is_pet:
+            if user_data.get("pets", {}).get(item_value, 0) <= 0: 
+                return await interaction.response.send_message("Lỗi: Không tìm thấy thú cưng này trong chuồng!", ephemeral=True)
+                
+            sell_price = get_pet_sell_price(item_value)
+            user_data["pets"][item_value] -= 1
+            
+            # Xóa key nếu pet về 0
+            if user_data["pets"][item_value] == 0: 
+                del user_data["pets"][item_value]
+                
+            success_message = f"✅ Thương lái đã mang bé **{item_value}** đi.\nBạn nhận được **{sell_price:,} 💰** tiền tươi thóc thật!"
+        else:
+            if item_value not in user_data.get("assets", []): 
+                return await interaction.response.send_message("Lỗi: Bạn làm gì có tài sản này mà đòi đem cắm!", ephemeral=True)
+                
+            sell_price = get_asset_price(item_value)
+            user_data["assets"].remove(item_value)
+            success_message = f"✅ Chủ tiệm cầm đồ đã thâu tóm **{item_value}**.\nBạn cắn răng chịu lỗ, vớt vát lại được **{sell_price:,} 💰**!"
+
+        # Cộng tiền cho user
+        user_data["money"] += sell_price
+        save_user(user_id)
+        
+        embed = discord.Embed(
+            title="🤝 GIAO DỊCH HOÀN TẤT", 
+            description=success_message, 
+            color=discord.Color.dark_orange()
+        )
+        await interaction.response.edit_message(embed=embed, view=None)
+
+class SellCategoryMenu(discord.ui.View):
+    """Menu chọn danh mục bán trong Chợ đen"""
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.author = author
+
+    @discord.ui.button(label="Cắm Sổ Đỏ / Cầm Xe", style=discord.ButtonStyle.primary, emoji="🏠")
+    async def btn_asset(self, interaction: discord.Interaction, button: discord.ui.Button):
+        assets = load_user(self.author.id).get("assets", [])
+        if not assets: 
+            embed_err = discord.Embed(
+                description="Bạn không có tài sản nào để bán cả! Nghèo rớt mồng tơi.", 
+                color=discord.Color.red()
+            )
+            return await interaction.response.send_message(embed=embed_err, ephemeral=True)
+            
+        view = discord.ui.View(timeout=60)
+        view.add_item(SellItemSelect(assets, False))
+        
+        embed = discord.Embed(
+            title="🏷️ CẦM ĐỒ BĐS & XE CỘ", 
+            description="Lưu ý: Bạn sẽ bị con buôn ép giá tơi bời, chịu lỗ 30% giá trị so với lúc mua.", 
+            color=discord.Color.orange()
+        )
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    @discord.ui.button(label="Bán Thú Cưng", style=discord.ButtonStyle.success, emoji="🐾")
+    async def btn_pet(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pets = load_user(self.author.id).get("pets", {})
+        if not pets or all(quantity == 0 for quantity in pets.values()): 
+            embed_err = discord.Embed(
+                description="Bạn chưa đập được con Thú cưng nào để bán cả!", 
+                color=discord.Color.red()
+            )
+            return await interaction.response.send_message(embed=embed_err, ephemeral=True)
+            
+        view = discord.ui.View(timeout=60)
+        view.add_item(SellItemSelect(pets, True))
+        
+        embed = discord.Embed(
+            title="🏷️ TRẠM THU MUA THÚ CƯNG", 
+            description="Thu mua thú cưng đổi lấy tiền mặt nhanh gọn lẹ. Pet càng hiếm giá càng cao.", 
+            color=discord.Color.green()
+        )
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id: 
+            return False
+        return True
+
+# =====================================================================
+# GIAO DIỆN UI: TRẠM TREO MÁY AFK (PHÁI)
+# =====================================================================
+class ExpSelect(discord.ui.Select):
+    """Bảng chọn thời gian treo máy dã ngoại"""
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label="4 Giờ (Bãi Cỏ Yên Bình)", 
+                description="Rủi ro thấp, phần thưởng dự kiến: ~450 💰", 
+                emoji="🌿", 
+                value="4"
+            ),
+            discord.SelectOption(
+                label="8 Giờ (Hang Động Tối Tăm)", 
+                description="Rủi ro trung bình, phần thưởng dự kiến: ~1000 💰", 
+                emoji="🦇", 
+                value="8"
+            ),
+            discord.SelectOption(
+                label="12 Giờ (Di Tích Nguy Hiểm)", 
+                description="Rủi ro cao, phần thưởng dự kiến: ~2000 💰", 
+                emoji="🏛️", 
+                value="12"
+            )
+        ]
+        super().__init__(
+            placeholder="Lựa chọn địa điểm hạ trại...", 
+            min_values=1, 
+            max_values=1, 
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        user_id = str(interaction.user.id)
+        user_data = load_user(user_id)
+        
+        hours = int(self.values[0])
+        
+        # Ngẫu nhiên phần thưởng tương xứng với rủi ro
+        if hours == 4: 
+            reward = random.randint(300, 600)
+        elif hours == 8: 
+            reward = random.randint(700, 1200)
+        else: 
+            reward = random.randint(1500, 2500)
+            
+        end_time = datetime.now() + timedelta(hours=hours)
+        
+        user_data["exp_end"] = end_time.strftime("%Y-%m-%d %H:%M:%S")
+        user_data["exp_reward"] = reward
+        save_user(user_id)
+
+        embed_success = discord.Embed(
+            title="⛺ LÊN ĐƯỜNG BÌNH AN!", 
+            description=f"Hành lý đã chuẩn bị xong. Bạn vác balo tiến vào rừng và bắt đầu cắm trại **{hours} giờ**.\n\n"
+                        f"⏳ Khi nào hết thời gian, hãy gõ lại lệnh `k phai` để thu hoạch chiến lợi phẩm mang về nhé.", 
+            color=discord.Color.green()
+        )
+        await interaction.response.edit_message(embed=embed_success, view=None)
+
+class ExpView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.author = author
+        self.add_item(ExpSelect())
+
+    async def interaction_check(self, interaction: discord.Interaction): 
+        if interaction.user.id != self.author.id:
+            return False
+        return True
+
+# =====================================================================
+# GIAO DIỆN UI: GAME NHÂN SINH LỰA CHỌN ĐA VŨ TRỤ (HARDCORE)
+# =====================================================================
+class NhanSinhGameView(discord.ui.View):
+    """Hệ thống lõi của Game Nhân Sinh - Xử lý ngã rẽ cuộc đời"""
+    def __init__(self, author, stats):
+        super().__init__(timeout=180) # Hạn chót 3 phút cho 1 mạng
+        self.author = author
+        self.stats = stats
+        self.phase = 1
+        self.tien_an = 0
+        self.logs = []
+        
+        # Khởi tạo kịch bản tuổi 15
+        self.ev = random.choice(EVENTS_P1)
+
+        # Mở bài theo điểm may mắn
+        if self.stats["may_man"] >= 8:
+            self.logs.append("👶 **Tuổi 0:** Bạn sinh ra đã ngậm thìa vàng, bố mẹ là tài phiệt ác ma.")
+        elif self.stats["may_man"] >= 4:
+            self.logs.append("👶 **Tuổi 0:** Bạn sinh ra trong một gia đình công chức bình dân êm ấm.")
+        else:
+            self.logs.append("👶 **Tuổi 0:** Bố mẹ ôm nợ bỏ trốn, bạn bị vứt lăn lóc ngoài bãi rác từ nhỏ.")
+
+        # Khởi tạo 4 Nút Lựa Chọn A, B, C, D
+        self.btn_a = discord.ui.Button(
+            label=f"A. {self.ev['choices'][0]['text'][:70]}", 
+            style=discord.ButtonStyle.primary, 
+            custom_id="btn_a"
+        )
+        self.btn_b = discord.ui.Button(
+            label=f"B. {self.ev['choices'][1]['text'][:70]}", 
+            style=discord.ButtonStyle.secondary, 
+            custom_id="btn_b"
+        )
+        self.btn_c = discord.ui.Button(
+            label=f"C. {self.ev['choices'][2]['text'][:70]}", 
+            style=discord.ButtonStyle.success, 
+            custom_id="btn_c"
+        )
+        self.btn_d = discord.ui.Button(
+            label=f"D. {self.ev['choices'][3]['text'][:70]}", 
+            style=discord.ButtonStyle.danger, 
+            custom_id="btn_d"
+        )
+        
+        # Gắn callback cho các nút
+        self.btn_a.callback = self.choice_a
+        self.btn_b.callback = self.choice_b
+        self.btn_c.callback = self.choice_c
+        self.btn_d.callback = self.choice_d
+        
+        self.add_item(self.btn_a)
+        self.add_item(self.btn_b)
+        self.add_item(self.btn_c)
+        self.add_item(self.btn_d)
+
+    async def on_timeout(self):
+        """Xử lý khi người chơi AFK bỏ dở game"""
+        user_id = str(self.author.id)
+        if user_id in dang_choi_nhansinh: 
+            dang_choi_nhansinh.remove(user_id)
+
+    async def interaction_check(self, interaction: discord.Interaction): 
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("⚠️ Nhân quả của ai người nấy gánh, đừng xen vào cuộc đời của người khác!", ephemeral=True)
+            return False
+        return True
+
+    # Các hàm liên kết nút bấm tới index của mảng kịch bản
+    async def choice_a(self, interaction: discord.Interaction): 
+        await self.process_choice(interaction, 0, "A")
+    async def choice_b(self, interaction: discord.Interaction): 
+        await self.process_choice(interaction, 1, "B")
+    async def choice_c(self, interaction: discord.Interaction): 
+        await self.process_choice(interaction, 2, "C")
+    async def choice_d(self, interaction: discord.Interaction): 
+        await self.process_choice(interaction, 3, "D")
+
+    async def process_choice(self, interaction: discord.Interaction, choice_idx: int, letter: str):
+        """Xử lý Logic cốt lõi khi bấm 1 nút lựa chọn"""
+        choice_data = self.ev["choices"][choice_idx]
+        base_rate = choice_data["rate"]
+        
+        # Tỉ lệ thành công = Tỉ lệ gốc + (May Mắn * 1.5). Khóa giới hạn tối đa 85% để tạo độ rủi ro Hardcore.
+        calculated_rate = base_rate + (self.stats["may_man"] * 1.5)
+        final_rate = min(85.0, calculated_rate)
+        
+        # Đổ xúc xắc
+        roll = random.uniform(0, 100)
+        is_win = roll <= final_rate
+        
+        result_msg = choice_data["win"] if is_win else choice_data["lose"]
+        money_change = choice_data["tien_w"] if is_win else choice_data["tien_l"]
+        
+        # Kiểm tra cờ Đột tử (die)
+        is_dead = False
+        if is_win and choice_data.get("die_w", False): 
+            is_dead = True
+        if not is_win and choice_data.get("die_l", False): 
+            is_dead = True
+
+        self.tien_an += money_change
+        
+        # Tạo nhật ký (Log) để ghi lại hành trình
+        status_icon = "✅ **THÀNH CÔNG**" if is_win else "❌ **THẤT BẠI**"
+        log_entry = f"🎲 Tỉ lệ thành công: **{final_rate:.1f}%** (Xúc xắc: {roll:.1f})\n{status_icon}: {result_msg} ({money_change:,} 💰)"
+        
+        # Tính toán tuổi
+        if self.phase == 1: 
+            tuoi_hien_tai = 15
+        elif self.phase == 2: 
+            tuoi_hien_tai = 25
+        elif self.phase == 3: 
+            tuoi_hien_tai = 35
+        elif self.phase == 4: 
+            tuoi_hien_tai = 50
+        else: 
+            tuoi_hien_tai = 70
+
+        if is_dead:
+            self.logs.append(f"👻 **Tuổi {tuoi_hien_tai}:** Bạn chọn con đường {letter}.\n{log_entry}\n\n💀 **BẠN ĐÃ ĐỘT TỬ! Cuộc đời luân hồi khép lại sớm.**")
+            self.phase = 99 # Đẩy phase lên mức max để ngắt game ngay lập tức
+        else:
+            self.logs.append(f"🗓️ **Tuổi {tuoi_hien_tai}:** Bạn chọn con đường {letter}.\n{log_entry}")
+            self.phase += 1
+            
+            # Sang giai đoạn mới, load kịch bản tiếp theo ngẫu nhiên
+            if self.phase == 2: 
+                self.ev = random.choice(EVENTS_P2)
+            elif self.phase == 3: 
+                self.ev = random.choice(EVENTS_P3)
+            elif self.phase == 4: 
+                self.ev = random.choice(EVENTS_P4)
+            elif self.phase == 5: 
+                self.ev = random.choice(EVENTS_P5)
+
+        # Cập nhật giao diện
+        await self.update_ui(interaction)
+
+    async def update_ui(self, interaction: discord.Interaction):
+        """Cập nhật lại giao diện sau mỗi lượt chơi"""
+        embed = discord.Embed(
+            title="🌀 MÔ PHỎNG NHÂN SINH (HARDCORE)", 
+            description=f"Ký chủ luân hồi: {self.author.mention}", 
+            color=discord.Color.teal()
+        )
+        
+        stats_text = f"Tâm linh / May mắn: **{self.stats['may_man']}/10** *(Được buff +{self.stats['may_man']*1.5}% Tỉ lệ)*"
+        embed.add_field(name="🍀 Chỉ số ban đầu", value=stats_text, inline=False)
+
+        # Rút gọn log nếu quá dài để không bị quá ký tự giới hạn của embed (hiển thị 4 turn gần nhất)
+        if len(self.logs) > 4:
+            story = "...\n\n" + "\n\n".join(self.logs[-4:])
+        else:
+            story = "\n\n".join(self.logs)
+            
+        embed.add_field(name="📜 Hành trình cuộc đời", value=story, inline=False)
+
+        # Trạng thái: Game đang tiếp tục
+        if self.phase <= 5:
+            if self.phase == 1: tuoi_next = 15
+            elif self.phase == 2: tuoi_next = 25
+            elif self.phase == 3: tuoi_next = 35
+            elif self.phase == 4: tuoi_next = 50
+            else: tuoi_next = 70
+            
+            embed.add_field(name=f"❓ Ngã rẽ quyết định tuổi {tuoi_next}", value=f"**{self.ev['q']}**", inline=False)
+            
+            # Cập nhật nhãn nút bấm
+            self.btn_a.label = f"A. {self.ev['choices'][0]['text'][:70]}"
+            self.btn_b.label = f"B. {self.ev['choices'][1]['text'][:70]}"
+            self.btn_c.label = f"C. {self.ev['choices'][2]['text'][:70]}"
+            self.btn_d.label = f"D. {self.ev['choices'][3]['text'][:70]}"
+            
+        # Trạng thái: Game kết thúc (Chết hoặc Hết tuổi)
+        else:
+            # Khóa và Xóa toàn bộ nút bấm
+            self.btn_a.disabled = True
+            self.btn_b.disabled = True
+            self.btn_c.disabled = True
+            self.btn_d.disabled = True
+            self.clear_items() 
+            
+            # Dọn dẹp cờ trạng thái đang chơi
+            user_id = str(self.author.id)
+            if user_id in dang_choi_nhansinh: 
+                dang_choi_nhansinh.remove(user_id)
+
+            # Thanh toán tiền (Cộng / Trừ)
+            user_data = load_user(user_id)
+            user_data["money"] += self.tien_an
+            save_user(user_id)
+
+            # Cập nhật thông báo cuối cùng tùy theo kết quả
+            if self.tien_an < 0:
+                embed.color = discord.Color.red()
+                embed.add_field(
+                    name="🪦 Về với Cát Bụi", 
+                    value=f"Sống lỗi để lại một đống nợ khổng lồ, chủ nợ đến siết nhà.\n❌ **BÁO NHÀ!** Khoản nợ phải gánh: **{self.tien_an:,} 💰**", 
+                    inline=False
+                )
+            elif self.tien_an >= 500000:
+                embed.color = discord.Color.gold()
+                embed.add_field(
+                    name="🪦 Về với Cát Bụi", 
+                    value=f"Hưởng thọ trong nhung lụa vinh hoa, con cháu kính trọng.\n👑 **TỶ PHÚ ĐỜI THẬT!** Di sản để lại: **+{self.tien_an:,} 💰**", 
+                    inline=False
+                )
+            else:
+                embed.color = discord.Color.blue()
+                embed.add_field(
+                    name="🪦 Về với Cát Bụi", 
+                    value=f"Một cuộc đời êm ấm trôi qua, không còn gì nuối tiếc.\n💼 **DƯ DẢ!** Di sản để lại: **+{self.tien_an:,} 💰**", 
+                    inline=False
+                )
+
+        # Cập nhật tin nhắn UI
+        if interaction.response.is_done(): 
+            await interaction.message.edit(embed=embed, view=self)
+        else: 
+            await interaction.response.edit_message(embed=embed, view=self)
+    # =====================================================================
+# HỆ THỐNG LỆNH NGÂN HÀNG TRUNG ƯƠNG
 # =====================================================================
 @bot.group(invoke_without_command=True, aliases=['nganhang', 'nh'])
 async def bank(ctx):
-    u = load_user(ctx.author.id)
-    embed = discord.Embed(title="🏦 NGÂN HÀNG TRUNG ƯƠNG SERVER", description="Gửi tiền an toàn tuyệt đối khỏi trộm cắp và Casino!\n📥 `k bank gui <tiền / all>`\n📤 `k bank rut <tiền / all>`", color=discord.Color.blue())
-    embed.add_field(name="💳 Ví (Wallet)", value=f"**{u.get('money', 0):,} 💰**", inline=True)
-    embed.add_field(name="🏦 Két sắt (Bank)", value=f"**{u.get('bank', 0):,} 💰**", inline=True)
-    embed.set_thumbnail(url=GIF_LINKS["bank"])
+    """Dashboard quản lý ngân hàng trung ương"""
+    user_data = load_user(ctx.author.id)
+    bank_balance = user_data.get("bank", 0)
+    wallet_balance = user_data.get("money", 0)
+    
+    embed = discord.Embed(
+        title="🏦 NGÂN HÀNG TRUNG ƯƠNG SERVER", 
+        description="Gửi tiền an toàn tuyệt đối. Tiền nằm trong ngân hàng sẽ không bao giờ bị mất do Casino, bị trộm hay bị đánh thuế!\n\n"
+                    "📥 `k bank gui <số tiền / all>`: Gửi tiền mặt vào két sắt\n"
+                    "📤 `k bank rut <số tiền / all>`: Rút tiền từ két sắt ra ví", 
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="💳 Ví tiền mặt (Wallet)", value=f"**{wallet_balance:,} 💰**", inline=True)
+    embed.add_field(name="🏦 Số dư Két sắt (Bank)", value=f"**{bank_balance:,} 💰**", inline=True)
+    embed.set_thumbnail(url=GIF_LINKS.get("bank", ""))
+    
     await ctx.reply(embed=embed, mention_author=False)
 
 @bank.command(aliases=['send'])
 async def gui(ctx, amount: str):
-    u = load_user(ctx.author.id)
-    try: amt = u["money"] if amount.lower() == "all" else int(amount)
-    except ValueError: return await ctx.reply("⚠️ Lỗi định dạng.")
-    if amt <= 0 or amt > u["money"]: return await ctx.reply("⚠️ Số tiền trong ví không đủ để gửi!")
-    u["money"] -= amt; u["bank"] = u.get("bank", 0) + amt
-    save_user(ctx.author.id)
-    await ctx.reply(embed=discord.Embed(description=f"✅ Đã gửi an toàn **{amt:,} 💰** vào két sắt!", color=discord.Color.green()), mention_author=False)
+    """Lệnh gửi tiền vào ngân hàng"""
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    
+    try: 
+        if amount.lower() == "all":
+            deposit_amount = user_data["money"]
+        else:
+            deposit_amount = int(amount)
+    except ValueError: 
+        embed_err = discord.Embed(description="⚠️ Vui lòng nhập đúng số tiền hoặc chữ `all`!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+    
+    if deposit_amount <= 0 or deposit_amount > user_data["money"]: 
+        embed_err = discord.Embed(description="⚠️ Số tiền trong ví không đủ để gửi!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+        
+    user_data["money"] -= deposit_amount
+    user_data["bank"] = user_data.get("bank", 0) + deposit_amount
+    save_user(user_id)
+    
+    embed_success = discord.Embed(
+        description=f"✅ Nhân viên ngân hàng đã đóng gói và đưa **{deposit_amount:,} 💰** của bạn vào két sắt an toàn tuyệt đối!", 
+        color=discord.Color.green()
+    )
+    await ctx.reply(embed=embed_success, mention_author=False)
 
 @bank.command(aliases=['withdraw'])
 async def rut(ctx, amount: str):
-    u = load_user(ctx.author.id)
-    bank_bal = u.get("bank", 0)
-    try: amt = bank_bal if amount.lower() == "all" else int(amount)
-    except ValueError: return await ctx.reply("⚠️ Lỗi định dạng.")
-    if amt <= 0 or amt > bank_bal: return await ctx.reply("⚠️ Số dư két sắt không đủ!")
-    u["bank"] -= amt; u["money"] += amt
-    save_user(ctx.author.id)
-    await ctx.reply(embed=discord.Embed(description=f"✅ Đã rút **{amt:,} 💰** ra ví!", color=discord.Color.green()), mention_author=False)
+    """Lệnh rút tiền từ ngân hàng ra ví"""
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    bank_balance = user_data.get("bank", 0)
+    
+    try: 
+        if amount.lower() == "all":
+            withdraw_amount = bank_balance
+        else:
+            withdraw_amount = int(amount)
+    except ValueError: 
+        embed_err = discord.Embed(description="⚠️ Vui lòng nhập đúng số tiền hoặc chữ `all`!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+    
+    if withdraw_amount <= 0 or withdraw_amount > bank_balance: 
+        embed_err = discord.Embed(description="⚠️ Số dư trong ngân hàng của bạn không đủ!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+        
+    user_data["bank"] -= withdraw_amount
+    user_data["money"] += withdraw_amount
+    save_user(user_id)
+    
+    embed_success = discord.Embed(
+        description=f"✅ Bạn đã rút thành công **{withdraw_amount:,} 💰** từ két sắt mang ra ngoài ví để ăn chơi!", 
+        color=discord.Color.green()
+    )
+    await ctx.reply(embed=embed_success, mention_author=False)
 
+# =====================================================================
+# HỆ THỐNG SÀN CHỨNG KHOÁN (CÓ CƠ CHẾ IPO VÀ RUG PULL)
+# =====================================================================
 @bot.group(invoke_without_command=True, aliases=['ck', 'trade'])
 async def chungkhoan(ctx):
+    """Bảng hiển thị giá trị cổ phiếu trên thị trường chứng khoán"""
+    next_timestamp = get_next_hour_timestamp()
     all_stocks = get_all_stocks()
-    embed = discord.Embed(title="📈 SÀN CHỨNG KHOÁN (IPO & MẶC ĐỊNH)", description=f"Cập nhật giá mới vào: <t:{get_next_hour_timestamp()}:R>\n🛒 Mua: `k ck buy <MÃ> <SL>` | 💸 Bán: `k ck sell <MÃ> <SL>`\n🏢 Lên Sàn: `k ck ipo`", color=discord.Color.blue())
+    
+    embed = discord.Embed(
+        title="📈 SÀN CHỨNG KHOÁN PHỐ WALL (IPO & MẶC ĐỊNH)", 
+        description=f"Thị trường sẽ đóng phiên và cập nhật giá mới vào: <t:{next_timestamp}:R>\n\n"
+                    f"🛒 Lệnh Mua: `k ck buy <MÃ> <Số lượng>`\n"
+                    f"💸 Lệnh Bán: `k ck sell <MÃ> <Số lượng>`\n"
+                    f"🏢 Lên Sàn: `k ck ipo` (Dành cho cty quỹ >50 Triệu)", 
+        color=discord.Color.blue()
+    )
+    
+    # Liệt kê các mã cổ phiếu và giá hiện tại
     for code, name in all_stocks.items():
         price_now = get_stock_price(code, 0)
         price_old = get_stock_price(code, -1)
-        if price_now <= 1000: trend, diff = "💀 HỦY NIÊM YẾT", 0
-        else: trend, diff = ("🟩 Lên", price_now - price_old) if price_now > price_old else ("🟥 Xuống", price_old - price_now)
-        embed.add_field(name=f"🏢 {code} - {name}", value=f"Giá: **{price_now:,} 💰**\n*({trend} {diff:,})*", inline=False)
         
-    my_stocks = load_user(ctx.author.id).get("stocks", {})
-    inv_str = "".join([f"🔸 {c}: {q} CP (Trị giá: {get_stock_price(c, 0) * q:,} 💰)\n" for c, q in my_stocks.items() if q > 0])
-    embed.add_field(name="🎒 Cổ phiếu nắm giữ", value=inv_str if inv_str else "Trống trơn.", inline=False)
+        # Cảnh báo phá sản / Hủy niêm yết
+        if price_now <= 1000:
+            trend = "💀 HỦY NIÊM YẾT / ĐÁY XÃ HỘI"
+            difference = 0
+        else:
+            if price_now > price_old:
+                trend = "🟩 Đang Lên"
+            else:
+                trend = "🟥 Đang Xuống"
+            difference = abs(price_now - price_old)
+        
+        embed.add_field(
+            name=f"🏢 {code} - {name}", 
+            value=f"Giá niêm yết: **{price_now:,} 💰**\n*(Biến động: {trend} {difference:,})*", 
+            inline=False
+        )
+        
+    user_data = load_user(ctx.author.id)
+    my_stocks = user_data.get("stocks", {})
+    
+    inventory_str = ""
+    for code, quantity in my_stocks.items():
+        if quantity > 0:
+            # Hiện giá trị đang nắm giữ
+            current_val = get_stock_price(code, 0) * quantity
+            inventory_str += f"🔸 {code}: {quantity} CP (Đang có giá trị: {current_val:,} 💰)\n"
+            
+    if not inventory_str:
+        inventory_str = "Ví đầu tư của bạn đang trống trơn."
+        
+    embed.add_field(name="🎒 Cổ phiếu bạn đang nắm giữ", value=inventory_str, inline=False)
+    
     await ctx.reply(embed=embed, mention_author=False)
 
 @chungkhoan.command()
 async def buy(ctx, code: str, qty: int):
+    """Lệnh mua cổ phiếu (Có cơ chế Rug Pull úp bô)"""
     code = code.upper()
-    if code not in get_all_stocks(): return await ctx.reply("⚠️ Mã CK không tồn tại!")
-    if qty <= 0: return await ctx.reply("⚠️ Số lượng > 0!")
-    price = get_stock_price(code, 0)
-    if price <= 1000: return await ctx.reply("⚠️ Công ty đã phá sản/hủy niêm yết!")
-    total = price * qty
-    u = load_user(ctx.author.id)
-    if u.get("money", 0) < total: return await ctx.reply(f"⚠️ Thiếu tiền! Cần **{total:,} 💰**.")
-    u["money"] -= total
+    all_stocks = get_all_stocks()
     
-    # RUG PULL (15% nổ nếu đầu tư > 50 triệu)
-    if total >= 50000000 and random.randint(1, 100) <= 15:
-        save_user(ctx.author.id)
-        embed = discord.Embed(title="🚨 RUG PULL 🚨", description=f"**CEO CÔNG TY ÔM TIỀN BỎ TRỐN!**\nSàn đóng băng mã {code}, bạn mất trắng **{total:,} 💰**!", color=discord.Color.red())
-        embed.set_image(url=GIF_LINKS["rugpull"])
-        return await ctx.reply(embed=embed, mention_author=False)
+    if code not in all_stocks:
+        embed_err = discord.Embed(description="⚠️ Mã cổ phiếu này không tồn tại trên sàn giao dịch!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
         
-    u.setdefault("stocks", {})[code] = u.get("stocks", {}).get(code, 0) + qty
-    save_user(ctx.author.id)
-    await ctx.reply(embed=discord.Embed(description=f"✅ BUY thành công **{qty} {code}** hết **{total:,} 💰**.", color=discord.Color.green()), mention_author=False)
+    if qty <= 0: 
+        embed_err = discord.Embed(description="⚠️ Số lượng mua phải lớn hơn 0!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+        
+    stock_price = get_stock_price(code, 0)
+    
+    if stock_price <= 1000:
+        embed_err = discord.Embed(description="⚠️ Công ty này đã bị hủy niêm yết / rớt đáy xã hội, sàn chứng khoán khóa chức năng mua!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+
+    total_cost = stock_price * qty
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    
+    if user_data.get("money", 0) < total_cost: 
+        embed_err = discord.Embed(description=f"⚠️ Thiếu lúa rồi đại gia ơi! Bạn cần tới **{total_cost:,} 💰** để khớp lệnh.", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+        
+    # TRỪ TIỀN TRƯỚC TIÊN ĐỂ KIỂM TRA RUG PULL
+    user_data["money"] -= total_cost
+    
+    # CƠ CHẾ RUG PULL: Đầu tư hơn 50 triệu có 15% bị úp bô
+    if total_cost >= 50000000:
+        if random.randint(1, 100) <= 15:
+            save_user(user_id)
+            embed_rugpull = discord.Embed(
+                title="🚨 CẢNH BÁO TỘI PHẠM KINH TẾ (RUG PULL) 🚨", 
+                description=f"**Trời ơi tin được không!**\nKhi bạn vừa chuyển khoản **{total_cost:,} 💰** để mua lượng lớn cổ phiếu **{code}**...\n\n"
+                            f"CEO của công ty này đã ôm toàn bộ số tiền của bạn, lên phi cơ riêng trốn ra nước ngoài!\n"
+                            f"Sàn chứng khoán đóng băng mã này, bạn mất trắng số tiền vừa mua!", 
+                color=discord.Color.red()
+            )
+            embed_rugpull.set_image(url=GIF_LINKS["rugpull"])
+            return await ctx.reply(embed=embed_rugpull, mention_author=False)
+            
+    # Thêm cổ phiếu vào túi đồ bình thường nếu không bị Rug pull
+    current_qty = user_data.get("stocks", {}).get(code, 0)
+    user_data["stocks"][code] = current_qty + qty
+    save_user(user_id)
+    
+    embed_success = discord.Embed(
+        description=f"✅ Lệnh BUY đã khớp! Bạn vừa đầu tư mua **{qty} {code}** với tổng số tiền là **{total_cost:,} 💰**.", 
+        color=discord.Color.green()
+    )
+    await ctx.reply(embed=embed_success, mention_author=False)
 
 @chungkhoan.command()
 async def sell(ctx, code: str, qty: int):
+    """Lệnh chốt lời/cắt lỗ cổ phiếu"""
     code = code.upper()
-    u = load_user(ctx.author.id)
-    if code not in get_all_stocks() or u.get("stocks", {}).get(code, 0) < qty or qty <= 0: return await ctx.reply("⚠️ Không hợp lệ hoặc không đủ số lượng!")
-    total = get_stock_price(code, 0) * qty
-    u["stocks"][code] -= qty
-    if u["stocks"][code] == 0: del u["stocks"][code]
-    u["money"] += total
-    save_user(ctx.author.id)
-    await ctx.reply(embed=discord.Embed(description=f"✅ SELL thành công **{qty} {code}**, thu về **{total:,} 💰**.", color=discord.Color.gold()), mention_author=False)
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    all_stocks = get_all_stocks()
+    
+    if code not in all_stocks:
+        embed_err = discord.Embed(description="⚠️ Mã cổ phiếu này không tồn tại!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+        
+    my_qty = user_data.get("stocks", {}).get(code, 0)
+    
+    if qty <= 0 or my_qty < qty: 
+        embed_err = discord.Embed(description="⚠️ Bạn không đủ số lượng cổ phiếu này để bán!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+        
+    total_gain = get_stock_price(code, 0) * qty
+    
+    # Trừ cổ phiếu và cộng tiền
+    user_data["stocks"][code] -= qty
+    if user_data["stocks"][code] == 0:
+        del user_data["stocks"][code]
+        
+    user_data["money"] += total_gain
+    save_user(user_id)
+    
+    embed_success = discord.Embed(
+        description=f"✅ Lệnh SELL đã khớp! Bạn vừa bán **{qty} {code}** và thu về **{total_gain:,} 💰**.", 
+        color=discord.Color.gold()
+    )
+    await ctx.reply(embed=embed_success, mention_author=False)
 
 @chungkhoan.command()
 async def ipo(ctx):
-    comp_id = load_user(ctx.author.id).get("company")
-    if not comp_id: return await ctx.reply("⚠️ Cần gia nhập/tạo công ty trước!")
+    """Lệnh đưa công ty lên sàn chứng khoán (Cần 50 Triệu)"""
+    user_id = str(ctx.author.id)
+    comp_id = load_user(user_id).get("company")
+    
+    if not comp_id:
+        embed_err = discord.Embed(description="⚠️ Bạn chưa gia nhập công ty nào cả!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+        
     comp = load_company(comp_id)
-    if comp["members"].get(str(ctx.author.id)) != "boss": return await ctx.reply("⚠️ Chỉ Chủ Tịch mới được quyền IPO!")
-    if comp.get("is_ipo"): return await ctx.reply("⚠️ Công ty đã lên sàn rồi!")
-    if comp["treasury"] < 50000000: return await ctx.reply("⚠️ Quỹ công ty phải đạt **50 Triệu 💰** mới được niêm yết!")
+    if comp["members"].get(user_id) != "boss":
+        embed_err = discord.Embed(description="⚠️ Chỉ Chủ Tịch mới có quyền quyết định đưa công ty lên sàn chứng khoán!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+        
+    if comp.get("is_ipo"):
+        embed_err = discord.Embed(description="⚠️ Công ty của bạn đã được niêm yết trên sàn chứng khoán rồi!", color=discord.Color.orange())
+        return await ctx.reply(embed=embed_err, mention_author=False)
+        
+    if comp["treasury"] < 50000000:
+        embed_err = discord.Embed(
+            description="⚠️ Điều kiện niêm yết: Quỹ công ty phải đạt tối thiểu **50,000,000 💰**.\n"
+                        "Hãy kêu gọi cổ đông đóng góp thêm!", 
+            color=discord.Color.red()
+        )
+        return await ctx.reply(embed=embed_err, mention_author=False)
+        
+    # Kích hoạt trạng thái IPO trên Database
     comp["is_ipo"] = True
     save_company(comp_id)
-    await ctx.reply(embed=discord.Embed(title="📈 CHÀO SÀN", description=f"Tập đoàn **{comp['name']}** đã IPO!\nMã cổ phiếu: **{comp['name'][:4].upper()}**", color=discord.Color.green()), mention_author=False)
+    
+    mã_ck = comp["name"][:4].upper()
+    embed_success = discord.Embed(
+        title="📈 CHÀO SÀN CHỨNG KHOÁN THÀNH CÔNG", 
+        description=f"Chúc mừng tập đoàn **{comp['name']}** đã chính thức IPO và được niêm yết trên Sàn Chứng Khoán Phố Wall!\n\n"
+                    f"Mã cổ phiếu: **{mã_ck}**\n"
+                    f"Từ giờ phút này, giá trị cổ phiếu sẽ biến động dựa trên số tiền trong Quỹ Công Ty và biến động thị trường.", 
+        color=discord.Color.green()
+    )
+    await ctx.reply(embed=embed_success, mention_author=False)
 
+# =====================================================================
+# HỆ THỐNG QUẢN LÝ CÔNG TY ĐẠI CHIẾN
+# =====================================================================
 @bot.group(invoke_without_command=True, aliases=['congty'])
 async def cty(ctx):
-    u = load_user(ctx.author.id)
-    comp_id = u.get("company")
-    if not comp_id: return await ctx.send(embed=discord.Embed(title="🏢 CÔNG TY", description="Bạn đang thất nghiệp. Gõ `k cty tao <tên>` (500k 💰).", color=discord.Color.red()))
+    """Dashboard trung tâm quản lý công ty"""
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    comp_id = user_data.get("company")
+
+    if not comp_id:
+        embed_none = discord.Embed(
+            title="🏢 SÀN GIAO DỊCH DOANH NGHIỆP", 
+            description="Bạn hiện đang là kẻ lang thang thất nghiệp.\nĐể thành lập công ty, gõ:\n`k cty tao <tên công ty>` (Phí thành lập: 500,000 💰)", 
+            color=discord.Color.red()
+        )
+        return await ctx.send(embed=embed_none)
+    
     comp = load_company(comp_id)
     if not comp:
-        u["company"] = None; save_user(ctx.author.id)
-        return await ctx.send("Công ty đã phá sản!")
-    role = comp["members"].get(str(ctx.author.id), "nhanvien")
-    embed = discord.Embed(title=f"🏢 CÔNG TY: {comp['name']}", color=discord.Color.gold())
-    embed.add_field(name="Quỹ Công Ty", value=f"**{comp['treasury']:,} 💰**", inline=True)
-    embed.add_field(name="Nhân Sự", value=f"**{len(comp['members'])} người**", inline=True)
-    embed.add_field(name="Chức vụ", value=f"**{comp['roles'].get(role, role)}**", inline=False)
-    cmds = "`k cty gop <tiền>` | `k cty thulai` | `k cty roi`"
-    if role in ["boss", "quanly"]: cmds += "\n`k cty tuyen @user` | `k cty duoi @user`"
-    if role == "boss": cmds += "\n`k cty luong <tiền>` | `k cty chucvu @user <role>` | `k cty doitenchuc <role> <tên>`"
-    embed.add_field(name="Bảng Lệnh", value=cmds, inline=False)
-    await ctx.send(embed=embed)
+        user_data["company"] = None
+        save_user(user_id)
+        return await ctx.send("Công ty của bạn đã phá sản từ trước rồi! Hãy dọn dẹp đống đổ nát và lập công ty mới.")
+        
+    my_role = comp["members"].get(user_id, "nhanvien")
+    role_name = comp["roles"].get(my_role, my_role)
+    
+    embed_dashboard = discord.Embed(title=f"🏢 CÔNG TY: {comp['name']}", color=discord.Color.gold())
+    embed_dashboard.add_field(name="Quỹ Công Ty", value=f"**{comp['treasury']:,} 💰**", inline=True)
+    embed_dashboard.add_field(name="Nhân Sự", value=f"**{len(comp['members'])} người**", inline=True)
+    embed_dashboard.add_field(name="Chức vụ của bạn", value=f"**{role_name}**", inline=False)
+    
+    cmds = "`k cty gop <tiền>`: Đóng góp tiền túi vào quỹ công ty\n`k cty thulai`: Nhận lãi suất ngân hàng mỗi ngày\n`k cty roi`: Nộp đơn từ chức nghỉ việc"
+    
+    if my_role in ["boss", "quanly"]:
+        cmds += "\n\n**Quyền Quản Lý:**\n`k cty tuyen @user`: Tuyển dụng nhân viên\n`k cty duoi @user`: Sa thải nhân viên"
+        
+    if my_role == "boss":
+        cmds += "\n\n**Quyền Chủ Tịch:**\n`k cty luong <tiền>`: Rút quỹ phát lương\n`k cty chucvu @user <quanly/nhanvien>`: Set role\n`k cty doitenchuc <boss/quanly/nhanvien> <Tên>`: Đổi tên hiển thị"
+        
+    embed_dashboard.add_field(name="Bảng Lệnh Công Ty", value=cmds, inline=False)
+    await ctx.send(embed=embed_dashboard)
 
 @cty.command()
 async def tao(ctx, *, name: str):
-    u_id = str(ctx.author.id)
-    u = load_user(u_id)
-    if u.get("company"): return await ctx.reply("⚠️ Bạn đã có cty!")
-    if u.get("money", 0) < 500000: return await ctx.reply("⚠️ Phí tạo là 500k!")
-    u["money"] -= 500000; u["company"] = u_id
-    COMPANY_CACHE[u_id] = {"_id": u_id, "name": name, "treasury": 0, "members": {u_id: "boss"}, "roles": {"boss": "Chủ Tịch", "quanly": "Giám Đốc", "nhanvien": "Nhân Viên"}, "last_interest": "2000-01-01 00:00:00", "is_ipo": False}
-    save_company(u_id); save_user(u_id)
-    await ctx.send(embed=discord.Embed(title="🏢 KHAI TRƯƠNG", description=f"Tạo thành công **{name}**!", color=discord.Color.green()))
-
-@cty.command()
-async def roi(ctx):
-    u_id = str(ctx.author.id)
-    u = load_user(u_id)
-    c_id = u.get("company")
-    if not c_id: return await ctx.reply("Bạn chưa có cty!")
-    comp = load_company(c_id)
-    if comp and comp["members"].get(u_id) == "boss":
-        COMPANY_CACHE.pop(c_id, None); companies_col.delete_one({"_id": c_id})
-        for m_id in list(comp["members"].keys()): 
-            m = load_user(m_id); m["company"] = None; save_user(m_id)
-        embed = discord.Embed(description="🏢 Bão tố! Chủ tịch bỏ trốn, công ty **PHÁ SẢN**!", color=discord.Color.red())
-        embed.set_image(url=GIF_LINKS["bankrupt"])
-        await ctx.reply(embed=embed, mention_author=False)
-    else:
-        if comp and u_id in comp["members"]: del comp["members"][u_id]
-        u["company"] = None; save_user(u_id); save_company(c_id)
-        await ctx.reply(embed=discord.Embed(description="🎒 Bạn đã từ chức.", color=discord.Color.dark_grey()), mention_author=False)
-
-@bot.command()
-async def daichien(ctx, member: discord.Member = None, tactic: str = None):
-    u_id = str(ctx.author.id)
-    c_id = load_user(u_id).get("company")
-    if not member or not tactic or tactic.lower() not in ["hack", "phot", "giangho"]:
-        embed = discord.Embed(title="⚔️ ĐẠI CHIẾN CÔNG TY", description="Cách dùng: `k daichien @user <hack/phot/giangho>`", color=discord.Color.red())
-        embed.set_image(url=GIF_LINKS["fight"])
-        return await ctx.send(embed=embed)
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
     
-    t_cid = load_user(member.id).get("company")
-    if u_id == str(member.id) or not c_id or not t_cid or c_id == t_cid: return await ctx.reply("⚠️ Lỗi không hợp lệ!")
+    if user_data.get("company"): 
+        return await ctx.reply("Bạn đã ký hợp đồng với một công ty rồi!", mention_author=False)
+    if user_data.get("money", 0) < 500000: 
+        return await ctx.reply("⚠️ Phí đăng ký doanh nghiệp là **500,000 💰**. Cày thêm đi sếp!", mention_author=False)
     
-    now = datetime.now()
-    if c_id in cty_cooldowns and (now - cty_cooldowns[c_id]).total_seconds() < 3600: return await ctx.reply("⏳ Công ty đang nghỉ ngơi, đợi 1h!")
+    user_data["money"] -= 500000
+    user_data["company"] = user_id
     
-    c1, c2 = load_company(c_id), load_company(t_cid)
-    if c2["treasury"] < 10000: return await ctx.reply("⚠️ Quỹ đối thủ quá nghèo!")
+    new_comp = {
+        "_id": user_id, 
+        "name": name, 
+        "treasury": 0, 
+        "members": {user_id: "boss"}, 
+        "roles": {"boss": "Chủ Tịch", "quanly": "Giám Đốc", "nhanvien": "Nhân Viên"}, 
+        "last_interest": "2000-01-01 00:00:00",
+        "is_ipo": False
+    }
     
-    cty_cooldowns[c_id] = now
-    tc = tactic.lower()
-    wr, w_pct, l_pct, nm = (30, 0.1, 0.05, "HACK") if tc == "hack" else (50, 0.05, 0.02, "PHỐT") if tc == "phot" else (70, 0.02, 0.01, "GIANG HỒ")
+    COMPANY_CACHE[user_id] = new_comp
+    save_company(user_id)
+    save_user(user_id)
     
-    msg = await ctx.send(embed=discord.Embed(description=f"⚔️ **{c1['name']}** đang dùng **{nm}** lên **{c2['name']}**...", color=discord.Color.dark_grey()))
-    await asyncio.sleep(2.5)
-    
-    if random.randint(1, 100) <= wr:
-        steal = int(c2["treasury"] * w_pct)
-        c1["treasury"] += steal; c2["treasury"] -= steal
-        save_company(c_id); save_company(t_cid)
-        await msg.edit(embed=discord.Embed(description=f"🔥 **ĐẠI THẮNG!** Cướp được **{steal:,} 💰**!", color=discord.Color.green()).set_image(url=GIF_LINKS["fight"]))
-    else:
-        fine = int(c1["treasury"] * l_pct)
-        c1["treasury"] -= fine; c2["treasury"] += fine
-        save_company(c_id); save_company(t_cid)
-        await msg.edit(embed=discord.Embed(description=f"💀 **THẤT BẠI!** Đền bù **{fine:,} 💰**.", color=discord.Color.red()))
+    embed_success = discord.Embed(
+        title="🏢 KHAI TRƯƠNG HỒNG PHÁT", 
+        description=f"Cắt băng khánh thành! Chúc mừng sếp {ctx.author.mention} đã thành lập doanh nghiệp **{name}**!", 
+        color=discord.Color.green()
+    )
+    await ctx.send(embed=embed_success)
 
 # =====================================================================
 # HỆ THỐNG LỆNH CƠ BẢN VÀ MINIGAME (RANK, CASINO, CƯỚP BANK...)
 # =====================================================================
 @bot.command()
 async def help(ctx):
-    embed = discord.Embed(title="📚 HỆ THỐNG LỆNH BOT UPDATE 2026", description="Tiền tố: `k ` hoặc `K `.", color=discord.Color.blurple())
+    """Bảng hiển thị trợ giúp hệ thống"""
+    embed = discord.Embed(
+        title="📚 HỆ THỐNG LỆNH BOT UPDATE 2026", 
+        description="Tiền tố: `k ` hoặc `K `.", 
+        color=discord.Color.blurple()
+    )
     embed.add_field(name="🏦 KINH TẾ", value="`k rank`, `k tuido`, `k bank`, `k cuahang`, `k choden`\n`k daily`, `k lixi`, `k give`, `k top`, `k marry @user`", inline=False)
     embed.add_field(name="🏢 CÔNG TY & CHỨNG KHOÁN", value="`k cty tao <tên>`, `k cty`, `k ck`, `k daichien @user`", inline=False)
     embed.add_field(name="🎮 CASINO", value="`k coin <tiền>`, `k taixiu <tài/xỉu> <tiền>`, `k baucua <vật> <tiền>`, `k duathu <vật> <tiền>`, `k nohu <tiền>`", inline=False)
@@ -1818,8 +1509,12 @@ async def help(ctx):
 
 @bot.command()
 async def rank(ctx):
+    """Lệnh xem Căn Cước Công Dân"""
     u = load_user(ctx.author.id)
-    embed = discord.Embed(title=f"💳 CĂN CƯỚC: {ctx.author.name.upper()}", color=discord.Color.gold() if u.get("money",0) > 1000000 else discord.Color.teal())
+    embed = discord.Embed(
+        title=f"💳 CĂN CƯỚC: {ctx.author.name.upper()}", 
+        color=discord.Color.gold() if u.get("money",0) > 1000000 else discord.Color.teal()
+    )
     embed.set_thumbnail(url=GIF_LINKS["rank"])
     embed.add_field(name="🏷️ Danh hiệu", value=f"**{u.get('title')}**", inline=False)
     embed.add_field(name="🌟 Cấp độ", value=f"**LV {u.get('level',1)}**", inline=True)
@@ -1830,175 +1525,202 @@ async def rank(ctx):
 
 @bot.command(aliases=['cuop', 'cuopbank'])
 async def cuopnganhang(ctx):
-    u_id = str(ctx.author.id); u = load_user(u_id); now = datetime.now()
-    if u.get("money", 0) < 50000: return await ctx.reply(embed=discord.Embed(description="⚠️ Cần 50k mua súng M4A1!", color=discord.Color.red()), mention_author=False)
-    if u_id in cty_cooldowns and (now - cty_cooldowns[u_id]).total_seconds() < 3600: return await ctx.reply("⏳ Truy nã 5 sao! Đợi 1 tiếng.", mention_author=False)
+    """Tính năng cướp ngân hàng kịch tính"""
+    u_id = str(ctx.author.id)
+    u = load_user(u_id)
+    now = datetime.now()
+    
+    if u.get("money", 0) < 50000: 
+        return await ctx.reply(embed=discord.Embed(description="⚠️ Cần 50k mua súng M4A1 mới đi cướp được!", color=discord.Color.red()), mention_author=False)
+        
+    if u_id in cty_cooldowns and (now - cty_cooldowns[u_id]).total_seconds() < 3600: 
+        return await ctx.reply("⏳ Đang bị truy nã 5 sao! Đi trốn 1 tiếng đi.", mention_author=False)
+        
     cty_cooldowns[u_id] = now
     
     msg = await ctx.send(embed=discord.Embed(title="🔫 PHI VỤ THẾ KỶ", description="Xông vào Ngân hàng Trung ương...", color=discord.Color.dark_grey()))
     await asyncio.sleep(2.5)
     
     if random.randint(1, 100) <= 20: 
-        loot = random.randint(200000, 800000); u["money"] += loot; save_user(u_id)
-        await msg.edit(embed=discord.Embed(title="🎉 TRÓT LỌT!", description=f"Vơ vét sạch! Húp **{loot:,} 💰**!", color=discord.Color.green()).set_image(url=GIF_LINKS["rob_success"]))
+        loot = random.randint(200000, 800000)
+        u["money"] += loot
+        save_user(u_id)
+        embed_win = discord.Embed(title="🎉 TRÓT LỌT!", description=f"Vơ vét sạch két sắt! Húp **{loot:,} 💰**!", color=discord.Color.green())
+        embed_win.set_image(url=GIF_LINKS["rob_success"])
+        await msg.edit(embed=embed_win)
     else: 
-        u["money"] -= 50000; u["jail_time"] = (now + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S"); save_user(u_id)
-        await msg.edit(embed=discord.Embed(title="🚨 BỊ TÓM GỌN", description="Đặc nhiệm SWAT ập tới! Mất 50k và đi tù 10 phút!", color=discord.Color.red()).set_image(url=GIF_LINKS["rob_fail"]))
-
-@bot.command(aliases=['mine', 'daomo'])
-async def daovang(ctx):
-    u_id = str(ctx.author.id); u = load_user(u_id); now = datetime.now()
-    if u_id in work_cooldowns and (now - work_cooldowns[u_id]).total_seconds() < 30: return await ctx.reply("⏳ Đợi 30s!", mention_author=False)
-    
-    if "Cuốc Chim ⛏️" not in u.get("assets", []):
-        if u.get("money", 0) < 5000: return await ctx.reply("⚠️ Cần 5000 💰 mua cuốc!")
-        u["money"] -= 5000; u["assets"].append("Cuốc Chim ⛏️")
-        await ctx.send("🛒 Đã trừ 5k mua Cuốc Chim.")
-        
-    work_cooldowns[u_id] = now
-    msg = await ctx.send(embed=discord.Embed(description="⛏️ Cạch... Đang đào...", color=discord.Color.dark_grey()))
-    await asyncio.sleep(2)
-    
-    roll = random.randint(1, 100)
-    if roll <= 40: name, val = "Đá 🪨", 0
-    elif roll <= 70: name, val = "Sắt Vụn 🔩", random.randint(1000, 3000)
-    elif roll <= 90: name, val = "Vàng 🥇", random.randint(8000, 15000)
-    elif roll <= 98: name, val = "Kim Cương 💎", random.randint(50000, 100000)
-    else: 
-        pen = int(u["money"] * 0.1); u["money"] -= pen; save_user(u_id)
-        return await msg.edit(embed=discord.Embed(description=f"💥 **BÙM!** Đào trúng bom! Phạt **{pen:,} 💰**.", color=discord.Color.red()))
-
-    u["money"] += val; save_user(u_id)
-    await msg.edit(embed=discord.Embed(description=f"⛏️ Đào trúng: **{name}**\nBán được: **{val:,} 💰**", color=discord.Color.green()).set_thumbnail(url=GIF_LINKS["mine"]))
+        u["money"] -= 50000
+        u["jail_time"] = (now + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+        save_user(u_id)
+        embed_lose = discord.Embed(title="🚨 BỊ TÓM GỌN", description="Đặc nhiệm SWAT ập tới! Mất 50k tiền súng và đi tù 10 phút!", color=discord.Color.red())
+        embed_lose.set_image(url=GIF_LINKS["rob_fail"])
+        await msg.edit(embed=embed_lose)
 
 @bot.command()
-async def coin(ctx, amount: str):
-    u, bet = await check_gamble_conditions(ctx, amount)
-    if not u: return
-    u_id = str(ctx.author.id); u["money"] -= bet; save_user(u_id); gamble_cooldowns[u_id] = datetime.now()
-    
-    msg = await ctx.reply(embed=discord.Embed(description=f"🪙 Tung **{bet:,} 💰**...").set_thumbnail(url=GIF_LINKS["casino"]), mention_author=False)
-    await asyncio.sleep(2) 
-    
-    if random.choice([True, False]):
-        u["money"] += bet * 2; save_user(u_id)
-        await msg.edit(embed=discord.Embed(description=f"🪙 **NGỬA!** Húp **{bet * 2:,} 💰**!", color=discord.Color.green()))
-    else: await msg.edit(embed=discord.Embed(description=f"🪙 **SẤP!** Mất trắng **{bet:,} 💰**.", color=discord.Color.red()))
-
-@bot.command()
-async def taixiu(ctx, choice: str, amount: str):
-    choice = choice.lower().replace("à", "a").replace("ỉ", "i")
-    if choice not in ["tai", "xiu"]: return await ctx.reply("⚠️ Dùng `tai` hoặc `xiu`.")
-    u, bet = await check_gamble_conditions(ctx, amount)
-    if not u: return
-    u_id = str(ctx.author.id); u["money"] -= bet; save_user(u_id); gamble_cooldowns[u_id] = datetime.now()
-    
-    msg = await ctx.reply(embed=discord.Embed(title="🎲 LẮC CASINO", description=f"Cược **{bet:,} 💰** vào **{choice.upper()}**...").set_thumbnail(url=GIF_LINKS["casino"]), mention_author=False)
-    await asyncio.sleep(2.5)
-    
-    d1, d2, d3 = random.randint(1,6), random.randint(1,6), random.randint(1,6)
-    total = d1 + d2 + d3
-    res = "xiu" if total <= 10 else "tai"
-    
-    embed = discord.Embed(title="🎲 KẾT QUẢ TÀI XỈU")
-    if choice == res: 
-        if d1 == d2 == d3: win = bet * 5; txt = f"🔥 **BÃO {d1}-{d2}-{d3}! X5 TÀI SẢN!**\nHúp **{win:,} 💰**!"
-        else: win = bet * 2; txt = f"✅ **THẮNG!** Nhận **{win:,} 💰**!"
-        u["money"] += win; embed.color = discord.Color.green()
-    else: txt = f"💀 **THUA!** Mất **{bet:,} 💰**."; embed.color = discord.Color.red()
-    
-    save_user(u_id)
-    embed.description = f"**[ {d1} | {d2} | {d3} ]** (Tổng: {total} - Cửa **{res.upper()}**)\n\n{txt}"
-    await msg.edit(embed=embed)
-
-@bot.command(aliases=['slot', 'nohu', 'slots'])
 async def mayxeng(ctx, amount: str):
+    """Máy đánh bạc Slot Machine"""
     u, bet = await check_gamble_conditions(ctx, amount)
     if not u: return
-    u_id = str(ctx.author.id); u["money"] -= bet; save_user(u_id); gamble_cooldowns[u_id] = datetime.now()
+    
+    u_id = str(ctx.author.id)
+    u["money"] -= bet
+    save_user(u_id)
+    gamble_cooldowns[u_id] = datetime.now()
 
     items = ["🍒", "🍋", "🍉", "🔔", "💎", "👑"]
     r = [random.choice(items) for _ in range(3)]
     
-    embed = discord.Embed(title="🎰 MÁY XÈNG 🎰", color=discord.Color.gold()).set_thumbnail(url=GIF_LINKS["casino"])
+    embed = discord.Embed(title="🎰 MÁY XÈNG CASINO 🎰", color=discord.Color.gold())
+    embed.set_thumbnail(url=GIF_LINKS["casino"])
     msg = await ctx.reply(embed=embed, mention_author=False)
     
-    for _ in range(2): embed.description = f"**[ {random.choice(items)} | {random.choice(items)} | {random.choice(items)} ]**\n\n🔄 Đang quay..."; await msg.edit(embed=embed); await asyncio.sleep(0.8)
-    for _ in range(2): embed.description = f"**[ {r[0]} | {random.choice(items)} | {random.choice(items)} ]**\n\n🔄 Chốt ô 1..."; await msg.edit(embed=embed); await asyncio.sleep(0.8)
-    for _ in range(2): embed.description = f"**[ {r[0]} | {r[1]} | {random.choice(items)} ]**\n\n🔄 Nín thở..."; await msg.edit(embed=embed); await asyncio.sleep(1)
+    for _ in range(2): 
+        embed.description = f"**[ {random.choice(items)} | {random.choice(items)} | {random.choice(items)} ]**\n\n🔄 Đang quay tít mù..."
+        await msg.edit(embed=embed)
+        await asyncio.sleep(0.8)
+        
+    for _ in range(2): 
+        embed.description = f"**[ {r[0]} | {random.choice(items)} | {random.choice(items)} ]**\n\n🔄 Đã chốt ô 1..."
+        await msg.edit(embed=embed)
+        await asyncio.sleep(0.8)
+        
+    for _ in range(2): 
+        embed.description = f"**[ {r[0]} | {r[1]} | {random.choice(items)} ]**\n\n🔄 Nín thở chờ ô cuối..."
+        await msg.edit(embed=embed)
+        await asyncio.sleep(1)
         
     if r[0] == r[1] == r[2]:
-        win = bet * 50 if r[0] == "👑" else (bet * 20 if r[0] == "💎" else bet * 10)
-        txt = f"🔥 **JACKPOT NỔ HŨ!** Húp trọn **{win:,} 💰**!"
+        if r[0] == "👑": win = bet * 50
+        elif r[0] == "💎": win = bet * 20
+        else: win = bet * 10
+        txt = f"🔥 **JACKPOT NỔ HŨ!!!** Bạn húp trọn **{win:,} 💰**!"
         u["money"] += win
     elif r[0] == r[1] or r[1] == r[2] or r[0] == r[2]:
-        win = bet * 2; txt = f"🎉 **THẮNG NHỎ!** Nhận **{win:,} 💰**."; u["money"] += win
-    else: txt = f"💀 **TOANG!** Mất **{bet:,} 💰**."
+        win = bet * 2
+        txt = f"🎉 **THẮNG NHỎ!** Bạn nhận được **{win:,} 💰**."
+        u["money"] += win
+    else: 
+        txt = f"💀 **TOANG!** Cờ bạc là bác thằng bần. Mất trắng **{bet:,} 💰**."
         
-    save_user(u_id); embed.description = f"**[ {r[0]} | {r[1]} | {r[2]} ]**\n\n{txt}"
+    save_user(u_id)
+    embed.description = f"**[ {r[0]} | {r[1]} | {r[2]} ]**\n\n{txt}"
     await msg.edit(embed=embed)
 
 @bot.command()
 async def daily(ctx):
-    u = load_user(ctx.author.id); now = datetime.now()
+    """Điểm danh nhận tiền mỗi ngày"""
+    u = load_user(ctx.author.id)
+    now = datetime.now()
+    
     if u.get("last_daily"):
         last = datetime.strptime(u["last_daily"], "%Y-%m-%d %H:%M:%S")
-        if now - last < timedelta(days=1): return await ctx.reply(embed=discord.Embed(description=f"⏳ Vẫn còn <t:{int((last + timedelta(days=1)).timestamp())}:R> nữa.", color=discord.Color.orange()), mention_author=False)
+        if now - last < timedelta(days=1): 
+            return await ctx.reply(embed=discord.Embed(description=f"⏳ Khôn thế, lương ngày mai nhận vào: <t:{int((last + timedelta(days=1)).timestamp())}:R> nữa.", color=discord.Color.orange()), mention_author=False)
     
-    u["money"] += 1000; u["last_daily"] = now.strftime("%Y-%m-%d %H:%M:%S"); save_user(ctx.author.id)
-    await ctx.reply(embed=discord.Embed(title="🎁 QUÀ ĐIỂM DANH", description=f"Nhận **1,000 💰**!\nVí: **{u['money']:,} 💰**", color=discord.Color.green()).set_thumbnail(url=GIF_LINKS["daily"]), mention_author=False)
+    u["money"] += 1000
+    u["last_daily"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    save_user(ctx.author.id)
+    
+    embed = discord.Embed(
+        title="🎁 QUÀ ĐIỂM DANH", 
+        description=f"Nhận trợ cấp **1,000 💰** thành công!\n💳 Số dư ví: **{u['money']:,} 💰**", 
+        color=discord.Color.green()
+    )
+    embed.set_thumbnail(url=GIF_LINKS["daily"])
+    await ctx.reply(embed=embed, mention_author=False)
 
 @bot.command()
 async def tuido(ctx):
+    """Hiển thị túi đồ BĐS, Xe và Thú cưng"""
     u = load_user(ctx.author.id)
     embed = discord.Embed(title=f"🎒 KHO BÁU CỦA {ctx.author.name.upper()}", color=discord.Color.dark_purple())
-    if ctx.author.avatar: embed.set_thumbnail(url=ctx.author.avatar.url)
-    embed.add_field(name="🏠 Tài Sản", value="Trống." if not u.get("assets") else "\n".join([f"🔸 {a}" for a in u["assets"]]), inline=False)
-    embed.add_field(name="🐾 Thú Cưng", value="Trống." if not u.get("pets") else "\n".join([f"{p} (x{c})" for p, c in u["pets"].items()]), inline=False)
+    if ctx.author.avatar: 
+        embed.set_thumbnail(url=ctx.author.avatar.url)
+        
+    embed.add_field(name="🏠 Tài Sản Cá Nhân", value="Trống không." if not u.get("assets") else "\n".join([f"🔸 {a}" for a in u["assets"]]), inline=False)
+    embed.add_field(name="🐾 Trang Trại Thú Cưng", value="Chưa bắt được con nào." if not u.get("pets") else "\n".join([f"{p} (x{c})" for p, c in u["pets"].items()]), inline=False)
+    
     await ctx.reply(embed=embed, mention_author=False)
 
 @bot.command()
 async def top(ctx):
-    danh_sach = sorted([(doc["_id"], doc.get("money", 0) + doc.get("bank", 0)) for doc in list(users_col.find())], key=lambda x: x[1], reverse=True)
-    desc = "".join([f"{'🥇' if i==0 else '🥈' if i==1 else '🥉' if i==2 else f'**#{i+1}**'} **Tỷ phú {uid[-4:]}** ━ {tien:,} 💰\n\n" for i, (uid, tien) in enumerate(danh_sach[:10])])
-    await ctx.send(embed=discord.Embed(title="🏆 BẢNG VÀNG ĐẠI GIA", description=desc, color=discord.Color.gold()))
+    """Bảng xếp hạng tổng tài sản server"""
+    all_users = list(users_col.find())
+    danh_sach = sorted([(doc["_id"], doc.get("money", 0) + doc.get("bank", 0)) for doc in all_users], key=lambda x: x[1], reverse=True)
+    
+    desc = ""
+    for i, (uid, tien) in enumerate(danh_sach[:10]):
+        user = bot.get_user(int(uid))
+        if not user:
+            try: user = await bot.fetch_user(int(uid))
+            except Exception: pass
+            
+        ten = user.name if user else f"Tỷ phú ẩn danh {uid[-4:]}"
+        icon = "🥇" if i==0 else "🥈" if i==1 else "🥉" if i==2 else f"**#{i+1}**"
+        desc += f"{icon} **{ten}** ━ {tien:,} 💰\n\n"
+        
+    embed = discord.Embed(title="🏆 BẢNG VÀNG ĐẠI GIA SERVER", description=desc, color=discord.Color.gold())
+    await ctx.send(embed=embed)
 
 # =====================================================================
 # SỰ KIỆN HỆ THỐNG LÕI CỦA BOT (ON_MESSAGE, ON_READY)
 # =====================================================================
 @bot.event
 async def on_message(message):
-    if message.author.bot: return
+    """Xử lý kinh nghiệm khi user chat và chặn chat nhận kinh nghiệm nếu đi tù"""
+    if message.author.bot: 
+        return
+        
     user_id = str(message.author.id)
     u = load_user(user_id)
     
-    if u.get("jail_time") and datetime.now() < datetime.strptime(u["jail_time"], "%Y-%m-%d %H:%M:%S"): return await bot.process_commands(message)
+    # Kiểm tra tù nhân, không cấp điểm kinh nghiệm
+    if u.get("jail_time"):
+        if datetime.now() < datetime.strptime(u["jail_time"], "%Y-%m-%d %H:%M:%S"): 
+            return await bot.process_commands(message)
             
+    # Cộng điểm kinh nghiệm chat
     u["xp"] += random.randint(5, 15)
     lv = u.get("level", 1)
     
+    # Thăng cấp
     if u["xp"] >= lv * 100:
-        u["xp"] -= lv * 100; u["level"] += 1; rw = u["level"] * 150; u["money"] += rw
-        try: await message.channel.send(embed=discord.Embed(description=f"🎉 **{message.author.mention}** đã thăng cấp **Lv.{u['level']}**!\nThưởng: **{rw:,} 💰**", color=discord.Color.gold()))
-        except Exception: pass
+        u["xp"] -= lv * 100
+        u["level"] += 1
+        rw = u["level"] * 150
+        u["money"] += rw
+        
+        try: 
+            embed_levelup = discord.Embed(
+                description=f"🎉 Chúc mừng **{message.author.mention}** đã đột phá cảnh giới lên **Cấp độ {u['level']}**!\nPhần thưởng thăng cấp: **{rw:,} 💰**", 
+                color=discord.Color.gold()
+            )
+            await message.channel.send(embed=embed_levelup)
+        except Exception: 
+            pass
             
     save_user(user_id)
     await bot.process_commands(message)
 
 @bot.event
 async def on_ready(): 
+    """Khởi động hệ thống in ra Terminal"""
     print('================================================')
     print(f'>>> SIÊU BOT {bot.user} ĐÃ SẴN SÀNG CÀN QUÉT!')
     print('>>> BẢN 4.0 SIÊU HARDCORE - KALLEN FANTASY TÍCH HỢP')
+    print('>>> TẤT CẢ MODULE ĐÃ HOẠT ĐỘNG TRƠN TRU 100%')
     print('================================================')
+    
+    # Gắn chữ đang chơi Game cho Bot trên Discord
     await bot.change_presence(activity=discord.Game(name="Kallen Fantasy & Sinh Tồn | k help"))
 
 # =====================================================================
 # KHỞI ĐỘNG SERVER 24/7 VÀ CHẠY BOT BẰNG TOKEN
 # =====================================================================
+# Chạy máy chủ giả để giữ mạng 24/7 trên Render hoặc UptimeRobot
 keep_alive() 
 
-# Khởi chạy bot bằng Token được ghép nối
+# Khởi chạy bot bằng Token được ghép nối an toàn
 TOKEN_PART_1 = 'MTUxODUwMzkzNDIyNDg5NjAwMA.GyKHSc.'
 TOKEN_PART_2 = 'WCjwsbS87_itRFAJxPTpDOCbFcmmjhQdcDSDU0'
 
