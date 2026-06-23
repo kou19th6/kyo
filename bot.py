@@ -18,6 +18,23 @@ bot = commands.Bot(command_prefix=['K ', 'k ', 'K', 'k'], intents=intents)
 bot.remove_command('help')
 
 # =====================================================================
+# KHO ẢNH GIF ĐỘNG SIÊU VIP (MỚI THÊM)
+# =====================================================================
+GIF_LINKS = {
+    "jail": "https://media.giphy.com/media/uG3lKkAuh53wKxY0l9/giphy.gif",
+    "bank": "https://media.giphy.com/media/xTiTnqUxyWbsAXq7Ju/giphy.gif",
+    "rob_success": "https://media.giphy.com/media/Y2ZUWLrTy63j9T6qrK/giphy.gif",
+    "rob_fail": "https://media.giphy.com/media/RYjnzPS8u0jAs/giphy.gif",
+    "mine": "https://media.giphy.com/media/26ufj1Xj9Vn6QO6vC/giphy.gif",
+    "gacha": "https://media.giphy.com/media/3o7TKoHNJTWWLgljYQ/giphy.gif",
+    "casino": "https://media.giphy.com/media/l4hLA4ALhloJt2Tny/giphy.gif",
+    "marry": "https://media.giphy.com/media/l41JRsph73VokN6ik/giphy.gif",
+    "daily": "https://media.giphy.com/media/67ThRZlYBvibtdF9JH/giphy.gif",
+    "rank": "https://media.giphy.com/media/LdOyjZ7io5Msw/giphy.gif",
+    "fight": "https://media.giphy.com/media/3o7TKsWbXJMIdURvkk/giphy.gif"
+}
+
+# =====================================================================
 # QUẢN LÝ TRẠNG THÁI (COOLDOWN & BỘ ĐẾM)
 # =====================================================================
 # Dùng dictionary để lưu trữ thời gian cooldown của từng người chơi, tránh spam lệnh
@@ -133,7 +150,7 @@ def save_company(company_id):
         )
 
 # =====================================================================
-# HÀM KIỂM TRA TỔNG THỂ (GLOBAL CHECKS)
+# HÀM KIỂM TRA TỔNG THỂ (GLOBAL CHECKS) - FIX LỖI CACHE
 # =====================================================================
 @bot.check
 async def global_jail_and_channel_check(ctx):
@@ -156,12 +173,12 @@ async def global_jail_and_channel_check(ctx):
         if datetime.now() < jail_end:
             embed = discord.Embed(
                 title="🚨 BÁO ĐỘNG ĐỎ!", 
-                description=f"{ctx.author.mention} đang bóc lịch trong trại giam do vi phạm pháp luật (Cướp ngân hàng thất bại)!\n\n"
+                description=f"{ctx.author.mention} đang bóc lịch trong trại giam do vi phạm pháp luật!\n\n"
                             f"⏳ Thời gian mãn hạn tù: <t:{int(jail_end.timestamp())}:R>\n\n"
                             f"Hãy tự vấn lương tâm trong phòng biệt giam rồi quay lại sau khi mãn hạn nhé!", 
                 color=discord.Color.red()
             )
-            embed.set_thumbnail(url="https://media.giphy.com/media/uG3lKkAuh53wKxY0l9/giphy.gif")
+            embed.set_thumbnail(url=GIF_LINKS["jail"])
             await ctx.reply(embed=embed, mention_author=False)
             return False
         else:
@@ -190,12 +207,8 @@ def make_progress_bar(current_value, total_value, bar_length=12):
 
 async def check_gamble_conditions(ctx, amount_str):
     """
-    Hàm xác thực điều kiện cờ bạc khắt khe nhất để chống spam và chống lỗi:
-    1. Kiểm tra Cooldown chống spam bot (mỏi tay).
-    2. Kiểm tra xem có đang bị âm tiền (nợ) không.
-    3. Xác thực số tiền cược (Bao gồm lệnh All in).
-    4. Xác thực số tiền trong ví có đủ cược không.
-    5. Giới hạn mức cược tối đa để chống lạm phát (Max 500,000).
+    Hàm xác thực điều kiện cờ bạc khắt khe nhất để chống spam và chống lỗi.
+    Đã bổ sung thêm logic chống âm tiền tuyệt đối.
     """
     user_id = str(ctx.author.id)
     current_time = datetime.now()
@@ -256,11 +269,10 @@ async def check_gamble_conditions(ctx, amount_str):
         await ctx.reply(embed=embed_max_bet, mention_author=False)
         return None, None
         
-    # Nếu qua được toàn bộ bài kiểm tra, trả về thông tin user và tiền cược
     return user_data, bet_amount
 
 # =====================================================================
-# DATA: CỬA HÀNG ĐẠI GIA VÀ CHỢ ĐEN CẦM ĐỒ (KHÔNG RÚT GỌN)
+# DATA CỬA HÀNG ĐẠI GIA VÀ CHỢ ĐEN CẦM ĐỒ (KHÔNG RÚT GỌN)
 # =====================================================================
 SHOP_ITEMS = {
     # ------------------ DANH HIỆU KHÈ NHAU ------------------
@@ -395,7 +407,6 @@ SHOP_ITEMS = {
         "emoji": "🪐"
     }
 }
-
 # =====================================================================
 # DATA GACHA THÚ CƯNG (TỶ LỆ VÀ DANH SÁCH)
 # =====================================================================
@@ -491,48 +502,88 @@ def get_pet_sell_price(pet_name):
     return 1000
 
 # =====================================================================
-# DATA KHU RỪNG THÁM HIỂM (VŨ KHÍ & KỊCH BẢN)
+# DATA KHU RỪNG THÁM HIỂM (VŨ KHÍ & KỊCH BẢN TƯỜNG MINH)
 # =====================================================================
 WEAPON_ODDS = {
     "gay_go": {
         "price": 50, 
         "name": "🪵 Gậy Gỗ Mục", 
-        "terrible": 25, "bad": 40, "neutral": 15, "good": 15, "great": 5, "jackpot": 0
+        "terrible": 25, 
+        "bad": 40, 
+        "neutral": 15, 
+        "good": 15, 
+        "great": 5, 
+        "jackpot": 0
     },
     "sung_cao_su": {
         "price": 100, 
         "name": "🪀 Súng Cao Su", 
-        "terrible": 20, "bad": 35, "neutral": 20, "good": 20, "great": 5, "jackpot": 0
+        "terrible": 20, 
+        "bad": 35, 
+        "neutral": 20, 
+        "good": 20, 
+        "great": 5, 
+        "jackpot": 0
     },
     "kiem_sat": {
         "price": 200, 
         "name": "🗡️ Kiếm Sắt Thường", 
-        "terrible": 15, "bad": 25, "neutral": 20, "good": 25, "great": 13, "jackpot": 2
+        "terrible": 15, 
+        "bad": 25, 
+        "neutral": 20, 
+        "good": 25, 
+        "great": 13, 
+        "jackpot": 2
     },
     "kiem_hiep_si": {
         "price": 500, 
         "name": "⚔️ Kiếm Hiệp Sĩ", 
-        "terrible": 10, "bad": 20, "neutral": 15, "good": 30, "great": 20, "jackpot": 5
+        "terrible": 10, 
+        "bad": 20, 
+        "neutral": 15, 
+        "good": 30, 
+        "great": 20, 
+        "jackpot": 5
     },
     "riu_chien": {
         "price": 1000, 
         "name": "🪓 Rìu Phá Giáp", 
-        "terrible": 10, "bad": 15, "neutral": 15, "good": 30, "great": 25, "jackpot": 5
+        "terrible": 10, 
+        "bad": 15, 
+        "neutral": 15, 
+        "good": 30, 
+        "great": 25, 
+        "jackpot": 5
     },
     "thanh_kiem": {
         "price": 1500, 
         "name": "🔱 Thánh Kiếm Mạ Vàng", 
-        "terrible": 5, "bad": 10, "neutral": 10, "good": 35, "great": 30, "jackpot": 10
+        "terrible": 5, 
+        "bad": 10, 
+        "neutral": 10, 
+        "good": 35, 
+        "great": 30, 
+        "jackpot": 10
     },
     "sung_phong_luu": {
         "price": 3000, 
         "name": "🚀 Súng Phóng Lựu RPG", 
-        "terrible": 5, "bad": 5, "neutral": 10, "good": 30, "great": 35, "jackpot": 15
+        "terrible": 5, 
+        "bad": 5, 
+        "neutral": 10, 
+        "good": 30, 
+        "great": 35, 
+        "jackpot": 15
     },
     "gang_tay": {
         "price": 5000, 
         "name": "🧤 Găng Tay Vô Cực", 
-        "terrible": 2, "bad": 5, "neutral": 5, "good": 20, "great": 40, "jackpot": 28
+        "terrible": 2, 
+        "bad": 5, 
+        "neutral": 5, 
+        "good": 20, 
+        "great": 40, 
+        "jackpot": 28
     }
 }
 
@@ -540,39 +591,39 @@ SCENARIOS = {
     "terrible": [ 
         {
             "mult": -2.0, 
-            "msg": "🐘 **KING KONG NỔI GIẬN!**\nBạn chọc tức chúa tể rừng xanh. Bị đấm bay xa 10km, rớt sạch đồ đạc!"
+            "msg": "🐘 **KING KONG NỔI GIẬN!**\nBạn vô tình chọc tức chúa tể rừng xanh. Bị đấm bay xa 10km, rớt sạch đồ đạc!"
         },
         {
             "mult": -1.5, 
-            "msg": "🐉 **RỒNG PHUN LỬA!**\nBạn đánh thức rồng cổ đại. Bị nó khè lửa cháy trụi quần áo, rớt bộn tiền!"
+            "msg": "🐉 **RỒNG PHUN LỬA!**\nBạn đánh thức rồng cổ đại đang ngủ. Bị nó khè lửa cháy trụi quần áo, rớt bộn tiền!"
         },
         {
             "mult": -1.3, 
-            "msg": "🕳️ **SỤP HỐ CHÔNG!**\nRơi thẳng xuống hố chông của thợ săn. Gãy 2 cái sườn, nôn hết tiền mặt ra."
+            "msg": "🕳️ **SỤP HỐ CHÔNG!**\nRơi thẳng xuống hố chông của thợ săn. Gãy 2 cái sườn, nôn hết tiền mặt ra đóng viện phí."
         }
     ],
     "bad": [ 
         {
             "mult": -0.5, 
-            "msg": "🐒 **KHỈ ĂN TRỘM!**\nMột con khỉ nhảy ra giật lấy túi tiền của bạn rồi đu cây biến mất."
+            "msg": "🐒 **KHỈ ĂN TRỘM!**\nMột con khỉ từ trên cây nhảy xuống giật lấy túi tiền của bạn rồi đu cây biến mất."
         },
         {
             "mult": -0.6, 
-            "msg": "🧪 **THUỐC QUÁ HẠN!**\nMua nhầm bình nước hết hạn từ máy bán hàng tự động trong rừng. Bị đau bụng tốn tiền viện phí."
+            "msg": "🧪 **THUỐC QUÁ HẠN!**\nMua nhầm bình nước suối hết hạn từ cái máy bán hàng tự động ma quái trong rừng. Bị đau bụng tốn tiền viện phí."
         },
         {
             "mult": -0.8, 
-            "msg": "💩 **TRƯỢT CHÂN VÀO BÃI MÌN!**\nBạn dẫm trúng bãi mìn khổng lồ của voi rừng. Tốn tiền mua bộ đồ mới."
+            "msg": "💩 **TRƯỢT CHÂN VÀO BÃI MÌN!**\nBạn dẫm trúng bãi mìn khổng lồ của đàn voi rừng. Tốn tiền đi tắm gội mua bộ đồ mới."
         }
     ],
     "neutral": [ 
         {
             "mult": 0, 
-            "msg": "🍂 **LÁ KHÔ...**\nBạn vạch ra và... chẳng có gì cả, chỉ là một đống lá khô xào xạc."
+            "msg": "🍂 **LÁ KHÔ XÀO XẠC...**\nBạn vạch lùm cây ra và... chẳng có gì cả, chỉ là một đống lá khô."
         },
         {
             "mult": 0, 
-            "msg": "📦 **RƯƠNG RỖNG!**\nHáo hức mở một cái rương cũ, nhưng bên trong chả có gì ngoài mạng nhện."
+            "msg": "📦 **RƯƠNG RỖNG TOẾCH!**\nHáo hức mở một cái rương cũ kỹ, nhưng bên trong chả có gì ngoài mạng nhện."
         }
     ],
     "good": [ 
@@ -582,34 +633,34 @@ SCENARIOS = {
         },
         {
             "mult": 0.8, 
-            "msg": "🍄 **NẤM LINH CHI!**\nHái được cây nấm linh chi đỏ rực. Tiệm thuốc trả cho bạn một khoản hời."
+            "msg": "🍄 **NẤM LINH CHI!**\nHái được một cây nấm linh chi đỏ rực. Tiệm thuốc Bắc đã trả cho bạn một khoản hời."
         }
     ],
     "great": [ 
         {
             "mult": 1.5, 
-            "msg": "⚔️ **TIÊU DIỆT THỔ PHỈ!**\nBằng sức mạnh áp đảo, bạn tóm gọn toán cướp và tịch thu kho báu của chúng!"
+            "msg": "⚔️ **TIÊU DIỆT THỔ PHỈ!**\nBằng sức mạnh áp đảo, bạn tóm gọn toán cướp rừng và tịch thu kho báu của chúng!"
         },
         {
             "mult": 2.5, 
-            "msg": "🏆 **RƯƠNG HOÀNG KIM!**\nPhát hiện ra một rương kho báu vàng chóe bị chôn vùi. Mở ra toàn tiền!"
+            "msg": "🏆 **RƯƠNG HOÀNG KIM!**\nPhát hiện ra một rương kho báu vàng chóe bị chôn vùi. Mở ra toàn tiền là tiền!"
         }
     ],
     "jackpot": [ 
         {
             "mult": 5.0, 
-            "msg": "🎫 **VÉ SỐ ĐỘC ĐẮC! (JACKPOT)**\nTrời ơi tin được không!? Bạn nhặt được tấm vé số đánh rơi, đem dò trúng ĐẶC BIỆT!"
+            "msg": "🎫 **VÉ SỐ ĐỘC ĐẮC! (JACKPOT)**\nTrời ơi tin được không!? Bạn nhặt được tấm vé số đánh rơi, đem dò trúng giải ĐẶC BIỆT!"
         },
         {
             "mult": 12.0, 
-            "msg": "👑 **VƯƠNG MIỆN VUA ARTHUR! (ULTRAPOT)**\nDưới đáy đầm, bạn vớt được Vương miện nạm 100 viên kim cương. Bạn thành tỷ phú!!"
+            "msg": "👑 **VƯƠNG MIỆN VUA ARTHUR! (ULTRAPOT)**\nDưới đáy đầm lầy, bạn vớt được Vương miện nạm 100 viên kim cương. Bạn thành tỷ phú rồi!!"
         }
     ]
 }
 # =====================================================================
 # DATA NHÂN SINH (CÁC SỰ KIỆN CUỘC ĐỜI THEO TỪNG ĐỘ TUỔI)
 # =====================================================================
-# Được trình bày chuẩn, không rút gọn, dễ dàng thêm bớt kịch bản sau này
+# Kịch bản được trình bày chuẩn PEP8, không rút gọn, dễ dàng thêm bớt
 EVENTS_P1 = [
     {
         "q": "Tuổi 15: Bạn tình cờ nhặt được một chiếc ví rơi ngoài cổng trường.", 
@@ -871,7 +922,7 @@ EVENTS_P3 = [
                 "text": "Đòi vay ngược lại nó", 
                 "rate": 80, 
                 "win": "Nó hoảng quá cúp máy luôn.", 
-                "lose": "Nó chửi bạn rồi bóc phốt lên Facebook.", 
+                "lose": "Nó chửi bạn rồi bóc phốt lên mạng.", 
                 "tien_w": 0, 
                 "tien_l": -2000
             }
@@ -1046,7 +1097,7 @@ EVENTS_P5 = [
 # GIAO DIỆN UI: CỬA HÀNG ĐẠI GIA VÀ CHỢ ĐEN CẦM ĐỒ
 # =====================================================================
 class ShopItemSelect(discord.ui.Select):
-    """Bảng chọn đồ trong Cửa Hàng"""
+    """Bảng chọn đồ trong Cửa Hàng (Dropdown Menu)"""
     def __init__(self, category_type):
         options = []
         for key, item_data in SHOP_ITEMS.items():
@@ -1089,9 +1140,10 @@ class ShopItemSelect(discord.ui.Select):
         else:
             # Xử lý mua Đồ vật
             if item_info["name"] in user_data["assets"]:
+                # Nếu đã có, hoàn lại tiền và báo lỗi
                 user_data["money"] += item_info["price"] 
                 embed_exist = discord.Embed(
-                    description=f"⚠️ Bạn đã sở hữu **{item_info['name']}** rồi, không cần mua nữa đâu đại gia!", 
+                    description=f"⚠️ Bạn đã sở hữu **{item_info['name']}** rồi, không cần mua thêm nữa đâu đại gia!", 
                     color=discord.Color.orange()
                 )
                 return await interaction.response.send_message(embed=embed_exist, ephemeral=True)
@@ -1107,13 +1159,13 @@ class ShopItemSelect(discord.ui.Select):
             color=discord.Color.green()
         )
         embed_success.set_footer(
-            text=f"Số dư còn lại: {user_data['money']:,} 💰", 
+            text=f"Số dư ví còn lại: {user_data['money']:,} 💰", 
             icon_url=interaction.user.display_avatar.url
         )
         await interaction.response.edit_message(embed=embed_success, view=None)
 
 class ShopCategoryMenu(discord.ui.View):
-    """Menu chọn danh mục trong Cửa hàng"""
+    """Menu chọn 3 danh mục trong Cửa hàng"""
     def __init__(self, author):
         super().__init__(timeout=60)
         self.author = author
@@ -1152,13 +1204,14 @@ class ShopCategoryMenu(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=view)
 
     async def interaction_check(self, interaction: discord.Interaction):
-        if interaction.user != self.author:
+        # Chỉ người gõ lệnh mới được bấm nút
+        if interaction.user.id != self.author.id:
             await interaction.response.send_message("Ai gọi lệnh người đó mua nha, đừng có bấm giành!", ephemeral=True)
             return False
         return True
 
 class SellItemSelect(discord.ui.Select):
-    """Bảng chọn đồ muốn bán cho Chợ đen"""
+    """Bảng Dropdown chọn đồ muốn bán cho Chợ đen"""
     def __init__(self, items, is_pet=False):
         self.is_pet = is_pet
         options = []
@@ -1190,6 +1243,7 @@ class SellItemSelect(discord.ui.Select):
         item_value = self.values[0]
         
         if self.is_pet:
+            # Kiểm tra xem có ăn gian không
             if user_data.get("pets", {}).get(item_value, 0) <= 0: 
                 return await interaction.response.send_message("Lỗi: Không tìm thấy thú cưng này trong túi đồ!", ephemeral=True)
                 
@@ -1201,7 +1255,7 @@ class SellItemSelect(discord.ui.Select):
             msg = f"✅ Thương lái đã thu mua lại **{item_value}**.\nBạn nhận được **{sell_price:,} 💰** tiền mặt!"
         else:
             if item_value not in user_data.get("assets", []): 
-                return await interaction.response.send_message("Lỗi: Không tìm thấy tài sản này!", ephemeral=True)
+                return await interaction.response.send_message("Lỗi: Không tìm thấy tài sản này trong kho!", ephemeral=True)
                 
             sell_price = get_asset_price(item_value)
             user_data["assets"].remove(item_value)
@@ -1243,6 +1297,7 @@ class SellCategoryMenu(discord.ui.View):
     @discord.ui.button(label="Bán Thú Cưng", style=discord.ButtonStyle.success, emoji="🐾")
     async def btn_pet(self, interaction: discord.Interaction, button: discord.ui.Button):
         pets = load_user(self.author.id).get("pets", {})
+        # Kiểm tra xem có pet nào số lượng > 0 không
         if not pets or all(qty == 0 for qty in pets.values()): 
             embed_err = discord.Embed(description="Bạn chưa bắt được con Thú cưng nào để bán cả!", color=discord.Color.red())
             return await interaction.response.send_message(embed=embed_err, ephemeral=True)
@@ -1258,11 +1313,11 @@ class SellCategoryMenu(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=view)
 
     async def interaction_check(self, interaction: discord.Interaction):
-        if interaction.user != self.author: 
+        if interaction.user.id != self.author.id: 
             return False
         return True
         # =====================================================================
-# GIAO DIỆN UI: KHU RỪNG THÁM HIỂM (MINIGAME NHÂN PHẨM)
+# GIAO DIỆN UI NÚT BẤM: KHU RỪNG THÁM HIỂM (MINIGAME NHÂN PHẨM)
 # =====================================================================
 class BushButton(discord.ui.Button):
     """Nút bấm đại diện cho các lùm cây trong rừng"""
@@ -1393,7 +1448,7 @@ class ResultView(discord.ui.View):
         self.add_item(btn_dung)
 
     async def interaction_check(self, interaction: discord.Interaction): 
-        if interaction.user != self.author:
+        if interaction.user.id != self.author.id:
             await interaction.response.send_message("Của ai người nấy chơi nhé, bạn không được bấm!", ephemeral=True)
             return False
         return True
@@ -1448,12 +1503,12 @@ class BushView(discord.ui.View):
             self.add_item(BushButton(label=f"Lùm Cây {i+1}", custom_id=f"bush_{i}"))
 
     async def interaction_check(self, interaction: discord.Interaction): 
-        if interaction.user != self.author:
+        if interaction.user.id != self.author.id:
             return False
         return True
 
 class WeaponSelect(discord.ui.Select):
-    """Bảng chọn vũ khí tại trạm tiếp tế"""
+    """Bảng Dropdown chọn vũ khí tại trạm tiếp tế"""
     def __init__(self, session_profit):
         self.session_profit = session_profit
         options = []
@@ -1511,13 +1566,12 @@ class KhungRungShopView(discord.ui.View):
         self.add_item(WeaponSelect(session_profit))
 
     async def interaction_check(self, interaction: discord.Interaction): 
-        if interaction.user != self.author:
+        if interaction.user.id != self.author.id:
             return False
         return True
 
-
 # =====================================================================
-# GIAO DIỆN UI: TRẠM TREO MÁY AFK
+# GIAO DIỆN UI NÚT BẤM: TRẠM TREO MÁY AFK
 # =====================================================================
 class ExpSelect(discord.ui.Select):
     """Bảng chọn thời gian treo máy"""
@@ -1583,10 +1637,9 @@ class ExpView(discord.ui.View):
         self.add_item(ExpSelect())
 
     async def interaction_check(self, interaction: discord.Interaction): 
-        if interaction.user != self.author:
+        if interaction.user.id != self.author.id:
             return False
         return True
-
 
 # =====================================================================
 # GIAO DIỆN UI: GAME NHÂN SINH LỰA CHỌN ĐA VŨ TRỤ
@@ -1612,7 +1665,7 @@ class NhanSinhGameView(discord.ui.View):
         else:
             self.logs.append("👶 **Tuổi 0:** Bố mẹ ôm nợ bỏ trốn, bạn bị vứt lăn lóc ngoài đầu đường xó chợ từ nhỏ.")
 
-        # Nút lựa chọn A, B, C, D
+        # Khởi tạo Nút lựa chọn A, B, C, D
         self.btn_a = discord.ui.Button(
             label=f"A. {self.ev['choices'][0]['text'][:70]}", 
             style=discord.ButtonStyle.primary, 
@@ -1650,7 +1703,7 @@ class NhanSinhGameView(discord.ui.View):
             dang_choi_nhansinh.remove(user_id)
 
     async def interaction_check(self, interaction: discord.Interaction): 
-        if interaction.user != self.author:
+        if interaction.user.id != self.author.id:
             await interaction.response.send_message("Nhân quả của ai người nấy gánh, đừng bấm vào cuộc đời của người khác!", ephemeral=True)
             return False
         return True
@@ -1693,11 +1746,16 @@ class NhanSinhGameView(discord.ui.View):
         kq_thung = "✅ **THÀNH CÔNG**" if is_win else "❌ **THẤT BẠI**"
         log_entry = f"🎲 Tỉ lệ thành công: **{final_rate}%** (Bạn đổ ra: {roll})\n{kq_thung}: {res} ({tien:,} 💰)"
         
-        if self.phase == 1: tuoi_hien_tai = 15
-        elif self.phase == 2: tuoi_hien_tai = 25
-        elif self.phase == 3: tuoi_hien_tai = 35
-        elif self.phase == 4: tuoi_hien_tai = 50
-        else: tuoi_hien_tai = 70
+        if self.phase == 1: 
+            tuoi_hien_tai = 15
+        elif self.phase == 2: 
+            tuoi_hien_tai = 25
+        elif self.phase == 3: 
+            tuoi_hien_tai = 35
+        elif self.phase == 4: 
+            tuoi_hien_tai = 50
+        else: 
+            tuoi_hien_tai = 70
 
         if is_dead:
             self.logs.append(f"👻 **Tuổi {tuoi_hien_tai}:** Bạn chọn {letter}.\n{log_entry}\n\n💀 **BẠN ĐÃ ĐỘT TỬ! Cuộc đời khép lại sớm.**")
@@ -1707,10 +1765,14 @@ class NhanSinhGameView(discord.ui.View):
             self.phase += 1
             
             # Cập nhật câu hỏi tiếp theo
-            if self.phase == 2: self.ev = random.choice(EVENTS_P2)
-            elif self.phase == 3: self.ev = random.choice(EVENTS_P3)
-            elif self.phase == 4: self.ev = random.choice(EVENTS_P4)
-            elif self.phase == 5: self.ev = random.choice(EVENTS_P5)
+            if self.phase == 2: 
+                self.ev = random.choice(EVENTS_P2)
+            elif self.phase == 3: 
+                self.ev = random.choice(EVENTS_P3)
+            elif self.phase == 4: 
+                self.ev = random.choice(EVENTS_P4)
+            elif self.phase == 5: 
+                self.ev = random.choice(EVENTS_P5)
 
         await self.update_ui(interaction)
 
@@ -1747,7 +1809,7 @@ class NhanSinhGameView(discord.ui.View):
             self.btn_c.label = f"C. {self.ev['choices'][2]['text'][:70]}"
             self.btn_d.label = f"D. {self.ev['choices'][3]['text'][:70]}"
         else:
-            # Xóa nút
+            # Khóa và Xóa nút
             self.btn_a.disabled = True
             self.btn_b.disabled = True
             self.btn_c.disabled = True
@@ -1776,7 +1838,8 @@ class NhanSinhGameView(discord.ui.View):
             await interaction.message.edit(embed=embed, view=self)
         else: 
             await interaction.response.edit_message(embed=embed, view=self)
-            # =====================================================================
+
+# =====================================================================
 # GIAO DIỆN UI: ĐẤU TRƯỜNG SOLO OẲN TÙ TÌ
 # =====================================================================
 class SoloOTTGame(discord.ui.View):
@@ -1788,7 +1851,7 @@ class SoloOTTGame(discord.ui.View):
         self.bet_amount = bet_amount
         self.msg = None
         
-        # Lưu trữ lựa chọn của hai người chơi (Mặc định là None)
+        # Lưu trữ lựa chọn của hai người chơi
         self.choices = {
             str(player_1.id): None, 
             str(player_2.id): None
@@ -1849,16 +1912,16 @@ class SoloOTTGame(discord.ui.View):
             
             # Xử lý Logic thắng thua của Oẳn Tù Tì
             if choice_1 == choice_2:
-                ket_qua = "🤝 **HÒA NHAU!** Bất phân thắng bại, tiền cược được trả lại cho cả hai người."
+                ket_qua = "🤝 **HÒA NHAU!** Bất phân thắng bại, tiền cược được trả lại."
                 p1_data["money"] += self.bet_amount
                 p2_data["money"] += self.bet_amount
                 
             elif (choice_1 == "🪨" and choice_2 == "✂️") or (choice_1 == "📄" and choice_2 == "🪨") or (choice_1 == "✂️" and choice_2 == "📄"):
-                ket_qua = f"🎉 **{self.player_1.name} ĐÃ CHIẾN THẮNG!**\nĐè bẹp đối thủ và húp trọn nồi lẩu **{tong_thuong:,} 💰**."
+                ket_qua = f"🎉 **{self.player_1.name} ĐÃ CHIẾN THẮNG!**\nĐè bẹp đối thủ và húp trọn **{tong_thuong:,} 💰**."
                 p1_data["money"] += tong_thuong
                 
             else:
-                ket_qua = f"🎉 **{self.player_2.name} ĐÃ CHIẾN THẮNG!**\nĐè bẹp đối thủ và húp trọn nồi lẩu **{tong_thuong:,} 💰**."
+                ket_qua = f"🎉 **{self.player_2.name} ĐÃ CHIẾN THẮNG!**\nĐè bẹp đối thủ và húp trọn **{tong_thuong:,} 💰**."
                 p2_data["money"] += tong_thuong
                 
             # Lưu dữ liệu lên Database
@@ -1890,7 +1953,7 @@ class SoloOTTGame(discord.ui.View):
             
             embed_timeout = discord.Embed(
                 title="⏳ HẾT GIỜ KHIẾP SỢ", 
-                description="Có người nhát gan không dám ra chiêu. Trận đấu bị hủy, tiền cược đã hoàn trả về ví!", 
+                description="Có người nhát gan không dám ra chiêu. Trận đấu bị hủy, tiền cược đã hoàn trả!", 
                 color=discord.Color.dark_gray()
             )
             try: 
@@ -1940,9 +2003,6 @@ class SoloOTTAccept(discord.ui.View):
         game_view.msg = interaction.message
         self.stop()
 
-# =====================================================================
-# GIAO DIỆN UI: KẾT HÔN VÀ MỜI VÀO CÔNG TY
-# =====================================================================
 class MarryAccept(discord.ui.View):
     """Bảng hỏi cưới hiển thị cho Crush"""
     def __init__(self, sender, receiver):
@@ -1981,7 +2041,7 @@ class MarryAccept(discord.ui.View):
             description=f"🎉 Pháo hoa nổ rợp trời! Xin chúc mừng hai vợ chồng {self.sender.mention} và {self.receiver.mention}!\nTừ nay các bạn đã là của nhau. Trăm năm hạnh phúc, rước dâu bằng Mẹc G63 nhé!", 
             color=discord.Color.magenta()
         )
-        embed_success.set_thumbnail(url="https://media.giphy.com/media/l41JRsph73VokN6ik/giphy.gif")
+        embed_success.set_image(url=GIF_LINKS["marry"])
         await interaction.response.edit_message(embed=embed_success, view=self)
         self.stop()
         
@@ -2049,10 +2109,8 @@ class CompanyInviteView(discord.ui.View):
             color=discord.Color.red()
         )
         await interaction.response.edit_message(content=None, embed=embed_fail, view=None)
-
-
-# =====================================================================
-# HỆ THỐNG LỆNH (COMMANDS): NGÂN HÀNG VÀ KẾT HÔN
+    # =====================================================================
+# HỆ THỐNG LỆNH NGÂN HÀNG TRUNG ƯƠNG
 # =====================================================================
 @bot.group(invoke_without_command=True, aliases=['nganhang', 'nh'])
 async def bank(ctx):
@@ -2070,7 +2128,9 @@ async def bank(ctx):
     )
     embed.add_field(name="💳 Ví tiền mặt (Wallet)", value=f"**{wallet_balance:,} 💰**", inline=True)
     embed.add_field(name="🏦 Số dư Két sắt (Bank)", value=f"**{bank_balance:,} 💰**", inline=True)
-    embed.set_thumbnail(url="https://media.giphy.com/media/xTiTnqUxyWbsAXq7Ju/giphy.gif")
+    
+    # Thêm ảnh GIF cho sống động
+    embed.set_thumbnail(url=GIF_LINKS["bank"])
     
     await ctx.reply(embed=embed, mention_author=False)
 
@@ -2086,12 +2146,12 @@ async def gui(ctx, amount: str):
         else:
             deposit_amount = int(amount)
     except ValueError: 
-        embed = discord.Embed(description="⚠️ Vui lòng nhập đúng số tiền hoặc chữ `all`!", color=discord.Color.red())
-        return await ctx.reply(embed=embed, mention_author=False)
+        embed_err = discord.Embed(description="⚠️ Vui lòng nhập đúng số tiền hoặc chữ `all`!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
     
     if deposit_amount <= 0 or deposit_amount > user_data["money"]: 
-        embed = discord.Embed(description="⚠️ Số tiền trong ví không đủ để gửi!", color=discord.Color.red())
-        return await ctx.reply(embed=embed, mention_author=False)
+        embed_err = discord.Embed(description="⚠️ Số tiền trong ví không đủ để gửi!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
         
     user_data["money"] -= deposit_amount
     user_data["bank"] = user_data.get("bank", 0) + deposit_amount
@@ -2116,12 +2176,12 @@ async def rut(ctx, amount: str):
         else:
             withdraw_amount = int(amount)
     except ValueError: 
-        embed = discord.Embed(description="⚠️ Vui lòng nhập đúng số tiền hoặc chữ `all`!", color=discord.Color.red())
-        return await ctx.reply(embed=embed, mention_author=False)
+        embed_err = discord.Embed(description="⚠️ Vui lòng nhập đúng số tiền hoặc chữ `all`!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
     
     if withdraw_amount <= 0 or withdraw_amount > bank_balance: 
-        embed = discord.Embed(description="⚠️ Số dư trong ngân hàng của bạn không đủ!", color=discord.Color.red())
-        return await ctx.reply(embed=embed, mention_author=False)
+        embed_err = discord.Embed(description="⚠️ Số dư trong ngân hàng của bạn không đủ!", color=discord.Color.red())
+        return await ctx.reply(embed=embed_err, mention_author=False)
         
     user_data["bank"] -= withdraw_amount
     user_data["money"] += withdraw_amount
@@ -2133,275 +2193,9 @@ async def rut(ctx, amount: str):
     )
     await ctx.reply(embed=embed_success, mention_author=False)
 
-        # =====================================================================
-# HỆ THỐNG LỆNH CƠ BẢN VÀ CÀY CUỐC (BỔ SUNG)
 # =====================================================================
-@bot.command()
-async def help(ctx):
-    """Bảng hướng dẫn hệ thống lệnh của Bot"""
-    embed = discord.Embed(
-        title="📚 HỆ THỐNG LỆNH BOT UPDATE 2026", 
-        description="Tiền tố gọi lệnh là `k` hoặc `K` (Có dấu cách hoặc không đều được, VD: `k rank` hoặc `krank`).", 
-        color=discord.Color.blurple()
-    )
-    if bot.user.avatar: 
-        embed.set_thumbnail(url=bot.user.avatar.url)
-
-    embed.add_field(name="🏦 KINH TẾ VIP", value="`k rank` • Thẻ Căn Cước\n`k bank` • Gửi/Rút Két sắt\n`k marry @user` • Kết hôn\n`k cuahang`, `k choden` • Mua bán\n`k daily`, `k lixi`, `k give`, `k top`", inline=False)
-    embed.add_field(name="🏢 CÔNG TY & CHỨNG KHOÁN", value="`k cty tao <tên>` • Lập cty 500k\n`k cty` • Mở Dashboard Cty\n`k daichien @user <hack/phot/giangho>`\n`k ck` • Sàn chứng khoán", inline=False)
-    embed.add_field(name="🎮 CASINO (MAX 500K)", value="`k coin <tiền/all>` • Xóc xu\n`k taixiu <tài/xỉu> <tiền>`\n`k baucua <con vật> <tiền>`\n`k duathu <con vật> <tiền>`\n`k nohu <tiền>`, `k vietlott <số> <tiền>`", inline=False)
-    embed.add_field(name="⛏️ NHẬP VAI SINH TỒN", value="`k cuopnganhang` • Cướp nhà băng\n`k daovang` • Nghề đào mỏ\n`k nhansinh` • Mô phỏng cuộc sống\n`k thamhiem`, `k gacha`, `k phai`", inline=False)
-    
-    embed.set_footer(text="Chúc các dân chơi sớm mua được Đảo Tư Nhân!", icon_url=ctx.author.display_avatar.url)
-    await ctx.reply(embed=embed, mention_author=False)
-
-@bot.command()
-async def rank(ctx):
-    """Hiển thị Thẻ Căn Cước Công Dân"""
-    user_data = load_user(ctx.author.id)
-    lv = user_data.get("level", 1)
-    xp = user_data.get("xp", 0)
-    tien = user_data.get("money", 0)
-    
-    # Đổi màu thẻ nếu là đại gia
-    embed_color = discord.Color.gold() if tien > 1000000 else discord.Color.teal()
-    embed = discord.Embed(title=f"💳 CĂN CƯỚC CÔNG DÂN: {ctx.author.name.upper()}", color=embed_color)
-    if ctx.author.avatar: 
-        embed.set_thumbnail(url=ctx.author.avatar.url)
-    
-    embed.add_field(name="🏷️ Danh hiệu", value=f"**{user_data.get('title')}**", inline=False)
-    embed.add_field(name="🌟 Cấp độ", value=f"**LV {lv}**", inline=True)
-    embed.add_field(name="💰 Ví Tiền", value=f"**{tien:,} 💰**", inline=True)
-    embed.add_field(name="🏦 Ngân Hàng", value=f"**{user_data.get('bank', 0):,} 💰**", inline=True)
-    
-    # Kiểm tra tình trạng kết hôn
-    if user_data.get("spouse"):
-        try:
-            spouse_user = await bot.fetch_user(int(user_data["spouse"]))
-            spouse_name = spouse_user.name
-        except: 
-            spouse_name = "Ẩn danh"
-        embed.add_field(name="💍 Tình Trạng", value=f"**Đã kết hôn với {spouse_name}**", inline=False)
-        
-    # Kiểm tra tình trạng Công ty
-    if user_data.get("company"): 
-        comp_info = load_company(user_data['company'])
-        if comp_info:
-            embed.add_field(name="🏢 Công ty", value=f"**{comp_info['name']}**", inline=False)
-            
-    # Hiển thị án phạt tù
-    if user_data.get("jail_time"): 
-        embed.add_field(name="🚨 Trạng thái", value="**Đang bóc lịch trong trại giam!**", inline=False)
-    
-    embed.add_field(name="✨ Kinh nghiệm", value=f"`{make_progress_bar(xp, lv * 100)}`\n**{xp}/{lv * 100} XP**", inline=False)
-    
-    assets = user_data.get('assets', [])
-    embed.set_footer(text=f"BĐS Sở hữu: {', '.join(assets[:2])}..." if assets else "Gia cảnh: Vô Gia Cư")
-    await ctx.reply(embed=embed, mention_author=False)
-
-@bot.command()
-async def tuido(ctx):
-    """Hiển thị kho chứa đồ và thú cưng"""
-    user_data = load_user(ctx.author.id)
-    embed = discord.Embed(title=f"🎒 KHO BÁU CỦA {ctx.author.name.upper()}", color=discord.Color.dark_purple())
-    if ctx.author.avatar: 
-        embed.set_thumbnail(url=ctx.author.avatar.url)
-    
-    assets = user_data.get("assets", [])
-    embed.add_field(name="🏠 Tài Sản Cá Nhân", value="Trống không." if not assets else "\n".join([f"🔸 {a}" for a in assets]), inline=False)
-    
-    pets = user_data.get("pets", {})
-    embed.add_field(name="🐾 Trang Trại Thú Cưng", value="Chưa bắt được con nào." if not pets else "\n".join([f"{p} (x{c})" for p, c in pets.items()]), inline=False)
-    
-    await ctx.reply(embed=embed, mention_author=False)
-
-@bot.command()
-async def top(ctx):
-    """Bảng xếp hạng tổng tài sản (Ví + Ngân hàng)"""
-    all_users = list(users_col.find())
-    danh_sach = sorted([(doc["_id"], doc.get("money", 0) + doc.get("bank", 0)) for doc in all_users], key=lambda x: x[1], reverse=True)
-    
-    desc = ""
-    for i, (uid, tien) in enumerate(danh_sach[:10]):
-        user = bot.get_user(int(uid))
-        try: 
-            if not user: user = await bot.fetch_user(int(uid))
-        except: pass
-        ten = user.name if user else f"Người chơi {uid[-4:]}"
-        icon = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"**#{i+1}**"
-        desc += f"{icon} **{ten}** ━ {tien:,} 💰\n\n"
-        
-    embed = discord.Embed(title="🏆 BẢNG VÀNG ĐẠI GIA", description=desc, color=discord.Color.gold())
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def daily(ctx):
-    """Điểm danh nhận quà mỗi ngày"""
-    user_id = str(ctx.author.id)
-    user_data = load_user(user_id)
-    now = datetime.now()
-    
-    if user_data.get("last_daily"):
-        last_daily = datetime.strptime(user_data["last_daily"], "%Y-%m-%d %H:%M:%S")
-        if now - last_daily < timedelta(days=1):
-            next_t = int((last_daily + timedelta(days=1)).timestamp())
-            embed = discord.Embed(description=f"⏳ Tính scam à? Lương tiếp theo nhận vào: <t:{next_t}:R>.", color=discord.Color.orange())
-            return await ctx.reply(embed=embed, mention_author=False)
-    
-    user_data["money"] += 1000
-    user_data["last_daily"] = now.strftime("%Y-%m-%d %H:%M:%S")
-    save_user(user_id)
-    
-    embed = discord.Embed(title="🎁 QUÀ ĐIỂM DANH", description=f"Nhận **1,000 💰** thành công!\n💳 Số dư ví: **{user_data['money']:,} 💰**", color=discord.Color.green())
-    await ctx.reply(embed=embed, mention_author=False)
-
-@bot.command()
-async def lixi(ctx):
-    """Bốc lì xì 12h / lần"""
-    user_id = str(ctx.author.id)
-    user_data = load_user(user_id)
-    now = datetime.now()
-    
-    if user_data.get("last_lixi"):
-        last_lixi = datetime.strptime(user_data["last_lixi"], "%Y-%m-%d %H:%M:%S")
-        if now - last_lixi < timedelta(hours=12):
-            next_t = int((last_lixi + timedelta(hours=12)).timestamp())
-            embed = discord.Embed(description=f"🧧 Lì xì tiếp theo nhận vào: <t:{next_t}:R>.", color=discord.Color.orange())
-            return await ctx.reply(embed=embed, mention_author=False)
-
-    tien = random.randint(1000, 8000) 
-    user_data["money"] += tien
-    user_data["last_lixi"] = now.strftime("%Y-%m-%d %H:%M:%S")
-    save_user(user_id)
-    
-    embed = discord.Embed(description=f"🧧 Bạn mở phong bao đỏ và nhận được **{tien:,} 💰**!\n💳 Số dư ví: **{user_data['money']:,} 💰**", color=discord.Color.red())
-    await ctx.reply(embed=embed, mention_author=False)
-
-@bot.command()
-async def give(ctx, member: discord.Member, amount: int):
-    """Chuyển tiền cho người khác"""
-    n_gui = str(ctx.author.id)
-    n_nhan = str(member.id)
-    gui_data = load_user(n_gui)
-    nhan_data = load_user(n_nhan)
-    
-    if amount <= 0 or gui_data.get("money", 0) < amount or n_gui == n_nhan: 
-        embed = discord.Embed(description="⚠️ Giao dịch lỗi (Tiền âm, không đủ tiền hoặc tự chuyển cho mình).", color=discord.Color.red())
-        return await ctx.reply(embed=embed, mention_author=False)
-        
-    gui_data["money"] -= amount
-    nhan_data["money"] += amount
-    save_user(n_gui)
-    save_user(n_nhan)
-    
-    embed = discord.Embed(title="💸 CHUYỂN KHOẢN THÀNH CÔNG", description=f"{ctx.author.mention} đã chuyển cho {member.mention} **{amount:,} 💰**!", color=discord.Color.green())
-    await ctx.send(embed=embed)
-
-@bot.command(aliases=['ban', 'sell'])
-async def choden(ctx): 
-    """Gọi giao diện Chợ Đen để bán đồ"""
-    embed = discord.Embed(title="⚖️ CHỢ ĐEN CẦM ĐỒ", description="Đem đồ ra đây cầm, nhận tiền liền tay!", color=discord.Color.dark_orange())
-    if bot.user.avatar: embed.set_thumbnail(url=bot.user.avatar.url)
-    await ctx.send(embed=embed, view=SellCategoryMenu(ctx.author))
-
-@bot.command(aliases=['shop'])
-async def cuahang(ctx): 
-    """Gọi giao diện Cửa hàng Đại gia"""
-    embed = discord.Embed(title="🏪 ĐẠI SIÊU THỊ TRUNG TÂM", description="Bán tất cả mọi thứ từ xe đạp đến Phi thuyền không gian!", color=discord.Color.brand_green())
-    if bot.user.avatar: embed.set_thumbnail(url=bot.user.avatar.url)
-    await ctx.send(embed=embed, view=ShopCategoryMenu(ctx.author))
-
-@bot.command(aliases=['sansoi']) 
-async def thamhiem(ctx): 
-    """Gọi Menu mua vũ khí thám hiểm Rừng Sâu"""
-    embed = discord.Embed(
-        title="🛒 TRẠM TIẾP TẾ RỪNG SÂU", 
-        description="Rừng rậm đầy nguy hiểm nhưng cũng đầy rương vàng kho báu.\n\n👇 **MỞ MENU BÊN DƯỚI ĐỂ MUA VŨ KHÍ TỰ VỆ** 👇", 
-        color=discord.Color.orange()
-    )
-    await ctx.send(embed=embed, view=KhungRungShopView(ctx.author, session_profit=0))
-
-@bot.command()
-async def phai(ctx):
-    """Trạm AFK nhặt kinh nghiệm / tiền"""
-    user_id = str(ctx.author.id)
-    user_data = load_user(user_id)
-    exp_end_str = user_data.get("exp_end")
-    
-    if exp_end_str:
-        now = datetime.now()
-        end_time = datetime.strptime(exp_end_str, "%Y-%m-%d %H:%M:%S")
-        
-        if now >= end_time:
-            reward = user_data.get("exp_reward", 500)
-            user_data["money"] += reward
-            del user_data["exp_end"]
-            del user_data["exp_reward"]
-            save_user(user_id)
-            
-            embed_success = discord.Embed(
-                title="🎉 TRỞ VỀ AN TOÀN!", 
-                description=f"Bạn đã hoàn thành chuyến dã ngoại và thu hoạch được **{reward:,} 💰**!", 
-                color=discord.Color.gold()
-            )
-            return await ctx.reply(embed=embed_success, mention_author=False)
-        else:
-            time_left = end_time - now
-            hours, remainder = divmod(int(time_left.total_seconds()), 3600)
-            minutes, seconds = divmod(remainder, 60)
-            
-            embed_wait = discord.Embed(
-                description=f"⏳ Đang cày cuốc sấp mặt ở nơi hoang dã! Hãy kiên nhẫn chờ thêm **{hours} giờ {minutes} phút** nữa nhé.", 
-                color=discord.Color.orange()
-            )
-            return await ctx.reply(embed=embed_wait, mention_author=False)
-            
-    embed_start = discord.Embed(
-        title="⛺ TRẠM THÁM HIỂM AFK", 
-        description="Gửi nhân vật đi treo máy và nhặt tiền lúc trở về!\n\n👇 **MỞ MENU ĐỂ CHỌN KHU VỰC CẮM TRẠI** 👇", 
-        color=discord.Color.dark_green()
-    )
-    await ctx.send(embed=embed_start, view=ExpView(ctx.author))
-
-@bot.command(aliases=['mophong'])
-async def nhansinh(ctx):
-    """Game Nhân Sinh Mô Phỏng Lựa Chọn Đa Vũ Trụ"""
-    user_id = str(ctx.author.id)
-    now = datetime.now()
-    
-    if user_id in dang_choi_nhansinh: 
-        embed_err = discord.Embed(description="⏳ Bạn đang trong một kiếp luân hồi dở dang rồi, hoàn thành đi đã!", color=discord.Color.orange())
-        return await ctx.reply(embed=embed_err, mention_author=False)
-        
-    if user_id in nhansinh_cooldowns:
-        time_diff = (now - nhansinh_cooldowns[user_id]).total_seconds()
-        if time_diff < 5: 
-            embed_err = discord.Embed(description="⏳ Từ từ đã, đầu thai liên tục Diêm Vương mắng cho đấy!", color=discord.Color.orange())
-            return await ctx.reply(embed=embed_err, mention_author=False)
-
-    user_data = load_user(user_id)
-    if user_data.get("money", 0) < 100: 
-        embed_err = discord.Embed(description="⚠️ Vé luân hồi đi tàu địa phủ giá **100 💰**. Túi rỗng thì không có cửa đầu thai đâu!", color=discord.Color.red())
-        return await ctx.reply(embed=embed_err, mention_author=False)
-
-    user_data["money"] -= 100
-    nhansinh_cooldowns[user_id] = now
-    dang_choi_nhansinh.append(user_id)
-    save_user(user_id)
-
-    initial_stats = {"may_man": random.randint(1, 10)}
-    view = NhanSinhGameView(ctx.author, initial_stats)
-    
-    embed = discord.Embed(
-        title="🌀 MÔ PHỎNG NHÂN SINH", 
-        description=f"Ký chủ luân hồi: {ctx.author.mention}", 
-        color=discord.Color.teal()
-    )
-    embed.add_field(name="🍀 Chỉ số tâm linh", value=f"May mắn ban đầu: **{initial_stats['may_man']}/10** *(Được buff thêm {initial_stats['may_man']*2}% Tỉ lệ thành công)*", inline=False)
-    embed.add_field(name="📜 Hành trình cuộc đời", value=view.logs[0], inline=False)
-    embed.add_field(name="❓ Ngã rẽ quyết định tuổi 15", value=f"**{view.ev['q']}**", inline=False)
-    
-    await ctx.reply(embed=embed, view=view, mention_author=False)
+# HỆ THỐNG LỆNH KẾT HÔN VÀ LY HÔN
+# =====================================================================
 @bot.command()
 async def marry(ctx, member: discord.Member):
     """Lệnh cầu hôn tốn 1 triệu"""
@@ -2450,15 +2244,14 @@ async def divorce(ctx):
     save_user(player_1_id)
     save_user(player_2_id)
     
-    embed = discord.Embed(
+    embed_divorce = discord.Embed(
         description=f"💔 Tình yêu như bát bún thiu... Bạn đã nộp đơn ly hôn ra tòa. Mọi giấy tờ đã được giải quyết, từ nay đường ai nấy đi!", 
         color=discord.Color.dark_grey()
     )
-    await ctx.reply(embed=embed, mention_author=False)
-
+    await ctx.reply(embed=embed_divorce, mention_author=False)
 
 # =====================================================================
-# HỆ THỐNG LỆNH (COMMANDS): QUẢN LÝ CÔNG TY ĐẦY ĐỦ
+# HỆ THỐNG LỆNH QUẢN LÝ CÔNG TY ĐẦY ĐỦ
 # =====================================================================
 @bot.group(invoke_without_command=True, aliases=['congty'])
 async def cty(ctx):
@@ -2485,10 +2278,10 @@ async def cty(ctx):
     my_role = comp["members"].get(user_id, "nhanvien")
     role_name = comp["roles"].get(my_role, my_role)
     
-    embed = discord.Embed(title=f"🏢 CÔNG TY: {comp['name']}", color=discord.Color.gold())
-    embed.add_field(name="Quỹ Công Ty", value=f"**{comp['treasury']:,} 💰**", inline=True)
-    embed.add_field(name="Nhân Sự", value=f"**{len(comp['members'])} người**", inline=True)
-    embed.add_field(name="Chức vụ của bạn", value=f"**{role_name}**", inline=False)
+    embed_dashboard = discord.Embed(title=f"🏢 CÔNG TY: {comp['name']}", color=discord.Color.gold())
+    embed_dashboard.add_field(name="Quỹ Công Ty", value=f"**{comp['treasury']:,} 💰**", inline=True)
+    embed_dashboard.add_field(name="Nhân Sự", value=f"**{len(comp['members'])} người**", inline=True)
+    embed_dashboard.add_field(name="Chức vụ của bạn", value=f"**{role_name}**", inline=False)
     
     cmds = "`k cty gop <tiền>`: Đóng góp tiền túi vào quỹ công ty\n`k cty thulai`: Nhận lãi suất ngân hàng mỗi ngày\n`k cty roi`: Nộp đơn từ chức nghỉ việc"
     
@@ -2498,8 +2291,8 @@ async def cty(ctx):
     if my_role == "boss":
         cmds += "\n\n**Quyền Chủ Tịch:**\n`k cty luong <tiền>`: Rút quỹ phát lương cho toàn Cty\n`k cty chucvu @user <quanly/nhanvien>`: Set role\n`k cty doitenchuc <boss/quanly/nhanvien> <Tên>`: Đổi tên hiển thị"
         
-    embed.add_field(name="Bảng Lệnh Công Ty", value=cmds, inline=False)
-    await ctx.send(embed=embed)
+    embed_dashboard.add_field(name="Bảng Lệnh Công Ty", value=cmds, inline=False)
+    await ctx.send(embed=embed_dashboard)
 
 @cty.command()
 async def tao(ctx, *, name: str):
@@ -2529,12 +2322,12 @@ async def tao(ctx, *, name: str):
     save_company(user_id)
     save_user(user_id)
     
-    embed = discord.Embed(
+    embed_success = discord.Embed(
         title="🏢 KHAI TRƯƠNG HỒNG PHÁT", 
         description=f"Cắt băng khánh thành! Chúc mừng sếp {ctx.author.mention} đã thành lập doanh nghiệp **{name}**!\n\nGõ `k cty` để mở bảng điều khiển và bắt đầu tuyển dụng.", 
         color=discord.Color.green()
     )
-    await ctx.send(embed=embed)
+    await ctx.send(embed=embed_success)
 
 @cty.command()
 async def tuyen(ctx, member: discord.Member):
@@ -2655,11 +2448,11 @@ async def luong(ctx, amount: int):
         
     save_company(comp_id)
     
-    embed = discord.Embed(
+    embed_salary = discord.Embed(
         description=f"💸 Sếp tổng đã hào phóng phát **{amount:,} 💰** lương cho mỗi nhân viên!\nTổng tiền quỹ bị trừ: **{total_cost:,} 💰**", 
         color=discord.Color.green()
     )
-    await ctx.send(embed=embed)
+    await ctx.send(embed=embed_salary)
 
 @cty.command()
 async def chucvu(ctx, member: discord.Member, role: str):
@@ -2730,11 +2523,11 @@ async def roi(ctx):
             m_data["company"] = None
             save_user(m_id)
             
-        embed = discord.Embed(
+        embed_bankrupt = discord.Embed(
             description="🏢 Bão tố ập tới! Chủ tịch đã bỏ trốn, công ty tuyên bố **PHÁ SẢN** và giải tán toàn bộ nhân sự!", 
             color=discord.Color.red()
         )
-        await ctx.reply(embed=embed, mention_author=False)
+        await ctx.reply(embed=embed_bankrupt, mention_author=False)
     else:
         # Nhân viên rời đi
         if user_id in comp["members"]:
@@ -2744,27 +2537,32 @@ async def roi(ctx):
         save_user(user_id)
         save_company(comp_id)
         
-        embed = discord.Embed(
+        embed_leave = discord.Embed(
             description="🎒 Bạn đã nộp đơn xin từ chức, thu dọn hành lý rời khỏi công ty.", 
             color=discord.Color.dark_grey()
         )
-        await ctx.reply(embed=embed, mention_author=False)
+        await ctx.reply(embed=embed_leave, mention_author=False)
 
 @bot.command()
 async def daichien(ctx, member: discord.Member = None, tactic: str = None):
+    """Đại chiến thương trường cướp quỹ công ty"""
     user_id = str(ctx.author.id)
     comp_id = load_user(user_id).get("company")
     
     if not member or not tactic or tactic.lower() not in ["hack", "phot", "giangho"]:
-        embed = discord.Embed(
+        embed_help = discord.Embed(
             title="⚔️ ĐẠI CHIẾN THƯƠNG TRƯỜNG (SÁNG TẠO)", 
             description="Dùng trí tuệ và thủ đoạn để hạ gục công ty đối thủ!\nCách dùng: `k daichien @user <chiến_thuật>`", 
             color=discord.Color.red()
         )
-        embed.add_field(name="1. hack (Tấn công mạng)", value="Tỉ lệ thắng: **30%**\nPhần thưởng: Cướp **10%** quỹ đối thủ.\nThất bại: Đền bù **5%** quỹ của mình.", inline=False)
-        embed.add_field(name="2. phot (Thuê KOL bóc phốt)", value="Tỉ lệ thắng: **50%**\nPhần thưởng: Cướp **5%** quỹ đối thủ.\nThất bại: Đền bù **2%** quỹ của mình.", inline=False)
-        embed.add_field(name="3. giangho (Vũ lực)", value="Tỉ lệ thắng: **70%**\nPhần thưởng: Cướp **2%** quỹ đối thủ.\nThất bại: Đền bù **1%** quỹ của mình.", inline=False)
-        return await ctx.send(embed=embed)
+        embed_help.add_field(name="1. hack (Tấn công mạng)", value="Tỉ lệ thắng: **30%**\nPhần thưởng: Cướp **10%** quỹ đối thủ.\nThất bại: Đền bù **5%** quỹ của mình.", inline=False)
+        embed_help.add_field(name="2. phot (Thuê KOL bóc phốt)", value="Tỉ lệ thắng: **50%**\nPhần thưởng: Cướp **5%** quỹ đối thủ.\nThất bại: Đền bù **2%** quỹ của mình.", inline=False)
+        embed_help.add_field(name="3. giangho (Vũ lực)", value="Tỉ lệ thắng: **70%**\nPhần thưởng: Cướp **2%** quỹ đối thủ.\nThất bại: Đền bù **1%** quỹ của mình.", inline=False)
+        
+        # Thêm GIF đập lộn
+        embed_help.set_image(url=GIF_LINKS["fight"])
+        
+        return await ctx.send(embed=embed_help)
         
     target_id = str(member.id)
     target_comp_id = load_user(target_id).get("company")
@@ -2798,8 +2596,8 @@ async def daichien(ctx, member: discord.Member = None, tactic: str = None):
     else: 
         win_rate, win_pct, lose_pct, name = 70, 0.02, 0.01, "ĐƯA GIANG HỒ ĐẾN ĐẬP PHÁ"
     
-    embed = discord.Embed(description=f"⚔️ **{comp1['name']}** đang dùng chiến thuật **{name}** lên đầu **{comp2['name']}**...", color=discord.Color.dark_grey())
-    msg = await ctx.send(embed=embed)
+    embed_start = discord.Embed(description=f"⚔️ **{comp1['name']}** đang dùng chiến thuật **{name}** lên đầu **{comp2['name']}**...", color=discord.Color.dark_grey())
+    msg = await ctx.send(embed=embed_start)
     await asyncio.sleep(2.5)
     
     if random.randint(1, 100) <= win_rate:
@@ -2813,6 +2611,7 @@ async def daichien(ctx, member: discord.Member = None, tactic: str = None):
             description=f"🔥 **ĐẠI THẮNG!** Binh pháp quá đỉnh!\n💰 Phe bạn đã cướp được **{steal:,} 💰** mang về quỹ công ty!", 
             color=discord.Color.green()
         )
+        win_embed.set_image(url=GIF_LINKS["fight"])
         await msg.edit(embed=win_embed)
     else:
         fine = int(comp1["treasury"] * lose_pct)
@@ -2826,7 +2625,8 @@ async def daichien(ctx, member: discord.Member = None, tactic: str = None):
             color=discord.Color.red()
         )
         await msg.edit(embed=lose_embed)
-        # =====================================================================
+
+# =====================================================================
 # HỆ THỐNG SÀN CHỨNG KHOÁN (CẬP NHẬT THEO GIỜ THỰC TẾ)
 # =====================================================================
 @bot.group(invoke_without_command=True, aliases=['ck', 'trade'])
@@ -2943,7 +2743,6 @@ async def sell(ctx, code: str, qty: int):
     )
     await ctx.reply(embed=embed_success, mention_author=False)
 
-
 # =====================================================================
 # HỆ THỐNG MINIGAME NHẬP VAI: CƯỚP BANK, ĐÀO VÀNG, VIETLOTT
 # =====================================================================
@@ -2987,6 +2786,8 @@ async def cuopnganhang(ctx):
             description=f"Bạn uy hiếp giám đốc, vơ vét sạch két sắt và chuồn êm qua đường cống ngầm.\n\n💰 Vụ này húp trọn: **{loot_amount:,} 💰**!", 
             color=discord.Color.green()
         )
+        # THÊM ẢNH GIF CƯỚP BANK THÀNH CÔNG
+        embed_win.set_image(url=GIF_LINKS["rob_success"])
         await msg.edit(embed=embed_win)
     else: 
         # 80% thất bại, mất vốn và vào tù
@@ -3002,6 +2803,8 @@ async def cuopnganhang(ctx):
                         f"⛔ **BẠN BỊ TƯỚC QUYỀN CÔNG DÂN VÀ CẤM DÙNG MỌI LỆNH BOT ĐẾN: <t:{int(jail_time.timestamp())}:R>**!", 
             color=discord.Color.red()
         )
+        # THÊM ẢNH GIF ĐI TÙ
+        embed_lose.set_image(url=GIF_LINKS["rob_fail"])
         await msg.edit(embed=embed_lose)
 
 @bot.command(aliases=['mine', 'daomo'])
@@ -3070,6 +2873,9 @@ async def daovang(ctx):
         description=f"⛏️ Chúc mừng! Bạn đào trúng: **{result_name}**\nĐem ra chợ bán được: **{value:,} 💰**", 
         color=embed_color
     )
+    # THÊM ẢNH GIF ĐÀO MỎ
+    embed_win.set_thumbnail(url=GIF_LINKS["mine"])
+    
     await msg.edit(embed=embed_win)
 
 @bot.command()
@@ -3098,7 +2904,7 @@ async def vietlott(ctx, so: int, amount: str):
     
     if so == ket_qua:
         win_amount = bet_amount * 70
-        user_data = load_user(user_id) # Reload lại dữ liệu để an toàn
+        user_data = load_user(user_id) 
         user_data["money"] += win_amount
         save_user(user_id)
         
@@ -3113,7 +2919,6 @@ async def vietlott(ctx, so: int, amount: str):
             color=discord.Color.red()
         )
         await msg.edit(embed=lose_embed)
-
 
 # =====================================================================
 # HỆ THỐNG CASINO VIP CÓ TÍNH NĂNG REPLY TRỰC TIẾP (DỄ NHÌN HƠN)
@@ -3133,12 +2938,14 @@ async def coin(ctx, amount: str):
         description=f"🪙 Bạn tung **{bet_amount:,} 💰** lên trời...\n🔄 Đồng xu xoay tít trên không...", 
         color=discord.Color.gold()
     )
-    # Dùng ctx.reply để trả lời đúng người đó
+    # THÊM GIF CASINO
+    embed_start.set_thumbnail(url=GIF_LINKS["casino"])
+    
     msg = await ctx.reply(embed=embed_start, mention_author=False)
     await asyncio.sleep(2) 
 
     is_win = random.choice([True, False])
-    user_data = load_user(user_id) # Tải lại dữ liệu cho chắc chắn
+    user_data = load_user(user_id)
     
     if is_win:
         win_amount = bet_amount * 2
@@ -3178,6 +2985,8 @@ async def taixiu(ctx, choice: str, amount: str):
         description=f"Bạn cược **{bet_amount:,} 💰** vào cửa **{choice.upper()}**.\n\nNhà cái đang lắc... 🫨", 
         color=discord.Color.gold()
     )
+    embed_start.set_thumbnail(url=GIF_LINKS["casino"])
+    
     msg = await ctx.reply(embed_start, mention_author=False)
     await asyncio.sleep(2.5)
     
@@ -3247,7 +3056,9 @@ async def baucua(ctx, choice: str, amount: str):
         description=f"Bạn cược **{bet_amount:,} 💰** vào ô **{user_icon}**.\n\nNhà cái đang xóc dĩa... 🫨", 
         color=discord.Color.gold()
     )
-    msg = await ctx.reply(embed=embed_start, mention_author=False)
+    embed_start.set_thumbnail(url=GIF_LINKS["casino"])
+    
+    msg = await ctx.reply(embed_start, mention_author=False)
     await asyncio.sleep(2.5)
     
     # Tung 3 cục xí ngầu bầu cua
@@ -3259,7 +3070,6 @@ async def baucua(ctx, choice: str, amount: str):
     result_embed = discord.Embed(title="🎲 MỞ BÁT KẾT QUẢ BẦU CUA")
     
     if match_count > 0: 
-        # Trả lại vốn + tiền lãi theo số mặt trúng
         win_amt = bet_amount + (bet_amount * match_count)
         user_data["money"] += win_amt
         result_txt = f"🎉 **TRÚNG {match_count} Ô!** Nhà cái đền cho bạn **{win_amt:,} 💰**."
@@ -3356,6 +3166,8 @@ async def mayxeng(ctx, amount: str):
     slots_result = [random.choice(items) for _ in range(3)]
     
     embed = discord.Embed(title="🎰 MÁY XÈNG NỔ HŨ 🎰", color=discord.Color.gold())
+    embed.set_thumbnail(url=GIF_LINKS["casino"])
+    
     msg = await ctx.reply(embed=embed, mention_author=False)
     
     # Hiệu ứng quay tít
@@ -3397,10 +3209,6 @@ async def mayxeng(ctx, amount: str):
     embed.set_footer(text=f"Số dư ví hiện tại: {user_data['money']:,} 💰", icon_url=ctx.author.display_avatar.url)
     await msg.edit(embed=embed)
 
-
-# =====================================================================
-# HỆ THỐNG GACHA, TREO MÁY VÀ GAME NHẬP VAI BỔ SUNG
-# =====================================================================
 @bot.command()
 async def gacha(ctx):
     """Lệnh mở trứng thú cưng (Gacha)"""
@@ -3416,6 +3224,8 @@ async def gacha(ctx):
     save_user(user_id)
     
     embed_start = discord.Embed(title="🥚 ĐẬP TRỨNG GACHA", description=f"{ctx.author.mention} đang vung búa đập vỡ lớp vỏ quả trứng...", color=discord.Color.orange())
+    embed_start.set_image(url=GIF_LINKS["gacha"])
+    
     msg = await ctx.reply(embed=embed_start, mention_author=False)
     await asyncio.sleep(1.5)
     
@@ -3461,107 +3271,67 @@ async def gacha(ctx):
     embed_result.set_footer(text="Gõ lệnh 'k tuido' để ngắm, lệnh 'k ban' để bán.", icon_url=ctx.author.display_avatar.url)
     await msg.edit(embed=embed_result)
 
-@bot.command(aliases=['sansoi']) 
-async def thamhiem(ctx): 
-    """Lệnh gọi UI Khu Rừng Thám Hiểm"""
-    embed = discord.Embed(
-        title="🛒 TRẠM TIẾP TẾ RỪNG SÂU", 
-        description="Rừng rậm đầy nguy hiểm nhưng cũng đầy rương vàng kho báu.\n\n👇 **MỞ MENU BÊN DƯỚI ĐỂ MUA VŨ KHÍ TỰ VỆ** 👇", 
-        color=discord.Color.orange()
-    )
-    await ctx.send(embed=embed, view=KhungRungShopView(ctx.author, session_profit=0))
+# =====================================================================
+# HỆ THỐNG LỆNH ADMIN (QUẢN TRỊ VIÊN) VÀ BƠM TIỀN
+# =====================================================================
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def setup(ctx, *, args=""):
+    """Thiết lập kênh cho phép dùng Bot"""
+    server_id = str(ctx.guild.id)
+    
+    if "clear" in args.lower():
+        config_col.update_one({"_id": server_id}, {"$unset": {"allowed_channels": ""}})
+        if server_id in CONFIG_CACHE and "allowed_channels" in CONFIG_CACHE[server_id]: 
+            del CONFIG_CACHE[server_id]["allowed_channels"]
+            
+        embed_clear = discord.Embed(description="✅ Đã gỡ bỏ giới hạn. Bot sẽ nhận lệnh ở **mọi kênh**.", color=discord.Color.green())
+        return await ctx.send(embed=embed_clear)
+
+    mentions = ctx.message.channel_mentions
+    if not mentions: 
+        embed_err = discord.Embed(description="⚠️ Vui lòng tag các kênh. VD: `k setup #kenh-1`", color=discord.Color.red())
+        return await ctx.send(embed=embed_err)
+        
+    channel_ids = [c.id for c in mentions]
+    config_col.update_one({"_id": server_id}, {"$set": {"allowed_channels": channel_ids}}, upsert=True)
+    
+    if server_id not in CONFIG_CACHE: 
+        CONFIG_CACHE[server_id] = {}
+        
+    CONFIG_CACHE[server_id]["allowed_channels"] = channel_ids
+    
+    embed_success = discord.Embed(description=f"✅ Đã cài đặt! Bot từ nay **CHỈ** nhận lệnh tại: {', '.join(c.mention for c in mentions)}", color=discord.Color.green())
+    await ctx.send(embed=embed_success)
 
 @bot.command()
-async def phai(ctx):
-    """Lệnh gọi UI Treo máy AFK / Thu hoạch"""
-    user_id = str(ctx.author.id)
-    user_data = load_user(user_id)
-    exp_end_str = user_data.get("exp_end")
-    
-    # Nếu đang treo máy
-    if exp_end_str:
-        now = datetime.now()
-        end_time = datetime.strptime(exp_end_str, "%Y-%m-%d %H:%M:%S")
+@commands.has_permissions(administrator=True) 
+async def themtien(ctx, member: discord.Member, amount: int):
+    """Admin bơm tiền cho người chơi"""
+    if amount > 0: 
+        user_id = str(member.id)
+        user_data = load_user(user_id)
+        user_data["money"] += amount
+        save_user(user_id)
         
-        # Nếu đã hết giờ
-        if now >= end_time:
-            reward = user_data.get("exp_reward", 500)
-            user_data["money"] += reward
-            del user_data["exp_end"]
-            del user_data["exp_reward"]
-            save_user(user_id)
-            
-            embed_success = discord.Embed(
-                title="🎉 TRỞ VỀ AN TOÀN!", 
-                description=f"Bạn đã hoàn thành chuyến dã ngoại và thu hoạch được **{reward:,} 💰**!", 
-                color=discord.Color.gold()
-            )
-            return await ctx.reply(embed=embed_success, mention_author=False)
-        else:
-            # Vẫn còn thời gian
-            time_left = end_time - now
-            hours, remainder = divmod(int(time_left.total_seconds()), 3600)
-            minutes, seconds = divmod(remainder, 60)
-            
-            embed_wait = discord.Embed(
-                description=f"⏳ Đang cày cuốc sấp mặt ở nơi hoang dã! Hãy kiên nhẫn chờ thêm **{hours} giờ {minutes} phút** nữa nhé.", 
-                color=discord.Color.orange()
-            )
-            return await ctx.reply(embed=embed_wait, mention_author=False)
-            
-    # Nếu chưa treo máy, gọi View ra
-    embed_start = discord.Embed(
-        title="⛺ TRẠM THÁM HIỂM AFK", 
-        description="Gửi nhân vật đi treo máy và nhặt tiền lúc trở về!\n\n👇 **MỞ MENU ĐỂ CHỌN KHU VỰC CẮM TRẠI** 👇", 
-        color=discord.Color.dark_green()
-    )
-    await ctx.send(embed=embed_start, view=ExpView(ctx.author))
+        embed = discord.Embed(description=f"✅ Sếp tổng {ctx.author.mention} vừa buff nóng cho {member.mention} **{amount:,} 💰**!", color=discord.Color.green())
+        await ctx.send(embed=embed)
 
-@bot.command(aliases=['mophong'])
-async def nhansinh(ctx):
-    """Lệnh gọi Game Nhân Sinh (Life Simulator)"""
-    user_id = str(ctx.author.id)
-    now = datetime.now()
-    
-    if user_id in dang_choi_nhansinh: 
-        embed_err = discord.Embed(description="⏳ Bạn đang trong một kiếp luân hồi dở dang rồi, hoàn thành đi đã!", color=discord.Color.orange())
-        return await ctx.reply(embed=embed_err, mention_author=False)
+@bot.command()
+@commands.has_permissions(administrator=True) 
+async def trutien(ctx, member: discord.Member, amount: int):
+    """Admin trừ tiền người chơi"""
+    if amount > 0: 
+        user_id = str(member.id)
+        user_data = load_user(user_id)
+        user_data["money"] -= amount
+        save_user(user_id)
         
-    if user_id in nhansinh_cooldowns:
-        time_diff = (now - nhansinh_cooldowns[user_id]).total_seconds()
-        if time_diff < 5: 
-            embed_err = discord.Embed(description="⏳ Từ từ đã, đầu thai liên tục Diêm Vương mắng cho đấy!", color=discord.Color.orange())
-            return await ctx.reply(embed=embed_err, mention_author=False)
-
-    user_data = load_user(user_id)
-    if user_data.get("money", 0) < 100: 
-        embed_err = discord.Embed(description="⚠️ Vé luân hồi đi tàu địa phủ giá **100 💰**. Túi rỗng thì không có cửa đầu thai đâu!", color=discord.Color.red())
-        return await ctx.reply(embed=embed_err, mention_author=False)
-
-    # Trừ tiền, add vào list đang chơi
-    user_data["money"] -= 100
-    nhansinh_cooldowns[user_id] = now
-    dang_choi_nhansinh.append(user_id)
-    save_user(user_id)
-
-    # Khởi tạo điểm may mắn
-    initial_stats = {"may_man": random.randint(1, 10)}
-    view = NhanSinhGameView(ctx.author, initial_stats)
-    
-    embed = discord.Embed(
-        title="🌀 MÔ PHỎNG NHÂN SINH", 
-        description=f"Ký chủ luân hồi: {ctx.author.mention}", 
-        color=discord.Color.teal()
-    )
-    embed.add_field(name="🍀 Chỉ số tâm linh", value=f"May mắn ban đầu: **{initial_stats['may_man']}/10** *(Được buff thêm {initial_stats['may_man']*2}% Tỉ lệ thành công)*", inline=False)
-    embed.add_field(name="📜 Hành trình cuộc đời", value=view.logs[0], inline=False)
-    embed.add_field(name="❓ Ngã rẽ quyết định tuổi 15", value=f"**{view.ev['q']}**", inline=False)
-    
-    await ctx.reply(embed=embed, view=view, mention_author=False)
-
+        embed = discord.Embed(description=f"⚖️ Admin đã tước đoạt **{amount:,} 💰** từ tài khoản của {member.mention}!", color=discord.Color.red())
+        await ctx.send(embed=embed)
 
 # =====================================================================
-# HỆ THỐNG EVENT CHÍNH CỦA BOT (ON_MESSAGE, ON_READY)
+# SỰ KIỆN LÕI CỦA BOT (ON_MESSAGE, ON_READY)
 # =====================================================================
 @bot.event
 async def on_message(message):
@@ -3570,6 +3340,7 @@ async def on_message(message):
     - Xử lý hệ thống kinh nghiệm (XP) cho người dùng chat
     - Không cấp XP cho người đang đi tù
     """
+    # Bỏ qua tin nhắn của các Bot khác
     if message.author.bot: 
         return
         
@@ -3619,10 +3390,10 @@ async def on_ready():
     """Sự kiện chạy khi Bot online thành công"""
     print('================================================')
     print(f'>>> SIÊU BOT {bot.user} ĐÃ SẴN SÀNG CÀN QUÉT!')
-    print('>>> BẢN CẬP NHẬT VIP 2026 - FULL TÍNH NĂNG')
+    print('>>> BẢN CẬP NHẬT VIP 2026 - FULL TÍNH NĂNG VÀ GIF')
     print('================================================')
     
-    # Thiết lập hoạt động hiển thị của Bot
+    # Thiết lập hoạt động hiển thị của Bot trên Discord
     await bot.change_presence(activity=discord.Game(name="Quản lý Sòng Bạc & Kinh Tế | k help"))
 
 # =====================================================================
