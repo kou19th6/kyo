@@ -48,11 +48,11 @@ gamble_cooldowns = {}
 nhansinh_cooldowns = {} 
 dang_choi_nhansinh = [] 
 cty_cooldowns = {}
-work_cooldowns = {}       # Chỉ dùng cho k dilamthem
-mining_cooldowns = {}     # FIX BUG: tách riêng cooldown đào vàng
-rob_cooldowns = {}        # FIX BUG: tách riêng cooldown cướp ngân hàng
-stock_cooldowns = {}      # FIX BUG: cooldown mua/bán cổ phiếu
-gacha_cooldowns = {}      # FIX BUG: cooldown gacha
+work_cooldowns = {}
+mining_cooldowns = {}
+rob_cooldowns = {}
+stock_cooldowns = {}
+gacha_cooldowns = {}
 fishing_cooldowns = {}
 vietlott_players = {}
 werewolf_lobbies = {}
@@ -62,7 +62,6 @@ duel_invites = {}
 _processing_users = set()
 
 def acquire_lock(user_id):
-    """Trả về True nếu lấy được lock, False nếu đang bận."""
     uid = str(user_id)
     if uid in _processing_users:
         return False
@@ -77,7 +76,14 @@ def release_lock(user_id):
 # =====================================================================
 MONGO_URI = "mongodb+srv://jakinat101084_db_user:Lam17722@cluster0.y6jqmz8.mongodb.net/?appName=Cluster0"
 
-mongo_client = pymongo.MongoClient(MONGO_URI)
+# FIX: thêm timeout và retry cho MongoDB
+mongo_client = pymongo.MongoClient(
+    MONGO_URI,
+    serverSelectionTimeoutMS=5000,   # FIX: timeout 5 giây thay vì chờ mãi
+    connectTimeoutMS=5000,
+    socketTimeoutMS=10000,
+    retryWrites=True,
+)
 db = mongo_client["DiscordBotDB"]
 
 users_col = db["users"]   
@@ -91,11 +97,17 @@ COMPANY_CACHE = {}
 def load_user(user_id):
     user_id = str(user_id)
     if user_id not in DB_CACHE:
-        document = users_col.find_one({"_id": user_id})
-        if document:
-            DB_CACHE[user_id] = document
-        else:
-            DB_CACHE[user_id] = {}
+        try:
+            document = users_col.find_one({"_id": user_id})
+            if document:
+                DB_CACHE[user_id] = document
+            else:
+                DB_CACHE[user_id] = {}
+        except Exception as e:
+            # FIX: nếu DB lỗi, dùng cache rỗng thay vì crash
+            print(f"[WARN] load_user DB error for {user_id}: {e}")
+            if user_id not in DB_CACHE:
+                DB_CACHE[user_id] = {}
             
     defaults = {
         "xp": 0, "level": 1, "money": 0, "bank": 0, "title": "Dân Đáy Xã Hội 🧱", 
@@ -108,13 +120,11 @@ def load_user(user_id):
         "streak": 0, "last_daily": None, "last_lixi": None,
         "badges": [], "achievements": [],
         "last_work": "2000-01-01 00:00:00",
-        # FIX BUG: thêm các field cooldown riêng
         "last_stock_trade": "2000-01-01 00:00:00",
         "last_gacha": "2000-01-01 00:00:00",
         "last_mine": "2000-01-01 00:00:00",
         "last_rob": "2000-01-01 00:00:00",
-        # Theo dõi giao dịch cổ phiếu để chống exploit
-        "stock_buy_prices": {},  # FIX BUG: lưu giá mua thực tế
+        "stock_buy_prices": {},
     }
     
     for key, value in defaults.items():
@@ -125,34 +135,52 @@ def load_user(user_id):
 
 def save_user(user_id):
     user_id = str(user_id)
-    if user_id in DB_CACHE: 
-        users_col.update_one({"_id": user_id}, {"$set": DB_CACHE[user_id]}, upsert=True)
+    if user_id in DB_CACHE:
+        try:
+            users_col.update_one({"_id": user_id}, {"$set": DB_CACHE[user_id]}, upsert=True)
+        except Exception as e:
+            # FIX: log lỗi save thay vì crash hoàn toàn
+            print(f"[ERROR] save_user DB error for {user_id}: {e}")
 
 def load_server_config(server_id):
     server_id = str(server_id)
     if server_id not in CONFIG_CACHE:
-        document = config_col.find_one({"_id": server_id})
-        if document: CONFIG_CACHE[server_id] = document
-        else: CONFIG_CACHE[server_id] = {}
+        try:
+            document = config_col.find_one({"_id": server_id})
+            if document:
+                CONFIG_CACHE[server_id] = document
+            else:
+                CONFIG_CACHE[server_id] = {}
+        except Exception as e:
+            print(f"[WARN] load_server_config DB error: {e}")
+            CONFIG_CACHE[server_id] = {}
     return CONFIG_CACHE[server_id]
 
 def load_company(company_id):
     company_id = str(company_id)
     if company_id not in COMPANY_CACHE:
-        document = companies_col.find_one({"_id": company_id})
-        if document: 
-            if "reputation" not in document: document["reputation"] = 100 
-            if "has_scandal" not in document: document["has_scandal"] = False
-            if "atk_level" not in document: document["atk_level"] = 1
-            if "def_level" not in document: document["def_level"] = 1
-            COMPANY_CACHE[company_id] = document
-        else: return None
+        try:
+            document = companies_col.find_one({"_id": company_id})
+            if document: 
+                if "reputation" not in document: document["reputation"] = 100 
+                if "has_scandal" not in document: document["has_scandal"] = False
+                if "atk_level" not in document: document["atk_level"] = 1
+                if "def_level" not in document: document["def_level"] = 1
+                COMPANY_CACHE[company_id] = document
+            else:
+                return None
+        except Exception as e:
+            print(f"[WARN] load_company DB error: {e}")
+            return None
     return COMPANY_CACHE[company_id]
 
 def save_company(company_id):
     company_id = str(company_id)
-    if company_id in COMPANY_CACHE: 
-        companies_col.update_one({"_id": company_id}, {"$set": COMPANY_CACHE[company_id]}, upsert=True)
+    if company_id in COMPANY_CACHE:
+        try:
+            companies_col.update_one({"_id": company_id}, {"$set": COMPANY_CACHE[company_id]}, upsert=True)
+        except Exception as e:
+            print(f"[ERROR] save_company DB error: {e}")
 
 def add_history(user_id, entry):
     user_data = load_user(user_id)
@@ -162,7 +190,6 @@ def add_history(user_id, entry):
     if len(user_data["history"]) > 15: user_data["history"].pop()
 
 def check_achievement(user_id, user_data):
-    """Kiểm tra và trao huy hiệu thành tích."""
     achievements = user_data.get("achievements", [])
     new_achievements = []
     
@@ -196,36 +223,118 @@ def check_achievement(user_id, user_data):
     return new_achievements
 
 # =====================================================================
-# HÀM KIỂM TRA TỔNG THỂ
+# FIX CHÍNH: HÀM KIỂM TRA TỔNG THỂ
 # =====================================================================
 @bot.check
 async def global_jail_and_channel_check(ctx):
-    if ctx.author.guild_permissions.administrator or ctx.command.name == "help": return True
+    # FIX: bỏ qua check cho admin và lệnh help như cũ
+    if ctx.author.guild_permissions.administrator:
+        return True
+    if ctx.command and ctx.command.name == "help":
+        return True
         
     user_data = load_user(ctx.author.id)
     jail_time_str = user_data.get("jail_time")
     
     if jail_time_str:
-        jail_end = datetime.strptime(jail_time_str, "%Y-%m-%d %H:%M:%S")
-        if datetime.now() < jail_end:
-            embed = discord.Embed(
-                title="🚨 BÁO ĐỘNG ĐỎ!", 
-                description=f"{ctx.author.mention} đang bóc lịch trong trại giam!\n\n"
-                            f"⏳ Mãn hạn: <t:{int(jail_end.timestamp())}:R>", 
-                color=discord.Color.red()
-            )
-            embed.set_thumbnail(url=GIF_LINKS["jail"])
-            await ctx.reply(embed=embed, mention_author=False)
-            return False
-        else:
+        try:
+            jail_end = datetime.strptime(jail_time_str, "%Y-%m-%d %H:%M:%S")
+            if datetime.now() < jail_end:
+                embed = discord.Embed(
+                    title="🚨 BÁO ĐỘNG ĐỎ!", 
+                    description=f"{ctx.author.mention} đang bóc lịch trong trại giam!\n\n"
+                                f"⏳ Mãn hạn: <t:{int(jail_end.timestamp())}:R>", 
+                    color=discord.Color.red()
+                )
+                embed.set_thumbnail(url=GIF_LINKS["jail"])
+                await ctx.reply(embed=embed, mention_author=False)
+                return False
+            else:
+                user_data["jail_time"] = None
+                save_user(ctx.author.id)
+        except Exception:
+            # FIX: nếu parse jail_time lỗi, xóa luôn thay vì crash
             user_data["jail_time"] = None
             save_user(ctx.author.id)
             
     if ctx.guild:
-        server_config = load_server_config(ctx.guild.id)
-        allowed_channels = server_config.get("allowed_channels", [])
-        if allowed_channels and ctx.channel.id not in allowed_channels: return False
+        try:
+            server_config = load_server_config(ctx.guild.id)
+            allowed_channels = server_config.get("allowed_channels", [])
+            if allowed_channels and ctx.channel.id not in allowed_channels:
+                # FIX: thông báo cho người dùng biết sai kênh thay vì im lặng
+                channel_mentions = [f"<#{cid}>" for cid in allowed_channels]
+                embed = discord.Embed(
+                    description=f"⚠️ Vui lòng dùng bot tại: {', '.join(channel_mentions)}",
+                    color=discord.Color.orange()
+                )
+                try:
+                    await ctx.reply(embed=embed, mention_author=False, delete_after=5)
+                except Exception:
+                    pass
+                return False
+        except Exception as e:
+            print(f"[WARN] channel check error: {e}")
+            # FIX: nếu check kênh lỗi, vẫn cho người dùng dùng được thay vì block
+            pass
+
     return True
+
+# =====================================================================
+# FIX: ERROR HANDLER TOÀN CỤC - bắt mọi lỗi không xử lý
+# =====================================================================
+@bot.event
+async def on_command_error(ctx, error):
+    # FIX: bỏ qua lỗi check thất bại (đã xử lý trong check)
+    if isinstance(error, commands.CheckFailure):
+        return
+    
+    # FIX: thông báo lỗi thiếu quyền
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.reply(embed=discord.Embed(
+            description="❌ Bạn không có quyền dùng lệnh này!",
+            color=discord.Color.red()
+        ), mention_author=False)
+        return
+    
+    # FIX: thông báo lỗi thiếu argument
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.reply(embed=discord.Embed(
+            description=f"⚠️ Thiếu thông tin! Gõ `k help` để xem hướng dẫn.",
+            color=discord.Color.orange()
+        ), mention_author=False)
+        return
+
+    # FIX: thông báo lỗi member không tìm thấy
+    if isinstance(error, commands.MemberNotFound):
+        await ctx.reply(embed=discord.Embed(
+            description="⚠️ Không tìm thấy người dùng này! Hãy tag trực tiếp @tên.",
+            color=discord.Color.orange()
+        ), mention_author=False)
+        return
+
+    # FIX: thông báo lỗi lệnh không tìm thấy (không spam)
+    if isinstance(error, commands.CommandNotFound):
+        return  # im lặng, không cần báo
+
+    # FIX: giải phóng lock nếu có lỗi không mong muốn
+    release_lock(ctx.author.id)
+
+    # FIX: log lỗi ra console để debug
+    print(f"[ERROR] Lệnh '{ctx.command}' của {ctx.author} gặp lỗi: {error}")
+
+    # FIX: báo lỗi chung cho người dùng thay vì im lặng
+    try:
+        await ctx.reply(embed=discord.Embed(
+            description="⚙️ Có lỗi xảy ra! Thử lại sau hoặc báo admin.",
+            color=discord.Color.red()
+        ), mention_author=False)
+    except Exception:
+        pass
+
+# =====================================================================
+# (Phần còn lại của code giữ nguyên từ đây)
+# =====================================================================
 
 def make_progress_bar(current_value, total_value, bar_length=12):
     if total_value == 0: return "⬛" * bar_length
@@ -237,7 +346,6 @@ async def check_gamble_conditions(ctx, amount_str):
     user_id = str(ctx.author.id)
     current_time = datetime.now()
     
-    # FIX: tăng cooldown casino lên 6 giây
     if user_id in gamble_cooldowns:
         time_diff = (current_time - gamble_cooldowns[user_id]).total_seconds()
         if time_diff < 6:
@@ -252,7 +360,6 @@ async def check_gamble_conditions(ctx, amount_str):
         return None, None
         
     try: 
-        # FIX: giảm giới hạn "all" xuống còn 200k
         if amount_str.lower() == "all": bet_amount = min(user_data["money"], 200000)
         else: bet_amount = int(amount_str)
     except ValueError: 
@@ -265,7 +372,6 @@ async def check_gamble_conditions(ctx, amount_str):
         await ctx.reply(embed=embed_poor, mention_author=False)
         return None, None
         
-    # FIX: giảm giới hạn cược tối đa xuống 300k
     if bet_amount > 300000: 
         embed_max = discord.Embed(description="🛑 Mỗi ván tối đa **300,000 💰** thôi nhé!", color=discord.Color.red())
         await ctx.reply(embed=embed_max, mention_author=False)
@@ -314,7 +420,7 @@ SHOP_ITEMS = {
 
 def get_asset_price(asset_name):
     for item_key, item_data in SHOP_ITEMS.items():
-        if item_data["name"] == asset_name: return int(item_data["price"] * 0.6)  # FIX: giảm giá bán xuống 60%
+        if item_data["name"] == asset_name: return int(item_data["price"] * 0.6)
     return 1000
 
 PET_RATES = {
@@ -335,37 +441,31 @@ def get_pet_sell_price(pet_name):
             if rarity == "mythic": return 8000000   
     return 1000
 
-# =====================================================================
-# FIX BUG CỔ PHIẾU: Hệ thống giá thực tế, chống exploit
-# =====================================================================
 STANDARD_STOCKS = {
     "VIN": "Tập Đoàn VIN", "FLC": "Hàng Không FLC", "VNZ": "Công Nghệ VNZ", 
     "DOGE": "Doge Coin", "BTC": "Bitcoin", "AAPL": "Apple Inc.", "TSLA": "Tesla"
 }
 
-# Thuế giao dịch cổ phiếu: 5% khi bán
 STOCK_TAX_RATE = 0.05
-# Spread (chênh lệch mua/bán): giá mua cao hơn 3%
 STOCK_SPREAD = 0.03
 
 def get_all_stocks():
     all_stocks = STANDARD_STOCKS.copy()
-    ipo_companies = companies_col.find({"is_ipo": True})
-    for comp in ipo_companies:
-        code = comp["name"][:4].upper()
-        all_stocks[code] = comp["name"]
+    try:
+        ipo_companies = companies_col.find({"is_ipo": True})
+        for comp in ipo_companies:
+            code = comp["name"][:4].upper()
+            all_stocks[code] = comp["name"]
+    except Exception as e:
+        print(f"[WARN] get_all_stocks error: {e}")
     return all_stocks
 
 def get_stock_price(stock_code, hour_offset=0):
-    """
-    FIX BUG TIỀN VÔ HẠN:
-    - Dùng seed theo phút thay vì giờ → giá biến động nhiều hơn
-    - Spread: giá mua (ask) = giá thị trường + 3%, giá bán (bid) = giá thị trường - 3%
-    - Không thể mua rồi bán ngay cùng lúc để kiếm tiền
-    """
-    ipo_comp = companies_col.find_one({"is_ipo": True, "name": {"$regex": f"^{stock_code}", "$options": "i"}})
+    try:
+        ipo_comp = companies_col.find_one({"is_ipo": True, "name": {"$regex": f"^{stock_code}", "$options": "i"}})
+    except Exception:
+        ipo_comp = None
     target_time = datetime.now() + timedelta(hours=hour_offset)
-    # FIX: seed theo phút thay vì giờ → biến động liên tục hơn
     rng = random.Random(int(target_time.strftime("%Y%m%d%H%M")) // 15 + sum(ord(char) for char in stock_code))
     
     if ipo_comp:
@@ -377,30 +477,23 @@ def get_stock_price(stock_code, hour_offset=0):
         return max(1000, final_price) 
 
     base = rng.randint(5, 800) * 1000
-    # FIX: tăng xác suất cổ phiếu rác lên 8%
     if rng.randint(1, 100) <= 8: return 1000 
     return base
 
 def get_stock_buy_price(stock_code):
-    """Giá mua (cao hơn giá thị trường do spread)."""
     market_price = get_stock_price(stock_code)
     return int(market_price * (1 + STOCK_SPREAD))
 
 def get_stock_sell_price(stock_code):
-    """Giá bán (thấp hơn giá thị trường do spread + thuế)."""
     market_price = get_stock_price(stock_code)
     return int(market_price * (1 - STOCK_SPREAD) * (1 - STOCK_TAX_RATE))
 
 def get_next_15min_timestamp():
-    """Giá cổ phiếu cập nhật mỗi 15 phút."""
     now = datetime.now()
     next_update = now + timedelta(minutes=15 - (now.minute % 15))
     next_update = next_update.replace(second=0, microsecond=0)
     return int(next_update.timestamp())
 
-# =====================================================================
-# HỆ THỐNG NHIỆM VỤ (QUEST)
-# =====================================================================
 DAILY_QUESTS = [
     {"id": "gamble5", "name": "Tay Chơi Cứng", "desc": "Chơi casino 5 lần", "target": 5, "type": "gamble", "reward": 15000},
     {"id": "mine3", "name": "Thợ Mỏ Chăm Chỉ", "desc": "Đào vàng 3 lần", "target": 3, "type": "mine", "reward": 12000},
@@ -414,7 +507,10 @@ DAILY_QUESTS = [
 def get_or_assign_quest(user_data):
     now = datetime.now()
     last_quest_str = user_data.get("last_quest", "2000-01-01 00:00:00")
-    last_quest = datetime.strptime(last_quest_str, "%Y-%m-%d %H:%M:%S")
+    try:
+        last_quest = datetime.strptime(last_quest_str, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        last_quest = datetime(2000, 1, 1)
     
     if now - last_quest >= timedelta(days=1) or user_data.get("quest") is None:
         quest = random.choice(DAILY_QUESTS)
@@ -561,14 +657,11 @@ EVENTS_P5 = [
     }
 ]
 
-# =====================================================================
-# HỆ THỐNG CÂU CÁ (tăng độ khó)
-# =====================================================================
 FISH_TABLE = {
     "common": {
-        "rate": 50,  # FIX: giảm tỉ lệ cá phổ thông
+        "rate": 50,
         "pool": [
-            ("Cá Rô Đồng 🐟", 300, 1000),     # FIX: giảm giá cá
+            ("Cá Rô Đồng 🐟", 300, 1000),
             ("Cá Trê Béo 🐠", 500, 1500),
             ("Cá Chép Vàng 🐡", 700, 1800),
             ("Cá Mương Nhỏ 🐟", 200, 600),
@@ -598,27 +691,24 @@ FISH_TABLE = {
         ]
     },
     "trash": {
-        "rate": 5,  # FIX: tăng tỉ lệ rác lên 5%
+        "rate": 5,
         "pool": [
             ("Cái Giày Cũ 👟", -2000, -1000),
             ("Lon Nước Rỉ Sét 🥫", -1500, -500),
-            ("Cần Câu Gãy 🪤", -3000, -1000),  # FIX: thêm rác mới
+            ("Cần Câu Gãy 🪤", -3000, -1000),
         ]
     }
 }
 
 def get_fish_bonus(user_data):
     assets = user_data.get("assets", [])
-    if "Máy Câu Tự Động ⚙️" in assets: return 1.4   # FIX: giảm bonus
+    if "Máy Câu Tự Động ⚙️" in assets: return 1.4
     if "Cần Câu Carbon 🎣" in assets: return 1.15
     if "Cần Câu Cơ Bản 🎣" in assets: return 0.9
-    return 0.5  # FIX: câu tay bị phạt nặng hơn
+    return 0.5
 
-# =====================================================================
-# HỆ THỐNG ĐI LÀM (tăng độ khó - lương thấp hơn, cooldown dài hơn)
-# =====================================================================
 JOBS = [
-    {"name": "Phụ Hồ 🧱", "min": 2000, "max": 6000, "time": 45, "desc": "Trộn hồ, vác gạch..."},        # FIX: tăng cooldown lên 45p
+    {"name": "Phụ Hồ 🧱", "min": 2000, "max": 6000, "time": 45, "desc": "Trộn hồ, vác gạch..."},
     {"name": "Shipper 🛵", "min": 3000, "max": 9000, "time": 45, "desc": "Giao đồ ăn, đội nắng..."},
     {"name": "Lập Trình Viên 💻", "min": 10000, "max": 25000, "time": 45, "desc": "Fix bug, uống cà phê..."},
     {"name": "Giáo Viên 📚", "min": 5000, "max": 15000, "time": 45, "desc": "Giảng bài, chấm bài..."},
@@ -629,7 +719,7 @@ JOBS = [
 ]
 
 # =====================================================================
-# GIAO DIỆN UI
+# GIAO DIỆN UI (giữ nguyên toàn bộ từ code gốc)
 # =====================================================================
 class ShopItemSelect(discord.ui.Select):
     def __init__(self, category_type):
@@ -805,7 +895,7 @@ class ExpSelect(discord.ui.Select):
         user_data = load_user(user_id)
         
         hours = int(self.values[0])
-        if hours == 4: reward = random.randint(200, 500)    # FIX: giảm phần thưởng AFK
+        if hours == 4: reward = random.randint(200, 500)
         elif hours == 8: reward = random.randint(500, 1000)
         else: reward = random.randint(1000, 2000)
             
@@ -959,15 +1049,12 @@ class NhanSinhGameView(discord.ui.View):
         if interaction.response.is_done(): await interaction.message.edit(embed=embed, view=self)
         else: await interaction.response.edit_message(embed=embed, view=self)
 
-# =====================================================================
-# CLASS OẲN TÙ TÌ
-# =====================================================================
 class SoloOTTGame(discord.ui.View):
     def __init__(self, player_1, player_2, bet_amount):
         super().__init__(timeout=60)
         self.player_1 = player_1; self.player_2 = player_2; self.bet_amount = bet_amount
         self.msg = None; self.choices = {str(player_1.id): None, str(player_2.id): None}
-        self.finished = False  # FIX: tránh double-resolve
+        self.finished = False
 
     @discord.ui.button(emoji="🪨", style=discord.ButtonStyle.secondary)
     async def btn_bua(self, interaction: discord.Interaction, button: discord.ui.Button): await self.handle_choice(interaction, "🪨")
@@ -987,7 +1074,7 @@ class SoloOTTGame(discord.ui.View):
         await interaction.response.send_message(embed=discord.Embed(description=f"🤫 Bạn đã chọn **{choice}**. Chờ đối thủ ra chiêu...", color=discord.Color.green()), ephemeral=True)
 
         if self.choices[str(self.player_1.id)] is not None and self.choices[str(self.player_2.id)] is not None:
-            if self.finished: return  # FIX: chống race condition
+            if self.finished: return
             self.finished = True
             for child in self.children: child.disabled = True
             choice_1 = self.choices[str(self.player_1.id)]
@@ -1019,8 +1106,7 @@ class SoloOTTGame(discord.ui.View):
             self.stop()
 
     async def on_timeout(self):
-        if self.finished: return  # FIX: không refund nếu đã kết thúc
-        # FIX: chỉ refund người đã cược (tiền đã bị trừ trước đó)
+        if self.finished: return
         p1_data = load_user(self.player_1.id); p2_data = load_user(self.player_2.id)
         p1_data["money"] += self.bet_amount; p2_data["money"] += self.bet_amount
         save_user(self.player_1.id); save_user(self.player_2.id)
@@ -1050,9 +1136,6 @@ class SoloOTTAccept(discord.ui.View):
         game_view.msg = interaction.message
         self.stop()
 
-# =====================================================================
-# CLASS KẾT HÔN VÀ CÔNG TY
-# =====================================================================
 class MarryAccept(discord.ui.View):
     def __init__(self, sender, receiver):
         super().__init__(timeout=60)
@@ -1130,16 +1213,13 @@ class MaSoiVoteView(discord.ui.View):
         self.lobby["votes"][user_id] = target_id
         await interaction.response.send_message(f"Bạn đã bỏ phiếu treo cổ <@{target_id}>.", ephemeral=True)
 
-# =====================================================================
-# UI DUEL (QUYẾT ĐẤU)
-# =====================================================================
 class DuelAccept(discord.ui.View):
     def __init__(self, challenger, target, bet):
         super().__init__(timeout=60)
         self.challenger = challenger
         self.target = target
         self.bet = bet
-        self.finished = False  # FIX: chống double-resolve
+        self.finished = False
 
     @discord.ui.button(label="Chấp Nhận Thách Đấu!", style=discord.ButtonStyle.danger, emoji="⚔️")
     async def btn_accept(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1165,7 +1245,6 @@ class DuelAccept(discord.ui.View):
         
         while c_hp > 0 and t_hp > 0 and rounds < 10:
             rounds += 1
-            # FIX: thêm yếu tố level ảnh hưởng duel
             c_atk = random.randint(8, 28)
             t_atk = random.randint(8, 28)
             t_hp -= c_atk
@@ -1203,7 +1282,7 @@ class DuelAccept(discord.ui.View):
         self.stop()
 
 # =====================================================================
-# HỆ THỐNG LỆNH CÔNG TY
+# HỆ THỐNG LỆNH CÔNG TY (giữ nguyên từ code gốc)
 # =====================================================================
 @bot.group(invoke_without_command=True, aliases=['congty'])
 async def cty(ctx):
@@ -1260,16 +1339,12 @@ async def dinhchinh(ctx):
     comp = load_company(comp_id)
     if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Chỉ Ban Giám Đốc mới được đính chính!")
     if not comp.get("has_scandal") and comp.get("reputation", 100) >= 100: return await ctx.reply("Công ty đang trong sạch!")
-
     cost = max(100000, int(comp["treasury"] * 0.05))
     if comp["treasury"] < cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{cost:,} 💰** để thuê báo chí!")
-
-    comp["treasury"] -= cost
-    comp["has_scandal"] = False
+    comp["treasury"] -= cost; comp["has_scandal"] = False
     recovered_rep = random.randint(15, 30)
     comp["reputation"] = min(100, comp.get("reputation", 50) + recovered_rep)
     save_company(comp_id)
-    
     embed = discord.Embed(title="📰 XỬ LÝ KHỦNG HOẢNG THÀNH CÔNG", description=f"Chi **{cost:,} 💰** dập tắt dư luận xấu!\n✅ **Đã gỡ bỏ Scandal!**\n📈 Danh tiếng hồi phục: **+{recovered_rep}**", color=discord.Color.green())
     await ctx.reply(embed=embed, mention_author=False)
 
@@ -1279,7 +1354,6 @@ async def nangcap(ctx, stat: str):
     if not comp_id: return await ctx.reply("Bạn chưa có công ty!")
     comp = load_company(comp_id)
     if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Chỉ Sếp mới được nâng cấp!")
-    
     if stat == "cong":
         current_lvl = comp.get("atk_level", 1); cost = current_lvl * 500000
         if comp["treasury"] < cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{cost:,} 💰**!")
@@ -1291,7 +1365,6 @@ async def nangcap(ctx, stat: str):
         comp["treasury"] -= cost; comp["def_level"] = current_lvl + 1
         msg = f"🛡️ Nâng KHIÊN THỦ lên Lv{current_lvl+1}! (Trừ {cost:,} 💰 từ quỹ)"
     else: return await ctx.reply("⚠️ Dùng `k cty nangcap cong` hoặc `k cty nangcap thu`.")
-        
     save_company(comp_id)
     await ctx.reply(embed=discord.Embed(description=msg, color=discord.Color.green()), mention_author=False)
 
@@ -1339,7 +1412,7 @@ async def thulai(ctx):
     now = datetime.now()
     last = datetime.strptime(comp.get("last_interest", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
     if now - last < timedelta(days=1): return await ctx.reply("⏳ Mỗi ngày chỉ được thu lãi 1 lần.", mention_author=False)
-    lai_nhan_duoc = min(int(comp["treasury"] * 0.03), 80000)  # FIX: giảm lãi công ty xuống 3%
+    lai_nhan_duoc = min(int(comp["treasury"] * 0.03), 80000)
     comp["treasury"] += lai_nhan_duoc; comp["last_interest"] = now.strftime("%Y-%m-%d %H:%M:%S")
     save_company(comp_id)
     await ctx.reply(f"📈 Công ty nhận **{lai_nhan_duoc:,} 💰** lãi hôm nay!\nTổng quỹ: **{comp['treasury']:,} 💰**.", mention_author=False)
@@ -1461,7 +1534,7 @@ async def daichien(ctx, action: str = None, member: discord.Member = None, tacti
             await msg.edit(embed=discord.Embed(description=f"💀 **THẤT BẠI!** Đền bù **{fine:,} 💰** cho đối thủ.", color=discord.Color.red()))
 
 # =====================================================================
-# SÀN CHỨNG KHOÁN (ĐÃ FIX BUG TIỀN VÔ HẠN)
+# SÀN CHỨNG KHOÁN
 # =====================================================================
 @bot.group(invoke_without_command=True, aliases=['ck', 'trade'])
 async def chungkhoan(ctx):
@@ -1483,7 +1556,10 @@ async def chungkhoan(ctx):
         sell_price = get_stock_sell_price(code)
         price_old = get_stock_price(code, -1)
         trend = "💀 ĐÁY XÃ HỘI" if market_price <= 1000 else ("🟩 Lên" if market_price > price_old else "🟥 Xuống")
-        ipo_comp = companies_col.find_one({"is_ipo": True, "name": {"$regex": f"^{code}", "$options": "i"}})
+        try:
+            ipo_comp = companies_col.find_one({"is_ipo": True, "name": {"$regex": f"^{code}", "$options": "i"}})
+        except Exception:
+            ipo_comp = None
         scandal_mark = " 🚨(Phốt)" if ipo_comp and ipo_comp.get("has_scandal") else ""
         embed.add_field(
             name=f"🏢 {code} - {name}{scandal_mark}", 
@@ -1497,20 +1573,12 @@ async def chungkhoan(ctx):
 
 @chungkhoan.command()
 async def buy(ctx, code: str, qty: int):
-    """
-    FIX BUG TIỀN VÔ HẠN:
-    - Giá mua = giá thị trường + 3% spread
-    - Lưu giá mua thực tế vào stock_buy_prices
-    - Cooldown 10 phút giữa các lệnh
-    """
     user_id = str(ctx.author.id)
     
-    # FIX: Anti race condition
     if not acquire_lock(user_id):
         return await ctx.reply(embed=discord.Embed(description="⚠️ Đang xử lý lệnh trước, vui lòng chờ!", color=discord.Color.orange()), mention_author=False)
     
     try:
-        # FIX: Cooldown 10 phút cho mỗi lệnh CK
         now = datetime.now()
         if user_id in stock_cooldowns:
             diff = (now - stock_cooldowns[user_id]).total_seconds()
@@ -1526,14 +1594,14 @@ async def buy(ctx, code: str, qty: int):
             return await ctx.reply("⚠️ Mã CK không tồn tại!")
         if qty <= 0:
             return await ctx.reply("⚠️ Số lượng > 0!")
-        if qty > 1000:  # FIX: giới hạn số lượng mua 1 lệnh
+        if qty > 1000:
             return await ctx.reply("⚠️ Tối đa **1,000 cổ phiếu** mỗi lệnh!")
         
         market_price = get_stock_price(code)
         if market_price <= 1000:
             return await ctx.reply("⚠️ Sàn khóa mua mã rác rưởi!")
         
-        buy_price = get_stock_buy_price(code)  # Giá mua có spread
+        buy_price = get_stock_buy_price(code)
         total_cost = buy_price * qty
         
         user_data = load_user(user_id)
@@ -1542,13 +1610,11 @@ async def buy(ctx, code: str, qty: int):
         
         user_data["money"] -= total_cost
         
-        # FIX: Rug pull check TRƯỚC KHI trừ tiền → đã trừ ở trên, hoàn lại nếu rug pull
         if total_cost >= 30000000 and random.randint(1, 100) <= 20:
             add_history(user_id, f"Bị Úp Bô CK {code} (-{total_cost:,} 💰)")
             save_user(user_id)
             return await ctx.reply(embed=discord.Embed(title="🚨 RUG PULL", description=f"CEO ôm **{total_cost:,} 💰** của bạn bỏ trốn! Mất trắng!", color=discord.Color.red()))
         
-        # FIX: Lưu giá mua trung bình để hiển thị lãi/lỗ khi bán
         current_stocks = user_data.get("stocks", {})
         current_buy_prices = user_data.get("stock_buy_prices", {})
         
@@ -1575,19 +1641,12 @@ async def buy(ctx, code: str, qty: int):
 
 @chungkhoan.command()
 async def sell(ctx, code: str, qty: int):
-    """
-    FIX BUG TIỀN VÔ HẠN:
-    - Giá bán = giá thị trường - 3% spread - 5% thuế
-    - Không thể bán ngay sau khi mua (cooldown 10 phút chung)
-    - Hiển thị lãi/lỗ so với giá mua
-    """
     user_id = str(ctx.author.id)
     
     if not acquire_lock(user_id):
         return await ctx.reply(embed=discord.Embed(description="⚠️ Đang xử lý lệnh trước, vui lòng chờ!", color=discord.Color.orange()), mention_author=False)
     
     try:
-        # FIX: Cùng cooldown với buy → không thể mua rồi bán ngay
         now = datetime.now()
         if user_id in stock_cooldowns:
             diff = (now - stock_cooldowns[user_id]).total_seconds()
@@ -1606,10 +1665,9 @@ async def sell(ctx, code: str, qty: int):
         if qty <= 0 or owned_qty < qty:
             return await ctx.reply(f"⚠️ Bạn chỉ có **{owned_qty} CP {code}**!")
         
-        sell_price = get_stock_sell_price(code)  # Giá bán có spread + thuế
+        sell_price = get_stock_sell_price(code)
         total_gain = sell_price * qty
         
-        # Hiển thị lãi/lỗ
         avg_buy_price = user_data.get("stock_buy_prices", {}).get(code, sell_price)
         profit = (sell_price - avg_buy_price) * qty
         profit_pct = ((sell_price - avg_buy_price) / avg_buy_price * 100) if avg_buy_price > 0 else 0
@@ -1649,12 +1707,12 @@ async def ipo(ctx):
     await ctx.reply(embed=embed_success, mention_author=False)
 
 # =====================================================================
-# HỆ THỐNG NGÂN HÀNG (giảm lãi suất)
+# HỆ THỐNG NGÂN HÀNG
 # =====================================================================
 @bot.group(invoke_without_command=True, aliases=['nganhang', 'nh'])
 async def bank(ctx):
     user_data = load_user(ctx.author.id)
-    embed = discord.Embed(title="🏦 NGÂN HÀNG TRUNG ƯƠNG SERVER", description="📥 `k bank gui <số tiền / all>`: Gửi tiền\n📤 `k bank rut <số tiền / all>`: Rút tiền\n📈 `k bank laisuat`: Nhận lãi **0.1%/ngày** (giảm từ 0.2%)", color=discord.Color.blue())
+    embed = discord.Embed(title="🏦 NGÂN HÀNG TRUNG ƯƠNG SERVER", description="📥 `k bank gui <số tiền / all>`: Gửi tiền\n📤 `k bank rut <số tiền / all>`: Rút tiền\n📈 `k bank laisuat`: Nhận lãi **0.1%/ngày**", color=discord.Color.blue())
     embed.add_field(name="💳 Ví Tiền Mặt", value=f"**{user_data.get('money', 0):,} 💰**", inline=True)
     embed.add_field(name="🏦 Két Sắt", value=f"**{user_data.get('bank', 0):,} 💰**", inline=True)
     embed.set_thumbnail(url=GIF_LINKS.get("bank", ""))
@@ -1665,11 +1723,14 @@ async def laisuat(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); bank_bal = user_data.get("bank", 0)
     if bank_bal < 50000: return await ctx.reply(embed=discord.Embed(description="⚠️ Gửi trên 50k mới được tính lãi suất.", color=discord.Color.red()), mention_author=False)
     now = datetime.now()
-    last = datetime.strptime(user_data.get("last_interest", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
+    try:
+        last = datetime.strptime(user_data.get("last_interest", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        last = datetime(2000, 1, 1)
     if now - last < timedelta(days=1):
         next_time = int((last + timedelta(days=1)).timestamp())
         return await ctx.reply(embed=discord.Embed(description=f"⏳ Quay lại vào: <t:{next_time}:R>", color=discord.Color.orange()), mention_author=False)
-    interest = int(bank_bal * 0.001)   # FIX: giảm xuống 0.1%/ngày
+    interest = int(bank_bal * 0.001)
     user_data["bank"] += interest; user_data["last_interest"] = now.strftime("%Y-%m-%d %H:%M:%S")
     save_user(user_id); add_history(user_id, f"Nhận lãi ngân hàng (+{interest:,} 💰)")
     await ctx.reply(embed=discord.Embed(description=f"📈 Ngân hàng cộng **{interest:,} 💰** (0.1%) vào két sắt.", color=discord.Color.green()), mention_author=False)
@@ -1713,10 +1774,20 @@ async def nongtrai(ctx):
     if not farm.get("seed"):
         embed.description = f"Đất trống.\n\n**Danh sách hạt giống:**\n{seed_list}\n\n🛒 Mua: `k farm mua <tên>` | 🌱 Trồng: `k farm trong <tên>`"
     else:
-        seed_info = FARM_SEEDS[farm["seed"]]
-        harvest_time = datetime.strptime(farm["plant_time"], "%Y-%m-%d %H:%M:%S") + timedelta(hours=seed_info["time_hours"])
-        if datetime.now() >= harvest_time: embed.description = f"🌾 **{seed_info['name']}** đã chín! Gõ `k farm thuhoach`"; embed.color = discord.Color.gold()
-        else: embed.description = f"🌱 Đang trồng **{seed_info['name']}**.\n⏳ Thu hoạch: <t:{int(harvest_time.timestamp())}:R>"
+        seed_info = FARM_SEEDS.get(farm["seed"])
+        if not seed_info:
+            embed.description = "Lỗi: Hạt giống không hợp lệ. Đất đã được dọn sạch."
+            user_data["farm"] = {"seed": None, "plant_time": None}
+            save_user(ctx.author.id)
+        else:
+            try:
+                harvest_time = datetime.strptime(farm["plant_time"], "%Y-%m-%d %H:%M:%S") + timedelta(hours=seed_info["time_hours"])
+                if datetime.now() >= harvest_time: embed.description = f"🌾 **{seed_info['name']}** đã chín! Gõ `k farm thuhoach`"; embed.color = discord.Color.gold()
+                else: embed.description = f"🌱 Đang trồng **{seed_info['name']}**.\n⏳ Thu hoạch: <t:{int(harvest_time.timestamp())}:R>"
+            except Exception:
+                embed.description = "Lỗi đọc thời gian trồng. Đất đã được dọn sạch."
+                user_data["farm"] = {"seed": None, "plant_time": None}
+                save_user(ctx.author.id)
     await ctx.reply(embed=embed)
 
 @nongtrai.command()
@@ -1744,8 +1815,17 @@ async def trong(ctx, seed: str):
 async def thuhoach(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); farm = user_data.get("farm", {})
     if not farm.get("seed"): return await ctx.reply("⚠️ Đất trống lấy gì thu hoạch!")
-    seed_info = FARM_SEEDS[farm["seed"]]
-    harvest_time = datetime.strptime(farm["plant_time"], "%Y-%m-%d %H:%M:%S") + timedelta(hours=seed_info["time_hours"])
+    seed_info = FARM_SEEDS.get(farm["seed"])
+    if not seed_info:
+        user_data["farm"] = {"seed": None, "plant_time": None}
+        save_user(user_id)
+        return await ctx.reply("⚠️ Hạt giống lỗi, đã dọn sạch đất.")
+    try:
+        harvest_time = datetime.strptime(farm["plant_time"], "%Y-%m-%d %H:%M:%S") + timedelta(hours=seed_info["time_hours"])
+    except Exception:
+        user_data["farm"] = {"seed": None, "plant_time": None}
+        save_user(user_id)
+        return await ctx.reply("⚠️ Lỗi dữ liệu farm, đã reset.")
     if datetime.now() < harvest_time: return await ctx.reply(f"⏳ Cây chưa chín! Chờ đến <t:{int(harvest_time.timestamp())}:R>.")
     profit = random.randint(seed_info["profit_min"], seed_info["profit_max"])
     user_data["money"] += profit; user_data["farm"] = {"seed": None, "plant_time": None}
@@ -1757,14 +1837,13 @@ async def thuhoach(ctx):
     await ctx.reply(embed=discord.Embed(description=result_text, color=discord.Color.gold()))
 
 # =====================================================================
-# HỆ THỐNG CÂU CÁ (tăng cooldown)
+# HỆ THỐNG CÂU CÁ
 # =====================================================================
 @bot.command(aliases=['caudu', 'fish'])
 async def cauca(ctx):
     user_id = str(ctx.author.id)
     now = datetime.now()
     
-    # FIX: tăng cooldown câu cá lên 25 giây
     if user_id in fishing_cooldowns:
         diff = (now - fishing_cooldowns[user_id]).total_seconds()
         if diff < 25:
@@ -1831,7 +1910,7 @@ async def cauca(ctx):
     await msg.edit(embed=embed_result)
 
 # =====================================================================
-# ĐI LÀM THÊM (cooldown 45 phút, thêm random event xui)
+# ĐI LÀM THÊM
 # =====================================================================
 @bot.command(aliases=['lamviec', 'work'])
 async def dilamthem(ctx):
@@ -1840,9 +1919,11 @@ async def dilamthem(ctx):
     now = datetime.now()
     
     last_work_str = user_data.get("last_work", "2000-01-01 00:00:00")
-    last_work = datetime.strptime(last_work_str, "%Y-%m-%d %H:%M:%S")
+    try:
+        last_work = datetime.strptime(last_work_str, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        last_work = datetime(2000, 1, 1)
     
-    # FIX: tăng cooldown lên 45 phút
     if now - last_work < timedelta(minutes=45):
         next_time = int((last_work + timedelta(minutes=45)).timestamp())
         return await ctx.reply(embed=discord.Embed(description=f"😓 Mệt quá rồi! Nghỉ ngơi đến <t:{next_time}:R> rồi đi làm tiếp.", color=discord.Color.orange()), mention_author=False)
@@ -1850,7 +1931,6 @@ async def dilamthem(ctx):
     job = random.choice(JOBS)
     wage = random.randint(job["min"], job["max"])
     
-    # FIX: 10% xác suất gặp tai nạn lao động mất tiền
     bad_event = None
     if random.randint(1, 100) <= 10:
         accident_cost = random.randint(1000, wage // 2)
@@ -1937,17 +2017,16 @@ async def thanhtich(ctx, member: discord.Member = None):
     await ctx.reply(embed=embed, mention_author=False)
 
 # =====================================================================
-# MINIGAMES: CASINO, ĐÀO VÀNG, VIETLOTT...
+# MINIGAMES
 # =====================================================================
 @bot.command(aliases=['cuop', 'cuopbank'])
 async def cuopnganhang(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); now = datetime.now()
     bank_bal = user_data.get("bank", 0)
     
-    if bank_bal < 200000:  # FIX: tăng ngưỡng lên 200k
+    if bank_bal < 200000:
         return await ctx.reply(embed=discord.Embed(description="⚠️ Bạn cần gửi ít nhất **200,000 💰** trong ngân hàng để làm nội gián!", color=discord.Color.red()), mention_author=False)
     
-    # FIX: dùng rob_cooldowns riêng, cooldown 2 giờ
     if user_id in rob_cooldowns and (now - rob_cooldowns[user_id]).total_seconds() < 7200:
         remaining = int(7200 - (now - rob_cooldowns[user_id]).total_seconds())
         return await ctx.reply(embed=discord.Embed(description=f"⏳ Đang bị truy nã! Hãy đi trốn **{remaining//60}p {remaining%60}s** nữa.", color=discord.Color.orange()), mention_author=False)
@@ -1956,18 +2035,17 @@ async def cuopnganhang(ctx):
     msg = await ctx.send(embed=discord.Embed(title="🔫 PHI VỤ THẾ KỶ", description="Bạn đang lẻn vào két sắt ngân hàng...", color=discord.Color.dark_grey()))
     await asyncio.sleep(2.5)
     
-    # FIX: giảm tỉ lệ thành công xuống 20%
     if random.randint(1, 100) <= 20: 
-        loot_amount = int(bank_bal * random.uniform(0.03, 0.10))  # FIX: giảm phần trăm loot
+        loot_amount = int(bank_bal * random.uniform(0.03, 0.10))
         user_data["money"] += loot_amount; save_user(user_id)
         add_history(user_id, f"Cướp Bank trót lọt (+{loot_amount:,} 💰)")
         embed_win = discord.Embed(title="🎉 PHI VỤ TRÓT LỌT!", description=f"Vơ vét được **{loot_amount:,} 💰** rồi chuồn êm!\n⏳ Cooldown: 2 giờ", color=discord.Color.green())
         embed_win.set_image(url=GIF_LINKS["rob_success"])
         await msg.edit(embed=embed_win)
     else: 
-        fine = int(bank_bal * 0.15)  # FIX: tăng phạt lên 15%
+        fine = int(bank_bal * 0.15)
         user_data["bank"] -= fine
-        jail_time = now + timedelta(minutes=20)  # FIX: tăng thời gian tù lên 20 phút
+        jail_time = now + timedelta(minutes=20)
         user_data["jail_time"] = jail_time.strftime("%Y-%m-%d %H:%M:%S")
         save_user(user_id); add_history(user_id, f"Cướp Bank xịt (-{fine:,} 💰)")
         embed_lose = discord.Embed(title="🚨 BỊ CÔNG AN TÓM GỌN", description=f"Bị bắt!\nNgân hàng siết nợ **{fine:,} 💰** từ két sắt.\n⛔ **BỊ TÙ ĐẾN: <t:{int(jail_time.timestamp())}:R>**!", color=discord.Color.red())
@@ -1978,28 +2056,26 @@ async def cuopnganhang(ctx):
 async def daovang(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); now = datetime.now()
     
-    # FIX: dùng mining_cooldowns riêng (không dùng work_cooldowns nữa)
     if user_id in mining_cooldowns and (now - mining_cooldowns[user_id]).total_seconds() < 60:
         remaining = int(60 - (now - mining_cooldowns[user_id]).total_seconds())
         return await ctx.reply(embed=discord.Embed(description=f"⏳ Tay mỏi nhừ! Nghỉ {remaining}s.", color=discord.Color.orange()), mention_author=False)
     
     if "Cuốc Chim ⛏️" not in user_data.get("assets", []):
         if user_data.get("money", 0) < 10000: return await ctx.reply(embed=discord.Embed(description="⚠️ Không đủ **10,000 💰** mua Cuốc Chim!", color=discord.Color.red()), mention_author=False)
-        user_data["money"] -= 10000; user_data["assets"].append("Cuốc Chim ⛏️")  # FIX: tăng giá cuốc
+        user_data["money"] -= 10000; user_data["assets"].append("Cuốc Chim ⛏️")
         await ctx.send(embed=discord.Embed(description="🛒 Đã tự động trừ 10k để mua **Cuốc Chim ⛏️**!", color=discord.Color.blue()))
     
     mining_cooldowns[user_id] = now
     msg = await ctx.send(embed=discord.Embed(description="⛏️ Cạch... Cạch... Đang đào hầm mỏ âm u...", color=discord.Color.dark_grey()))
     await asyncio.sleep(2)
     
-    # FIX: tăng xác suất kết quả xấu, giảm phần thưởng
     roll = random.randint(1, 100)
-    if roll <= 45: result_name, value = "Cục Đá Vô Dụng 🪨", 0           # FIX: tăng từ 40% → 45%
-    elif roll <= 72: result_name, value = "Mảnh Sắt Vụn 🔩", random.randint(500, 2000)   # FIX: giảm tiền
+    if roll <= 45: result_name, value = "Cục Đá Vô Dụng 🪨", 0
+    elif roll <= 72: result_name, value = "Mảnh Sắt Vụn 🔩", random.randint(500, 2000)
     elif roll <= 90: result_name, value = "Thỏi Vàng Ròng 🥇", random.randint(5000, 12000)
     elif roll <= 98: result_name, value = "Viên Kim Cương 💎", random.randint(40000, 80000)
     else: 
-        penalty = int(user_data["money"] * 0.15) if user_data["money"] > 0 else 0  # FIX: tăng phạt
+        penalty = int(user_data["money"] * 0.15) if user_data["money"] > 0 else 0
         user_data["money"] -= penalty; save_user(user_id)
         add_history(user_id, f"Đào trúng bom (-{penalty:,} 💰)")
         return await msg.edit(embed=discord.Embed(description=f"💥 **BÙMMMMM!** Đào trúng quả bom!\nViện phí: **{penalty:,} 💰**!", color=discord.Color.red()))
@@ -2027,7 +2103,7 @@ async def vietlott(ctx, so: int, amount: str):
     
     ket_qua = random.randint(0, 99)
     if so == ket_qua:
-        win_amount = bet_amount * 60  # FIX: giảm nhân từ 70x xuống 60x
+        win_amount = bet_amount * 60
         user_data["money"] += win_amount; save_user(user_id)
         add_history(user_id, f"Trúng Vietlott (+{win_amount:,} 💰)")
         await msg.edit(embed=discord.Embed(description=f"🎉 **TRÚNG ĐỘC ĐẮC!** Kết quả: **{ket_qua:02d}**!\nThu về **{win_amount:,} 💰** (gấp 60 lần)!", color=discord.Color.green()))
@@ -2044,7 +2120,6 @@ async def coin(ctx, amount: str):
     msg = await ctx.reply(embed=discord.Embed(description=f"🪙 Tung **{bet_amount:,} 💰** lên trời...", color=discord.Color.gold()), mention_author=False)
     await asyncio.sleep(2) 
 
-    # FIX: 48% thắng thay vì 50% (lợi thế nhà cái)
     if random.randint(1, 100) <= 48:
         user_data["money"] += bet_amount * 2; save_user(user_id)
         add_history(user_id, f"Tung xu Thắng (+{bet_amount:,} 💰)")
@@ -2075,9 +2150,6 @@ async def taixiu(ctx, choice: str, amount: str):
     result_type = "xiu" if total_score <= 10 else "tai"
     result_embed = discord.Embed(title="🎲 KẾT QUẢ TÀI XỈU")
     
-    # FIX BUG: so sánh đúng - normalize cả 2 vế
-    choice_normalized = choice.replace("à", "a").replace("ỉ", "i").replace("ầ", "a").replace("ỉ", "i")
-    # Đơn giản hơn: map trực tiếp
     choice_map = {"tai": "tai", "tài": "tai", "xiu": "xiu", "xỉu": "xiu"}
     choice_key = choice_map.get(choice, "xiu")
     
@@ -2193,13 +2265,13 @@ async def mayxeng(ctx, amount: str):
     for _ in range(2): embed.description = f"**[ {slots_result[0]} | {slots_result[1]} | {random.choice(items)} ]**\n\n🔄 Chốt ô cuối..."; await msg.edit(embed=embed); await asyncio.sleep(1)
         
     if slots_result[0] == slots_result[1] and slots_result[1] == slots_result[2]:
-        if slots_result[0] == "👑": win_amt = bet_amount * 40    # FIX: giảm jackpot
+        if slots_result[0] == "👑": win_amt = bet_amount * 40
         elif slots_result[0] == "💎": win_amt = bet_amount * 15
         else: win_amt = bet_amount * 8
         result_text = f"🔥 **JACKPOT!!! ĐẠI NỔ HŨ!** 3 ô {slots_result[0]}\nHúp **{win_amt:,} 💰**!"
         user_data["money"] += win_amt; add_history(user_id, f"Nổ Hũ (+{win_amt:,} 💰)")
     elif slots_result[0] == slots_result[1] or slots_result[1] == slots_result[2] or slots_result[0] == slots_result[2]:
-        win_amt = int(bet_amount * 1.5)  # FIX: thắng nhỏ chỉ 1.5x
+        win_amt = int(bet_amount * 1.5)
         result_text = f"🎉 **THẮNG NHỎ!** 2 ô giống nhau. Nhận **{win_amt:,} 💰**."
         user_data["money"] += win_amt; add_history(user_id, f"Máy Xèng Thắng nhỏ (+{win_amt - bet_amount:,} 💰)")
     else:
@@ -2215,11 +2287,9 @@ async def mayxeng(ctx, amount: str):
 
 @bot.command()
 async def gacha(ctx):
-    """FIX BUG: thêm cooldown 5 phút cho gacha."""
     user_id = str(ctx.author.id)
     now = datetime.now()
     
-    # FIX: cooldown 5 phút
     if user_id in gacha_cooldowns:
         diff = (now - gacha_cooldowns[user_id]).total_seconds()
         if diff < 300:
@@ -2229,7 +2299,7 @@ async def gacha(ctx):
             ), mention_author=False)
     
     user_data = load_user(user_id)
-    cost = 50000  # FIX: tăng giá gacha từ 30k lên 50k
+    cost = 50000
     if user_data.get("money", 0) < cost:
         return await ctx.reply(embed=discord.Embed(description=f"⚠️ Trứng Gacha giá **{cost:,} 💰**. Đi cày thêm!", color=discord.Color.red()), mention_author=False)
         
@@ -2341,7 +2411,7 @@ async def duel(ctx, member: discord.Member, amount: int):
     if member.bot or member.id == ctx.author.id:
         return await ctx.reply(embed=discord.Embed(description="⚠️ Không thể thách đấu bot hoặc chính mình!", color=discord.Color.red()), mention_author=False)
     
-    if amount <= 0 or amount > 300000:  # FIX: giảm giới hạn duel
+    if amount <= 0 or amount > 300000:
         return await ctx.reply(embed=discord.Embed(description="⚠️ Cược từ 1 đến 300,000 💰!", color=discord.Color.red()), mention_author=False)
     
     author_data = load_user(ctx.author.id)
@@ -2368,7 +2438,7 @@ async def help(ctx):
     embed.add_field(name="🎮 CASINO (MAX 300K, CD 6s)", value="`k coin` `k taixiu <tai/xiu>` `k baucua`\n`k nohu` `k vietlott <số>` `k duathu`", inline=False)
     embed.add_field(name="⚔️ PK & GAME", value="`k pk @user <tiền>` (Oẳn Tù Tì)\n`k duel @user <tiền>` (Quyết Đấu RPG)\n`k masoi` (Game Ma Sói)\n`k nhansinh` (Mô phỏng cuộc sống)\n`k gacha` (CD: 5p, giá 50k)\n`k cuopnganhang` (CD: 2h)", inline=False)
     embed.add_field(name="📊 THỐNG KÊ", value="`k thanhtich` | `k tuido`", inline=False)
-    embed.set_footer(text="v7.1 Patched: Fix bug CK tiền vô hạn, tăng độ khó toàn bộ game", icon_url=ctx.author.display_avatar.url)
+    embed.set_footer(text="v7.1 Patched", icon_url=ctx.author.display_avatar.url)
     await ctx.reply(embed=embed, mention_author=False)
 
 @bot.command()
@@ -2433,7 +2503,10 @@ async def tuido(ctx, member: discord.Member = None):
 
 @bot.command()
 async def top(ctx, category: str = "tien"):
-    all_users = list(users_col.find())
+    try:
+        all_users = list(users_col.find())
+    except Exception as e:
+        return await ctx.reply(embed=discord.Embed(description="⚠️ Lỗi kết nối database, thử lại sau!", color=discord.Color.red()), mention_author=False)
     
     if category.lower() in ["level", "cap"]:
         danh_sach = sorted([(doc["_id"], doc.get("level", 1), doc.get("xp", 0)) for doc in all_users], key=lambda x: (x[1], x[2]), reverse=True)
@@ -2467,7 +2540,10 @@ async def top(ctx, category: str = "tien"):
 async def daily(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); now = datetime.now()
     if user_data.get("last_daily"):
-        last_daily = datetime.strptime(user_data["last_daily"], "%Y-%m-%d %H:%M:%S")
+        try:
+            last_daily = datetime.strptime(user_data["last_daily"], "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            last_daily = datetime(2000, 1, 1)
         if now - last_daily < timedelta(days=1):
             next_time = int((last_daily + timedelta(days=1)).timestamp())
             return await ctx.reply(embed=discord.Embed(description=f"⏳ Lương tiếp theo: <t:{next_time}:R>.", color=discord.Color.orange()), mention_author=False)
@@ -2479,9 +2555,8 @@ async def daily(ctx):
         user_data["streak"] = 1
     
     streak = user_data.get("streak", 1)
-    # FIX: giảm base daily từ 1000 xuống 500
     base = 500
-    streak_bonus = min(streak * 50, 2500)  # FIX: giảm bonus streak
+    streak_bonus = min(streak * 50, 2500)
     total = base + streak_bonus
     
     user_data["money"] += total
@@ -2500,12 +2575,15 @@ async def daily(ctx):
 async def lixi(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); now = datetime.now()
     if user_data.get("last_lixi"):
-        last_lixi = datetime.strptime(user_data["last_lixi"], "%Y-%m-%d %H:%M:%S")
+        try:
+            last_lixi = datetime.strptime(user_data["last_lixi"], "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            last_lixi = datetime(2000, 1, 1)
         if now - last_lixi < timedelta(hours=12):
             next_time = int((last_lixi + timedelta(hours=12)).timestamp())
             return await ctx.reply(embed=discord.Embed(description=f"🧧 Lì xì tiếp theo: <t:{next_time}:R>.", color=discord.Color.orange()), mention_author=False)
 
-    tien = random.randint(500, 5000)  # FIX: giảm lì xì
+    tien = random.randint(500, 5000)
     user_data["money"] += tien; user_data["last_lixi"] = now.strftime("%Y-%m-%d %H:%M:%S"); save_user(user_id)
     await ctx.reply(embed=discord.Embed(description=f"🧧 Mở phong bao đỏ nhận được **{tien:,} 💰**!\n💳 Số dư ví: **{user_data['money']:,} 💰**", color=discord.Color.red()), mention_author=False)
 
@@ -2544,13 +2622,19 @@ async def thamhiem(ctx):
 async def phai(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); exp_end_str = user_data.get("exp_end")
     if exp_end_str:
-        now = datetime.now(); end_time = datetime.strptime(exp_end_str, "%Y-%m-%d %H:%M:%S")
-        if now >= end_time:
+        try:
+            now = datetime.now(); end_time = datetime.strptime(exp_end_str, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            del user_data["exp_end"]
+            if "exp_reward" in user_data: del user_data["exp_reward"]
+            save_user(user_id)
+            end_time = datetime.now()  # force reset
+        if datetime.now() >= end_time:
             reward = user_data.get("exp_reward", 500); user_data["money"] += reward
-            del user_data["exp_end"]; del user_data["exp_reward"]; save_user(user_id)
+            user_data.pop("exp_end", None); user_data.pop("exp_reward", None); save_user(user_id)
             return await ctx.reply(embed=discord.Embed(title="🎉 TRỞ VỀ AN TOÀN!", description=f"Hoàn thành chuyến dã ngoại! Thu hoạch **{reward:,} 💰**!", color=discord.Color.gold()), mention_author=False)
         else:
-            time_left = end_time - now; hours, remainder = divmod(int(time_left.total_seconds()), 3600); minutes, seconds = divmod(remainder, 60)
+            time_left = end_time - datetime.now(); hours, remainder = divmod(int(time_left.total_seconds()), 3600); minutes, seconds = divmod(remainder, 60)
             return await ctx.reply(embed=discord.Embed(description=f"⏳ Đang cày cuốc nơi hoang dã! Chờ thêm **{hours}h {minutes}m**.", color=discord.Color.orange()), mention_author=False)
     embed_start = discord.Embed(title="⛺ THÁM HIỂM AFK", description="Gửi nhân vật đi treo máy nhặt tiền!\n\n👇 **MỞ MENU CHỌN KHU VỰC CẮM TRẠI** 👇", color=discord.Color.dark_green())
     await ctx.send(embed=embed_start, view=ExpView(ctx.author))
@@ -2561,7 +2645,7 @@ async def nhansinh(ctx):
     if user_id in dang_choi_nhansinh: return await ctx.reply(embed=discord.Embed(description="⏳ Đang trong một kiếp luân hồi dở dang!", color=discord.Color.orange()), mention_author=False)
     if user_id in nhansinh_cooldowns and (now - nhansinh_cooldowns[user_id]).total_seconds() < 5: return await ctx.reply(embed=discord.Embed(description="⏳ Từ từ đã, đầu thai liên tục Diêm Vương mắng!", color=discord.Color.orange()), mention_author=False)
     user_data = load_user(user_id)
-    if user_data.get("money", 0) < 500: return await ctx.reply(embed=discord.Embed(description="⚠️ Vé luân hồi giá **500 💰**.", color=discord.Color.red()), mention_author=False)  # FIX: tăng giá vé
+    if user_data.get("money", 0) < 500: return await ctx.reply(embed=discord.Embed(description="⚠️ Vé luân hồi giá **500 💰**.", color=discord.Color.red()), mention_author=False)
 
     user_data["money"] -= 500; nhansinh_cooldowns[user_id] = now; dang_choi_nhansinh.append(user_id); save_user(user_id)
     initial_stats = {"may_man": random.randint(1, 10)}; view = NhanSinhGameView(ctx.author, initial_stats)
@@ -2642,30 +2726,41 @@ async def lyhon(ctx):
 @bot.event
 async def on_message(message):
     if message.author.bot: return
-    user_id = str(message.author.id); user_data = load_user(user_id)
+    user_id = str(message.author.id)
     
-    if user_data.get("jail_time") and datetime.now() < datetime.strptime(user_data["jail_time"], "%Y-%m-%d %H:%M:%S"):
-        return await bot.process_commands(message)
+    # FIX: luôn process commands TRƯỚC, kể cả người ở tù
+    # Người ở tù vẫn được check jail trong global_check
+    
+    user_data = load_user(user_id)
+    
+    # FIX: wrap XP/level-up trong try-except để không làm crash on_message
+    try:
+        if not (user_data.get("jail_time") and datetime.now() < datetime.strptime(user_data.get("jail_time", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")):
+            user_data["xp"] += random.randint(3, 10)
+            max_xp_required = user_data.get("level", 1) * 100
             
-    user_data["xp"] += random.randint(3, 10)  # FIX: giảm XP nhận được
-    max_xp_required = user_data.get("level", 1) * 100
-    
-    if user_data["xp"] >= max_xp_required:
-        user_data["xp"] -= max_xp_required; user_data["level"] += 1
-        reward = user_data["level"] * 100  # FIX: giảm tiền thưởng level up
-        user_data["money"] += reward
-        add_history(user_id, f"Thăng cấp Lv{user_data['level']} (+{reward:,} 💰)")
-        
-        new_achievements = check_achievement(user_id, user_data)
-        save_user(user_id)
-        
-        try: 
-            level_msg = f"🎉 **{message.author.mention}** đã đột phá lên **Cấp {user_data['level']}**!\nThưởng: **{reward:,} 💰**"
-            if new_achievements: level_msg += f"\n🏅 **THÀNH TÍCH MỚI:** " + ", ".join(new_achievements)
-            await message.channel.send(embed=discord.Embed(description=level_msg, color=discord.Color.gold()))
-        except Exception: pass
-    else:
-        save_user(user_id)
+            if user_data["xp"] >= max_xp_required:
+                user_data["xp"] -= max_xp_required; user_data["level"] += 1
+                reward = user_data["level"] * 100
+                user_data["money"] += reward
+                add_history(user_id, f"Thăng cấp Lv{user_data['level']} (+{reward:,} 💰)")
+                
+                new_achievements = check_achievement(user_id, user_data)
+                save_user(user_id)
+                
+                try: 
+                    level_msg = f"🎉 **{message.author.mention}** đã đột phá lên **Cấp {user_data['level']}**!\nThưởng: **{reward:,} 💰**"
+                    if new_achievements: level_msg += f"\n🏅 **THÀNH TÍCH MỚI:** " + ", ".join(new_achievements)
+                    await message.channel.send(embed=discord.Embed(description=level_msg, color=discord.Color.gold()))
+                except Exception: pass
+            else:
+                save_user(user_id)
+    except Exception as e:
+        print(f"[WARN] on_message XP error for {user_id}: {e}")
+        try:
+            save_user(user_id)
+        except Exception:
+            pass
             
     await bot.process_commands(message)
 
@@ -2725,7 +2820,7 @@ async def resetjail(ctx, member: discord.Member):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def giveall(ctx, amount: int):
-    if amount <= 0 or amount > 10000:  # FIX: giới hạn giveall tối đa 10k
+    if amount <= 0 or amount > 10000:
         return await ctx.send(embed=discord.Embed(description="⚠️ Giveall tối đa 10,000 💰!", color=discord.Color.red()))
     count = 0
     for member in ctx.guild.members:
