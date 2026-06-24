@@ -2440,22 +2440,31 @@ async def dinhchinh(ctx):
     await ctx.reply(embed=embed, mention_author=False)
 
 @cty.command()
-async def nangcap(ctx, stat: str):
+async def nangcap(ctx, stat: str, levels: int = 1):
     stat = stat.lower(); user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return await ctx.reply("Bạn chưa có công ty!")
     comp = load_company(comp_id)
     if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Chỉ Sếp mới được nâng cấp!")
+    if levels < 1 or levels > 10: return await ctx.reply("⚠️ Nâng tối đa 10 cấp 1 lần!")
+
     if stat == "cong":
-        current_lvl = comp.get("atk_level", 1); cost = current_lvl * 500000
-        if comp["treasury"] < cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{cost:,} 💰**!")
-        comp["treasury"] -= cost; comp["atk_level"] = current_lvl + 1
-        msg = f"⚔️ Nâng CÔNG lên Lv{current_lvl+1}! (Trừ {cost:,} 💰 từ quỹ)"
+        current_lvl = comp.get("atk_level", 1)
+        # Tính tổng chi phí: lv1→2 + lv2→3 + ...
+        total_cost = sum((current_lvl + i) * 500000 for i in range(levels))
+        if comp["treasury"] < total_cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{total_cost:,} 💰**!")
+        comp["treasury"] -= total_cost
+        comp["atk_level"] = current_lvl + levels
+        msg = f"⚔️ Nâng CÔNG **Lv{current_lvl} → Lv{current_lvl+levels}**! (Trừ {total_cost:,} 💰 từ quỹ)"
+
     elif stat == "thu":
-        current_lvl = comp.get("def_level", 1); cost = current_lvl * 300000
-        if comp["treasury"] < cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{cost:,} 💰**!")
-        comp["treasury"] -= cost; comp["def_level"] = current_lvl + 1
-        msg = f"🛡️ Nâng KHIÊN THỦ lên Lv{current_lvl+1}! (Trừ {cost:,} 💰 từ quỹ)"
-    else: return await ctx.reply("⚠️ Dùng `k cty nangcap cong` hoặc `k cty nangcap thu`.")
+        current_lvl = comp.get("def_level", 1)
+        total_cost = sum((current_lvl + i) * 300000 for i in range(levels))
+        if comp["treasury"] < total_cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{total_cost:,} 💰**!")
+        comp["treasury"] -= total_cost
+        comp["def_level"] = current_lvl + levels
+        msg = f"🛡️ Nâng THỦ **Lv{current_lvl} → Lv{current_lvl+levels}**! (Trừ {total_cost:,} 💰 từ quỹ)"
+
+    else: return await ctx.reply("⚠️ Dùng `k cty nangcap cong <số lv>` hoặc `k cty nangcap thu <số lv>`.")
     save_company(comp_id)
     await ctx.reply(embed=discord.Embed(description=msg, color=discord.Color.green()), mention_author=False)
 
@@ -3240,7 +3249,648 @@ async def giveall(ctx, amount: int):
             save_user(member.id)
             count += 1
     await ctx.send(embed=discord.Embed(description=f"✅ Đã bơm **{amount:,} 💰** cho **{count}** thành viên!", color=discord.Color.green()))
+# =====================================================================
+# HỆ THỐNG ĐẠI CHIẾN CÔNG TY - v1.0
+# Dán đoạn code này vào bot.py, TRƯỚC dòng keep_alive()
+# =====================================================================
 
+import asyncio
+import random
+from datetime import datetime, timedelta
+import discord
+from discord.ext import commands
+
+# Cooldown đại chiến: mỗi công ty chỉ được tấn công 1 lần / 6 giờ
+daichien_cooldowns = {}   # {comp_id: datetime}
+daichien_defense_log = {} # {comp_id: [log entries]}
+
+# ── Bảng kỹ năng chiến đấu ──────────────────────────────────────────
+# Mỗi vòng 1 bên chọn 1 kỹ năng (ẩn), reveal cùng lúc
+SKILLS = {
+    "tan_cong":  {"name": "⚔️  Tấn Công",   "emoji": "⚔️",  "beats": "phong_thu",  "bonus_atk": 1.4, "bonus_def": 1.0, "desc": "Dồn lực đánh thẳng"},
+    "phong_thu": {"name": "🛡️  Phòng Thủ",  "emoji": "🛡️",  "beats": "phan_cong",  "bonus_atk": 0.7, "bonus_def": 1.6, "desc": "Lập thế thủ chắc"},
+    "phan_cong": {"name": "🔄  Phản Công",   "emoji": "🔄",  "beats": "tan_cong",   "bonus_atk": 1.2, "bonus_def": 1.2, "desc": "Chờ đòn rồi trả"},
+    "do_bo":     {"name": "🎯  Đổ Bộ",       "emoji": "🎯",  "beats": None,          "bonus_atk": 1.8, "bonus_def": 0.5, "desc": "All-in mạo hiểm"},
+    "mai_phuc":  {"name": "🌑  Mai Phục",    "emoji": "🌑",  "beats": "do_bo",       "bonus_atk": 1.5, "bonus_def": 0.9, "desc": "Bẫy đòn đổ bộ"},
+}
+
+# ── Sự kiện ngẫu nhiên trong chiến đấu ─────────────────────────────
+BATTLE_EVENTS = [
+    {"msg": "⚡ **Sét đánh kho vũ khí** của {atk}! ATK giảm 20%.", "atk_mult": 0.8, "def_mult": 1.0},
+    {"msg": "🔥 **Lửa bùng** trại của {def}! DEF giảm 20%.", "atk_mult": 1.0, "def_mult": 0.8},
+    {"msg": "🌪️ **Bão cát** phủ chiến trường! Cả 2 bị -10%.", "atk_mult": 0.9, "def_mult": 0.9},
+    {"msg": "💊 **Viện trợ y tế** tới {def}! DEF +15%.", "atk_mult": 1.0, "def_mult": 1.15},
+    {"msg": "🚀 **Tiếp viện bí mật** cho {atk}! ATK +20%.", "atk_mult": 1.2, "def_mult": 1.0},
+    {"msg": "🤝 **Không có sự kiện** — trận đấu diễn ra bình thường.", "atk_mult": 1.0, "def_mult": 1.0},
+    {"msg": "🤝 **Không có sự kiện** — trận đấu diễn ra bình thường.", "atk_mult": 1.0, "def_mult": 1.0},
+]
+
+# ── Phần thưởng / hình phạt ─────────────────────────────────────────
+PRIZE_STEAL_RATE  = 0.12   # Thắng: cướp 12% quỹ đối phương
+REP_WIN_BONUS     = 15     # +15 danh tiếng khi thắng
+REP_LOSE_PENALTY  = 20     # -20 danh tiếng khi thua
+REP_SCANDAL_THRES = 30     # Dưới 30 rep → bị scandal
+CRIT_CHANCE       = 0.12   # 12% chí mạng x1.8
+
+# ════════════════════════════════════════════════════════════════════
+# VIEW: Màn hình chọn kỹ năng (Button)
+# ════════════════════════════════════════════════════════════════════
+class SkillPickView(discord.ui.View):
+    """Mỗi Chủ tịch bấm nút chọn kỹ năng (ẩn, ephemeral)."""
+
+    def __init__(self, battle_ctx, side: str):
+        super().__init__(timeout=60)
+        self.battle_ctx = battle_ctx  # BattleContext object
+        self.side = side              # "atk" hoặc "def"
+
+        for skill_id, skill_data in SKILLS.items():
+            btn = discord.ui.Button(
+                label=f"{skill_data['emoji']} {skill_data['name'].split()[1]}",
+                style=discord.ButtonStyle.primary,
+                custom_id=skill_id,
+            )
+            btn.callback = self._make_callback(skill_id)
+            self.add_item(btn)
+
+    def _make_callback(self, skill_id):
+        async def callback(interaction: discord.Interaction):
+            ctx = self.battle_ctx
+            # Chỉ boss mới được chọn
+            expected_id = ctx.atk_boss_id if self.side == "atk" else ctx.def_boss_id
+            if str(interaction.user.id) != expected_id:
+                return await interaction.response.send_message(
+                    "❌ Chỉ Chủ Tịch công ty mới được chọn kỹ năng!", ephemeral=True
+                )
+
+            if self.side == "atk":
+                ctx.atk_skill = skill_id
+            else:
+                ctx.def_skill = skill_id
+
+            self.stop()
+            for btn in self.children:
+                btn.disabled = True
+
+            chosen = SKILLS[skill_id]
+            await interaction.response.edit_message(
+                embed=discord.Embed(
+                    description=f"✅ Đã chọn **{chosen['name']}** — {chosen['desc']}\n⏳ Chờ đối phương...",
+                    color=discord.Color.green()
+                ),
+                view=self
+            )
+
+        return callback
+
+
+# ════════════════════════════════════════════════════════════════════
+# VIEW: Chấp nhận / từ chối thách đấu
+# ════════════════════════════════════════════════════════════════════
+class ChallengeAcceptView(discord.ui.View):
+    def __init__(self, ctx, atk_comp, def_comp, atk_boss, def_boss_id: str):
+        super().__init__(timeout=120)
+        self.ctx       = ctx
+        self.atk_comp  = atk_comp
+        self.def_comp  = def_comp
+        self.atk_boss  = atk_boss
+        self.def_boss_id = def_boss_id
+        self.accepted  = False
+
+    @discord.ui.button(label="⚔️ Nhận Chiến!", style=discord.ButtonStyle.danger)
+    async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != self.def_boss_id:
+            return await interaction.response.send_message("❌ Chỉ Chủ Tịch bên phòng thủ!", ephemeral=True)
+
+        self.accepted = True
+        for btn in self.children:
+            btn.disabled = True
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                title="⚔️ THÁCH CHIẾN ĐƯỢC CHẤP NHẬN!",
+                description="🕐 Trận đấu bắt đầu trong **5 giây**...",
+                color=discord.Color.red()
+            ),
+            view=self
+        )
+        self.stop()
+        await asyncio.sleep(2)
+        await run_battle(interaction, self.atk_comp, self.def_comp, self.atk_boss)
+
+    @discord.ui.button(label="🏳️ Rút Lui", style=discord.ButtonStyle.secondary)
+    async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != self.def_boss_id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        for btn in self.children:
+            btn.disabled = True
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                description=f"🏳️ Công ty **{self.def_comp['name']}** đã rút lui khỏi thách đấu.",
+                color=discord.Color.dark_grey()
+            ),
+            view=self
+        )
+        self.stop()
+
+
+# ════════════════════════════════════════════════════════════════════
+# CORE: Chạy trận đấu
+# ════════════════════════════════════════════════════════════════════
+class BattleContext:
+    """Lưu trạng thái 1 trận chiến."""
+    def __init__(self, atk_comp, def_comp, atk_boss_id, def_boss_id):
+        self.atk_comp    = atk_comp
+        self.def_comp    = def_comp
+        self.atk_boss_id = str(atk_boss_id)
+        self.def_boss_id = str(def_boss_id)
+        self.atk_skill   = None
+        self.def_skill   = None
+
+
+async def run_battle(interaction_or_ctx, atk_comp, def_comp, atk_boss_member):
+    """Điều phối toàn bộ trận chiến: 3 vòng + tổng kết."""
+    channel = (
+        interaction_or_ctx.channel
+        if hasattr(interaction_or_ctx, "channel")
+        else interaction_or_ctx.channel
+    )
+
+    atk_boss_id = str(atk_boss_member.id)
+    def_boss_id = next(
+        (uid for uid, role in def_comp["members"].items() if role == "boss"), None
+    )
+    if not def_boss_id:
+        return await channel.send("❌ Không tìm thấy Chủ Tịch phòng thủ!")
+
+    # Lấy Member object
+    try:
+        def_boss_member = await interaction_or_ctx.guild.fetch_member(int(def_boss_id))
+    except Exception:
+        def_boss_member = None
+
+    # Chỉ số cơ bản
+    atk_base = (atk_comp.get("atk_level", 1) * 100 +
+                 len(atk_comp.get("members", {})) * 20 +
+                 atk_comp.get("treasury", 0) // 100000)
+    def_base = (def_comp.get("def_level", 1) * 100 +
+                 len(def_comp.get("members", {})) * 20 +
+                 def_comp.get("treasury", 0) // 100000)
+
+    atk_hp = 300
+    def_hp = 300
+    round_logs = []
+
+    for round_num in range(1, 4):
+        # ── Gửi DM để chọn kỹ năng ──────────────────────────────────
+        ctx_obj = BattleContext(atk_comp, def_comp, atk_boss_id, def_boss_id)
+
+        embed_pick = discord.Embed(
+            title=f"⚔️ Vòng {round_num}/3 — Chọn Kỹ Năng",
+            description=(
+                "Cả 2 Chủ Tịch hãy **chọn kỹ năng trong 30 giây**.\n"
+                "Kết quả sẽ reveal cùng lúc!\n\n"
+                "```\n⚔️ Tấn Công  > 🛡️ Phòng Thủ\n"
+                "🛡️ Phòng Thủ > 🔄 Phản Công\n"
+                "🔄 Phản Công  > ⚔️ Tấn Công\n"
+                "🌑 Mai Phục   > 🎯 Đổ Bộ\n"
+                "🎯 Đổ Bộ     (mạo hiểm nhất)\n```"
+            ),
+            color=discord.Color.gold()
+        )
+        await channel.send(
+            f"{atk_boss_member.mention} | "
+            f"{def_boss_member.mention if def_boss_member else f'<@{def_boss_id}>'} "
+            f"— Vòng **{round_num}**: Chọn kỹ năng!",
+            embed=embed_pick
+        )
+
+        # Gửi view chọn kỹ năng ephemeral (dùng message thường vì không dùng slash)
+        view_atk = SkillPickView(ctx_obj, "atk")
+        view_def = SkillPickView(ctx_obj, "def")
+
+        msg_atk = await channel.send(
+            f"🔐 {atk_boss_member.mention} — **{atk_comp['name']}** chọn kỹ năng:",
+            view=view_atk
+        )
+        msg_def = await channel.send(
+            f"🔐 {def_boss_member.mention if def_boss_member else f'<@{def_boss_id}>'} — **{def_comp['name']}** chọn kỹ năng:",
+            view=view_def
+        )
+
+        # Đợi cả 2 chọn hoặc timeout
+        start = datetime.now()
+        while (ctx_obj.atk_skill is None or ctx_obj.def_skill is None):
+            await asyncio.sleep(1)
+            if (datetime.now() - start).total_seconds() >= 30:
+                break
+
+        # Nếu ai không chọn → random
+        if ctx_obj.atk_skill is None:
+            ctx_obj.atk_skill = random.choice(list(SKILLS.keys()))
+        if ctx_obj.def_skill is None:
+            ctx_obj.def_skill = random.choice(list(SKILLS.keys()))
+
+        # Disable cả 2 view
+        for btn in view_atk.children:
+            btn.disabled = True
+        for btn in view_def.children:
+            btn.disabled = True
+        try:
+            await msg_atk.edit(view=view_atk)
+            await msg_def.edit(view=view_def)
+        except Exception:
+            pass
+
+        # ── Tính kết quả vòng ───────────────────────────────────────
+        sk_atk = SKILLS[ctx_obj.atk_skill]
+        sk_def = SKILLS[ctx_obj.def_skill]
+
+        # Kỹ năng counter bonus (+20%)
+        skill_atk_mult = 1.2 if sk_atk.get("beats") == ctx_obj.def_skill else 1.0
+        skill_def_mult = 1.2 if sk_def.get("beats") == ctx_obj.atk_skill else 1.0
+
+        # Sự kiện ngẫu nhiên
+        event = random.choice(BATTLE_EVENTS)
+
+        # Tính damage
+        atk_power = (atk_base * sk_atk["bonus_atk"] * skill_atk_mult
+                     * event["atk_mult"] * random.uniform(0.85, 1.15))
+        def_power = (def_base * sk_def["bonus_def"] * skill_def_mult
+                     * event["def_mult"] * random.uniform(0.85, 1.15))
+
+        # Chí mạng
+        atk_crit = random.random() < CRIT_CHANCE
+        def_crit = random.random() < CRIT_CHANCE
+        if atk_crit:
+            atk_power *= 1.8
+        if def_crit:
+            def_power *= 1.8
+
+        # Damage thực sự
+        atk_dmg = max(5, int((atk_power - def_power * 0.4) / 10))
+        def_dmg = max(5, int((def_power - atk_power * 0.4) / 10))
+
+        def_hp -= atk_dmg
+        atk_hp -= def_dmg
+
+        # Xây log vòng
+        crit_atk_str = " 💥**CHÍ MẠNG!**" if atk_crit else ""
+        crit_def_str = " 💥**CHÍ MẠNG!**" if def_crit else ""
+
+        counter_str = ""
+        if skill_atk_mult > 1.0:
+            counter_str = f"\n🎯 **{sk_atk['emoji']} counter {sk_def['emoji']}** → ATK +20%"
+        elif skill_def_mult > 1.0:
+            counter_str = f"\n🎯 **{sk_def['emoji']} counter {sk_atk['emoji']}** → DEF +20%"
+
+        log = (
+            f"**Vòng {round_num}:**\n"
+            f"  {atk_comp['name']}: {sk_atk['emoji']} **{sk_atk['name'].split()[1]}**"
+            f"{crit_atk_str} → gây **{atk_dmg} ST**\n"
+            f"  {def_comp['name']}: {sk_def['emoji']} **{sk_def['name'].split()[1]}**"
+            f"{crit_def_str} → giảm **{def_dmg} ST**\n"
+            f"  📣 {event['msg'].format(atk=atk_comp['name'], def_=def_comp['name'])}"
+            f"{counter_str}\n"
+            f"  ❤️ {atk_comp['name']}: **{max(0,atk_hp)}** | "
+            f"{def_comp['name']}: **{max(0,def_hp)}**"
+        )
+        round_logs.append(log)
+
+        bar_atk = make_hp_bar(max(0, atk_hp), 300)
+        bar_def = make_hp_bar(max(0, def_hp), 300)
+
+        embed_round = discord.Embed(
+            title=f"⚔️ KẾT QUẢ VÒNG {round_num}",
+            description=log,
+            color=discord.Color.orange()
+        )
+        embed_round.add_field(
+            name=f"❤️ {atk_comp['name']}",
+            value=f"{bar_atk} {max(0,atk_hp)}/300",
+            inline=False
+        )
+        embed_round.add_field(
+            name=f"❤️ {def_comp['name']}",
+            value=f"{bar_def} {max(0,def_hp)}/300",
+            inline=False
+        )
+        await channel.send(embed=embed_round)
+
+        if atk_hp <= 0 or def_hp <= 0:
+            break
+
+        await asyncio.sleep(3)
+
+    # ── Tổng kết ────────────────────────────────────────────────────
+    atk_wins = atk_hp > def_hp
+    if atk_hp == def_hp:
+        atk_wins = random.choice([True, False])  # hòa thì random
+
+    winner_comp = atk_comp if atk_wins else def_comp
+    loser_comp  = def_comp if atk_wins else atk_comp
+    winner_id   = atk_comp["_id"] if atk_wins else def_comp["_id"]
+    loser_id    = def_comp["_id"] if atk_wins else atk_comp["_id"]
+
+    # Thưởng: cướp 12% quỹ đối phương
+    loot = int(loser_comp.get("treasury", 0) * PRIZE_STEAL_RATE)
+    loser_comp["treasury"]  = max(0, loser_comp.get("treasury", 0) - loot)
+    winner_comp["treasury"] = winner_comp.get("treasury", 0) + loot
+
+    # Cập nhật danh tiếng
+    winner_comp["reputation"] = min(100, winner_comp.get("reputation", 100) + REP_WIN_BONUS)
+    loser_comp["reputation"]  = max(0,   loser_comp.get("reputation",  100) - REP_LOSE_PENALTY)
+
+    # Scandal nếu danh tiếng quá thấp
+    if loser_comp["reputation"] <= REP_SCANDAL_THRES and not loser_comp.get("has_scandal"):
+        loser_comp["has_scandal"] = True
+        scandal_note = f"\n🚨 **{loser_comp['name']}** bị PHỐT do danh tiếng quá thấp!"
+    else:
+        scandal_note = ""
+
+    # Phần thưởng cho toàn bộ thành viên winner
+    member_bonus = max(1000, loot // max(1, len(winner_comp.get("members", {}))))
+    for m_id in winner_comp.get("members", {}):
+        m_data = load_user(m_id)
+        m_data["money"] += member_bonus
+        save_user(m_id)
+
+    # Cooldown 6h cho bên tấn công
+    daichien_cooldowns[atk_comp["_id"]] = datetime.now()
+
+    save_company(winner_id)
+    save_company(loser_id)
+
+    # Thêm vào lịch sử sự kiện server
+    add_history(atk_boss_id,
+                f"Đại chiến {'thắng' if atk_wins else 'thua'} {loser_comp['name'] if atk_wins else winner_comp['name']}")
+
+    # Embed tổng kết
+    color_final = discord.Color.gold() if atk_wins else discord.Color.red()
+    embed_final = discord.Embed(
+        title="🏆 KẾT QUẢ ĐẠI CHIẾN CÔNG TY",
+        color=color_final
+    )
+    embed_final.add_field(
+        name="🎖️ Chiến thắng",
+        value=f"**{winner_comp['name']}** đánh bại **{loser_comp['name']}**!",
+        inline=False
+    )
+    embed_final.add_field(
+        name="💰 Chiến lợi phẩm",
+        value=(
+            f"Cướp **{loot:,} 💰** từ quỹ đối phương\n"
+            f"Mỗi thành viên nhận thêm **+{member_bonus:,} 💰**"
+        ),
+        inline=False
+    )
+    embed_final.add_field(
+        name="📊 Danh tiếng",
+        value=(
+            f"🟢 {winner_comp['name']}: +{REP_WIN_BONUS} → **{winner_comp['reputation']}/100**\n"
+            f"🔴 {loser_comp['name']}: -{REP_LOSE_PENALTY} → **{loser_comp['reputation']}/100**"
+            f"{scandal_note}"
+        ),
+        inline=False
+    )
+    embed_final.add_field(
+        name="📜 Tóm tắt trận đấu",
+        value="\n".join(round_logs),
+        inline=False
+    )
+    embed_final.set_footer(text=f"Quỹ thắng: {winner_comp['treasury']:,} 💰 | Quỹ thua: {loser_comp['treasury']:,} 💰")
+
+    await channel.send(embed=embed_final)
+
+
+def make_hp_bar(current, total, length=12):
+    """Tạo thanh HP màu."""
+    if total == 0:
+        return "⬛" * length
+    filled = int((current / total) * length)
+    empty  = length - filled
+    if current / total > 0.5:
+        bar = "🟩" * filled
+    elif current / total > 0.25:
+        bar = "🟨" * filled
+    else:
+        bar = "🟥" * filled
+    return bar + "⬛" * empty
+
+
+# ════════════════════════════════════════════════════════════════════
+# LỆNH CHÍNH: k daichien
+# ════════════════════════════════════════════════════════════════════
+@bot.group(invoke_without_command=True, aliases=['dc', 'war'])
+async def daichien(ctx):
+    """Bảng thông tin đại chiến + xem bảng xếp hạng công ty."""
+    try:
+        all_comps = list(companies_col.find())
+    except Exception:
+        all_comps = []
+
+    # Sắp xếp theo treasury
+    ranked = sorted(all_comps, key=lambda c: c.get("treasury", 0), reverse=True)
+
+    embed = discord.Embed(
+        title="⚔️ ĐẠI CHIẾN CÔNG TY",
+        description=(
+            "**Cách chơi:**\n"
+            "`k daichien tan <@user hoặc tên cty>` — Thách đấu\n"
+            "`k daichien info` — Thống kê công ty bạn\n"
+            "`k daichien lichsu` — Lịch sử trận đánh\n\n"
+            "**Cơ chế:**\n"
+            "• 3 vòng, mỗi vòng 2 bên chọn kỹ năng\n"
+            "• Kỹ năng có quan hệ counter (⚔️>🛡️>🔄>⚔️, 🌑>🎯)\n"
+            "• Sự kiện ngẫu nhiên xảy ra mỗi vòng\n"
+            "• Thắng: cướp 12% quỹ + +15 danh tiếng\n"
+            "• Thua: mất tiền + -20 danh tiếng\n"
+            "• CD: 6 giờ / lần tấn công\n"
+        ),
+        color=discord.Color.red()
+    )
+
+    if ranked:
+        top_str = ""
+        for i, comp in enumerate(ranked[:8]):
+            medals = ["🥇", "🥈", "🥉"]
+            icon = medals[i] if i < 3 else f"**#{i+1}**"
+            rep = comp.get("reputation", 100)
+            scandal = "🚨" if comp.get("has_scandal") else ""
+            atk = comp.get("atk_level", 1)
+            df  = comp.get("def_level",  1)
+            top_str += (
+                f"{icon} **{comp['name']}** {scandal}\n"
+                f"   💰 {comp.get('treasury',0):,} | ⚔️Lv{atk} 🛡️Lv{df} | 🌟{rep}/100\n"
+            )
+        embed.add_field(name="🏆 BXH CÔNG TY", value=top_str or "Chưa có", inline=False)
+
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@daichien.command(aliases=['thachdan', 'attack'])
+async def tan(ctx, *, target_name: str):
+    """Thách đấu một công ty khác. Dùng tên công ty."""
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    atk_comp_id = user_data.get("company")
+
+    if not atk_comp_id:
+        return await ctx.reply("⚠️ Bạn chưa có công ty!", mention_author=False)
+
+    atk_comp = load_company(atk_comp_id)
+    if not atk_comp:
+        return await ctx.reply("⚠️ Công ty bạn không tồn tại!", mention_author=False)
+
+    if atk_comp["members"].get(user_id) != "boss":
+        return await ctx.reply("⚠️ Chỉ **Chủ Tịch** mới được phát động chiến tranh!", mention_author=False)
+
+    # Cooldown 6 giờ
+    last_war = daichien_cooldowns.get(atk_comp_id)
+    if last_war and (datetime.now() - last_war).total_seconds() < 21600:
+        remain = int(21600 - (datetime.now() - last_war).total_seconds())
+        h, m = divmod(remain, 3600)
+        m //= 60
+        return await ctx.reply(
+            embed=discord.Embed(
+                description=f"⏳ Quân lính cần nghỉ ngơi! Tấn công lại sau **{h}h {m}m**.",
+                color=discord.Color.orange()
+            ),
+            mention_author=False
+        )
+
+    # Tìm công ty đích theo tên
+    target_name_lower = target_name.lower().strip()
+    try:
+        all_comps = list(companies_col.find())
+    except Exception:
+        all_comps = []
+
+    def_comp = None
+    for comp in all_comps:
+        if comp["name"].lower() == target_name_lower:
+            def_comp = comp
+            break
+    if not def_comp:
+        # Tìm tương đối
+        for comp in all_comps:
+            if target_name_lower in comp["name"].lower():
+                def_comp = comp
+                break
+
+    if not def_comp:
+        return await ctx.reply(f"⚠️ Không tìm thấy công ty **{target_name}**!", mention_author=False)
+
+    if def_comp["_id"] == atk_comp_id:
+        return await ctx.reply("⚠️ Không thể tự tấn công mình!", mention_author=False)
+
+    # Cập nhật cache
+    COMPANY_CACHE[def_comp["_id"]] = def_comp
+
+    # Tìm Chủ tịch bên phòng thủ
+    def_boss_id = next(
+        (uid for uid, role in def_comp["members"].items() if role == "boss"), None
+    )
+    if not def_boss_id:
+        return await ctx.reply("⚠️ Công ty kia không có Chủ Tịch!", mention_author=False)
+
+    # Sức mạnh cơ bản để preview
+    atk_power = atk_comp.get("atk_level", 1) * 100 + len(atk_comp.get("members", {})) * 20
+    def_power = def_comp.get("def_level", 1)  * 100 + len(def_comp.get("members", {})) * 20
+    loot_preview = int(def_comp.get("treasury", 0) * PRIZE_STEAL_RATE)
+
+    embed = discord.Embed(
+        title="⚔️ TUYÊN CHIẾN!",
+        description=(
+            f"**{atk_comp['name']}** tuyên chiến với **{def_comp['name']}**!\n\n"
+            f"⚔️ Công: **{atk_power}** vs 🛡️ Thủ: **{def_power}**\n"
+            f"💰 Tiền thưởng nếu thắng: **~{loot_preview:,} 💰**\n\n"
+            f"<@{def_boss_id}> — **Chủ Tịch {def_comp['name']}**, bạn có nhận chiến không?"
+        ),
+        color=discord.Color.red()
+    )
+    embed.set_footer(text="Timeout: 2 phút | 3 vòng | Chọn kỹ năng mỗi vòng")
+
+    view = ChallengeAcceptView(ctx, atk_comp, def_comp, ctx.author, def_boss_id)
+    await ctx.send(f"<@{def_boss_id}>", embed=embed, view=view)
+
+
+@daichien.command()
+async def info(ctx):
+    """Xem thông tin chiến đấu công ty của bạn."""
+    user_id = str(ctx.author.id)
+    comp_id = load_user(user_id).get("company")
+    if not comp_id:
+        return await ctx.reply("⚠️ Bạn chưa có công ty!", mention_author=False)
+
+    comp = load_company(comp_id)
+    if not comp:
+        return await ctx.reply("⚠️ Công ty không tồn tại!", mention_author=False)
+
+    atk_lvl = comp.get("atk_level", 1)
+    def_lvl = comp.get("def_level", 1)
+    members = len(comp.get("members", {}))
+    treasury = comp.get("treasury", 0)
+    rep = comp.get("reputation", 100)
+    scandal = "🚨 ĐANG DÍNH PHỐT" if comp.get("has_scandal") else "✅ Trong sạch"
+
+    # Tính tổng sức mạnh
+    atk_power = atk_lvl * 100 + members * 20 + treasury // 100000
+    def_power = def_lvl * 100 + members * 20 + treasury // 100000
+
+    last_war = daichien_cooldowns.get(comp_id)
+    if last_war:
+        remain = max(0, 21600 - int((datetime.now() - last_war).total_seconds()))
+        h, m = divmod(remain, 3600)
+        cd_str = f"**{h}h {m//60}m** nữa" if remain > 0 else "Sẵn sàng!"
+    else:
+        cd_str = "Sẵn sàng!"
+
+    embed = discord.Embed(
+        title=f"🏢 THÔNG TIN CHIẾN ĐẤU — {comp['name']}",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="⚔️ Chỉ số tấn công", value=f"**{atk_power}** (ATK Lv{atk_lvl})", inline=True)
+    embed.add_field(name="🛡️ Chỉ số phòng thủ", value=f"**{def_power}** (DEF Lv{def_lvl})", inline=True)
+    embed.add_field(name="👥 Nhân sự", value=f"**{members}** người", inline=True)
+    embed.add_field(name="🌟 Danh tiếng", value=f"**{rep}/100**", inline=True)
+    embed.add_field(name="🚨 Trạng thái", value=scandal, inline=True)
+    embed.add_field(name="⏳ Cooldown chiến", value=cd_str, inline=True)
+    embed.add_field(
+        name="📈 Nâng cấp",
+        value=(
+            f"ATK Lv{atk_lvl} → Lv{atk_lvl+1}: **{atk_lvl*500000:,} 💰** (từ quỹ)\n"
+            f"DEF Lv{def_lvl} → Lv{def_lvl+1}: **{def_lvl*300000:,} 💰** (từ quỹ)\n"
+            f"`k cty nangcap cong` | `k cty nangcap thu`"
+        ),
+        inline=False
+    )
+    embed.add_field(
+        name="💡 Kỹ năng trong trận",
+        value=(
+            "⚔️ Tấn Công | 🛡️ Phòng Thủ | 🔄 Phản Công\n"
+            "🎯 Đổ Bộ (all-in) | 🌑 Mai Phục (counter đổ bộ)"
+        ),
+        inline=False
+    )
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@daichien.command()
+async def lichsu(ctx):
+    """Xem lịch sử đại chiến của bạn."""
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    history = [h for h in user_data.get("history", []) if "chiến" in h.lower() or "Đại chiến" in h]
+    if not history:
+        return await ctx.reply(
+            embed=discord.Embed(description="📜 Chưa có lịch sử đại chiến.", color=discord.Color.light_grey()),
+            mention_author=False
+        )
+    embed = discord.Embed(
+        title="📜 LỊCH SỬ ĐẠI CHIẾN",
+        description="\n".join(history[:10]),
+        color=discord.Color.blue()
+    )
+    await ctx.reply(embed=embed, mention_author=False)
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
