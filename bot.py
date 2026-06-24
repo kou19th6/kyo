@@ -646,7 +646,7 @@ async def chungkhoan(ctx):
             f"⏱️ Cập nhật mỗi **15 phút** | Tiếp theo: <t:{get_next_15min_timestamp()}:R>\n"
             f"💸 Phí: Spread **0.1%** + Thuế bán **0.1%** (thực tế VN)\n"
             f"⚡ Cầu dao: Tạm ngừng nếu giá biến động >7%/phiên\n"
-            f"📊 Cooldown: **10 phút** mỗi lệnh\n\n"
+            f"📊 Cooldown: **2 phút** mỗi lệnh\n\n"
             f"**LỆNH:**\n"
             f"🛒 Mua: `k ck buy <MÃ> <SL>`\n"
             f"💸 Bán: `k ck sell <MÃ> <SL/all>`\n"
@@ -752,7 +752,7 @@ async def buy(ctx, code: str, qty: int):
         embed.add_field(name="Tổng chi", value=f"**{total_cost:,} 💰**", inline=True)
         embed.add_field(name="Giá TB mới", value=f"**{new_avg:,} 💰/CP**", inline=True)
         embed.add_field(name="Số dư ví", value=f"**{user_data['money']:,} 💰**", inline=True)
-        embed.set_footer(text="⏳ Cooldown 10 phút | Dùng 'k ck sl' để đặt cắt lỗ")
+        embed.set_footer(text="⏳ Cooldown 2 phút | Dùng 'k ck sl' để đặt cắt lỗ")
         await ctx.reply(embed=embed, mention_author=False)
     finally:
         release_lock(user_id)
@@ -770,9 +770,9 @@ async def sell(ctx, code: str, qty_str: str):
         now = datetime.now()
         if user_id in stock_cooldowns:
             diff = (now - stock_cooldowns[user_id]).total_seconds()
-            if diff < 600:
+            if diff < 120:
                 return await ctx.reply(embed=discord.Embed(
-                    description=f"⏳ Cooldown: còn **{int((600-diff)//60)}p {int((600-diff)%60)}s**",
+                    description=f"⏳ Cooldown: còn **{int((120-diff)//60)}p {int((120-diff)%60)}s**",
                     color=discord.Color.orange()
                 ), mention_author=False)
 
@@ -2950,13 +2950,13 @@ async def help(ctx):
     embed = discord.Embed(title="📚 BOT ECONOMY v8.0 - REAL MARKETS", description="Tiền tố: `k` (Ví dụ: `k rank`)", color=discord.Color.blurple())
     if bot.user.avatar: embed.set_thumbnail(url=bot.user.avatar.url)
     embed.add_field(name="🏦 KINH TẾ CƠ BẢN", value="`k rank` `k bank` `k give @user <tiền>`\n`k daily` `k lixi` `k top` `k ls`\n`k dilamthem` (CD:45p) `k nhiemvu`\n`k vay <tiền>` `k tranno`", inline=False)
-    embed.add_field(name="📈 CHỨNG KHOÁN v2 (THỰC TẾ)", value="`k ck` - Xem thị trường\n`k ck buy/sell <MÃ> <SL>` - Mua/Bán\n`k ck order <MÃ> buy/sell <SL> <GIÁ>` - Lệnh giá\n`k ck sl/tp <MÃ> <GIÁ>` - Stop-Loss/Take-Profit\n`k ck margin <MÃ> <SL>` - Mua ký quỹ (đòn bẩy)\n`k ck short <MÃ> <SL>` - Bán khống\n`k ck port` `k ck chart <MÃ>`", inline=False)
+    embed.add_field(name="📈 CHỨNG KHOÁN", value="`k ck` - Xem thị trường\n`k ck buy/sell <MÃ> <SL>` - Mua/Bán\n`k ck order <MÃ> buy/sell <SL> <GIÁ>` - Lệnh giá\n`k ck sl/tp <MÃ> <GIÁ>` - Stop-Loss/Take-Profit\n`k ck margin <MÃ> <SL>` - Mua ký quỹ (đòn bẩy)\n`k ck short <MÃ> <SL>` - Bán khống\n`k ck port` `k ck chart <MÃ>`", inline=False)
     embed.add_field(name="🎮 CASINO (MAX 300K, CD 6s)", value="`k coin` `k taixiu` `k baucua`\n`k nohu` `k vietlott <số>` `k blackjack`\n`k vecao <tiền>` - Vé cào 9 ô", inline=False)
     embed.add_field(name="🎁 PHÚC LỢI", value="`k vongquay` - Vòng quay free/20h\n`k gacha` (CD:5p, 50k)\n`k cuopnganhang` (CD:2h)", inline=False)
     embed.add_field(name="🌾 SINH HOẠT", value="`k cauca` (CD:25s) `k daovang` (CD:60s)\n`k farm` `k dilamthem` `k gym`", inline=False)
     embed.add_field(name="⚔️ PK & GAME", value="`k pk @user <tiền>` `k duel @user <tiền>`\n`k nhansinh` `k marry @user`", inline=False)
     embed.add_field(name="🏢 CÔNG TY", value="`k cty tao <tên>` `k cty` `k daichien`", inline=False)
-    embed.set_footer(text="v8.0 Real Stock Market | Spread 0.1% | Tax 0.1% | Circuit Breaker 7%")
+    embed.set_footer(text="v8.0")
     await ctx.reply(embed=embed, mention_author=False)
 
 @bot.command()
