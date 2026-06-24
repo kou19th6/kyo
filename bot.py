@@ -196,7 +196,7 @@ def save_company(company_id):
         try:
             companies_col.update_one({"_id": company_id}, {"$set": COMPANY_CACHE[company_id]}, upsert=True)
         except Exception as e:
-            print(f"[ERROR] save_company DB error: {e}")
+            print(f"[ERROR] save_company DB error for {company_id}: {e}")
 
 def add_history(user_id, entry):
     user_data = load_user(user_id)
