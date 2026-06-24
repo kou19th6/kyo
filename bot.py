@@ -2378,74 +2378,193 @@ class ExpView(discord.ui.View):
 @bot.group(invoke_without_command=True, aliases=['congty'])
 async def cty(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); comp_id = user_data.get("company")
-    if not comp_id: return await ctx.send(embed=discord.Embed(title="🏢 SÀN GIAO DỊCH DOANH NGHIỆP", description="Chưa có công ty.\n`k cty tao <tên>` (Phí: 500,000 💰)", color=discord.Color.red()))
+    if not comp_id: return await ctx.send(embed=discord.Embed(title="🏢 SÀN GIAO DỊCH DOANH NGHIỆP", description="Bạn chưa có công ty.\n`k cty tao <tên công ty>` (Phí: 500,000 💰)", color=discord.Color.red()))
+    
     comp = load_company(comp_id)
-    if not comp: user_data["company"] = None; save_user(user_id); return await ctx.send("Công ty đã phá sản!")
-    my_role = comp["members"].get(user_id, "nhanvien"); role_name = comp["roles"].get(my_role, my_role)
-    embed = discord.Embed(title=f"🏢 {comp['name']}", color=discord.Color.gold())
-    embed.add_field(name="Quỹ", value=f"**{comp['treasury']:,} 💰**", inline=True)
-    embed.add_field(name="Sức mạnh", value=f"⚔️Lv{comp.get('atk_level',1)} 🛡️Lv{comp.get('def_level',1)}", inline=True)
+    if not comp:
+        user_data["company"] = None; save_user(user_id)
+        return await ctx.send("Công ty của bạn đã phá sản rồi!")
+        
+    my_role = comp["members"].get(user_id, "nhanvien")
+    role_name = comp["roles"].get(my_role, my_role)
+    atk, df = comp.get("atk_level", 1), comp.get("def_level", 1)
+    
+    embed_db = discord.Embed(title=f"🏢 CÔNG TY: {comp['name']}", color=discord.Color.gold())
+    embed_db.add_field(name="Quỹ Công Ty", value=f"**{comp['treasury']:,} 💰**", inline=True)
+    embed_db.add_field(name="Sức Mạnh", value=f"⚔️ Công: Lv{atk} | 🛡️ Thủ: Lv{df}", inline=True)
+    
     rep = comp.get("reputation", 100)
-    embed.add_field(name="Danh tiếng", value=f"**{rep}/100**{'🚨Scandal!' if comp.get('has_scandal') else ''}", inline=True)
-    embed.add_field(name="Nhân sự", value=f"**{len(comp['members'])} người**", inline=True)
-    embed.add_field(name="Chức vụ", value=f"**{role_name}**", inline=True)
-    await ctx.send(embed=embed)
+    rep_status = "Tốt" if rep > 80 else "Trung Bình" if rep > 50 else "⚠️ Cảnh báo Đỏ"
+    scandal_str = "\n🚨 **ĐANG DÍNH PHỐT!**" if comp.get("has_scandal") else ""
+    embed_db.add_field(name="Danh Tiếng", value=f"**{rep}/100** ({rep_status}){scandal_str}", inline=True)
+    embed_db.add_field(name="Nhân Sự", value=f"**{len(comp['members'])} người**", inline=True)
+    embed_db.add_field(name="Chức vụ của bạn", value=f"**{role_name}**", inline=False)
+    
+    cmds = "`k cty gop <tiền>` | `k cty thulai` | `k cty dinhchinh` | `k cty nangcap <cong/thu>` | `k cty roi`"
+    if my_role in ["boss", "quanly"]: cmds += "\n**Quản Lý:** `k cty tuyen @user` | `k cty duoi @user`"
+    if my_role == "boss": cmds += "\n**Chủ Tịch:** `k cty luong <tiền>` | `k ck ipo` | `k cty chucvu @user <role>` | `k cty doitenchuc <role> <tên>`"
+        
+    embed_db.add_field(name="📋 Bảng Lệnh", value=cmds, inline=False)
+    await ctx.send(embed=embed_db)
 
 @cty.command()
 async def tao(ctx, *, name: str):
     user_id = str(ctx.author.id); user_data = load_user(user_id)
-    if user_data.get("company"): return await ctx.reply("Đã có công ty rồi!")
-    if user_data.get("money", 0) < 500000: return await ctx.reply("⚠️ Phí **500,000 💰**.")
+    if user_data.get("company"): return await ctx.reply("Bạn đã có công ty rồi!", mention_author=False)
+    if user_data.get("money", 0) < 500000: return await ctx.reply("⚠️ Phí đăng ký **500,000 💰**. Cày thêm đi sếp!", mention_author=False)
+    
     user_data["money"] -= 500000; user_data["company"] = user_id
-    COMPANY_CACHE[user_id] = {"_id": user_id, "name": name, "treasury": 0, "members": {user_id: "boss"}, "roles": {"boss": "Chủ Tịch", "quanly": "Giám Đốc", "nhanvien": "Nhân Viên"}, "reputation": 100, "has_scandal": False, "atk_level": 1, "def_level": 1, "last_interest": "2000-01-01 00:00:00", "is_ipo": False}
-    save_company(user_id); save_user(user_id)
-    await ctx.send(embed=discord.Embed(title="🏢 KHAI TRƯƠNG!", description=f"Thành lập **{name}**! `k cty` để xem dashboard.", color=discord.Color.green()))
+    new_comp = {
+        "_id": user_id, "name": name, "treasury": 0, "members": {user_id: "boss"}, 
+        "roles": {"boss": "Chủ Tịch", "quanly": "Giám Đốc", "nhanvien": "Nhân Viên"}, 
+        "reputation": 100, "has_scandal": False, "atk_level": 1, "def_level": 1,
+        "last_interest": "2000-01-01 00:00:00", "is_ipo": False
+    }
+    COMPANY_CACHE[user_id] = new_comp; save_company(user_id); save_user(user_id)
+    await ctx.send(embed=discord.Embed(title="🏢 KHAI TRƯƠNG HỒNG PHÁT", description=f"Chúc mừng {ctx.author.mention} đã thành lập **{name}**!\nGõ `k cty` để mở bảng điều khiển.", color=discord.Color.green()))
+
+@cty.command()
+async def dinhchinh(ctx):
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
+    if not comp_id: return await ctx.reply("Bạn chưa có công ty!")
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Chỉ Ban Giám Đốc mới được đính chính!")
+    if not comp.get("has_scandal") and comp.get("reputation", 100) >= 100: return await ctx.reply("Công ty đang trong sạch!")
+    cost = max(100000, int(comp["treasury"] * 0.05))
+    if comp["treasury"] < cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{cost:,} 💰** để thuê báo chí!")
+    comp["treasury"] -= cost; comp["has_scandal"] = False
+    recovered_rep = random.randint(15, 30)
+    comp["reputation"] = min(100, comp.get("reputation", 50) + recovered_rep)
+    save_company(comp_id)
+    embed = discord.Embed(title="📰 XỬ LÝ KHỦNG HOẢNG THÀNH CÔNG", description=f"Chi **{cost:,} 💰** dập tắt dư luận xấu!\n✅ **Đã gỡ bỏ Scandal!**\n📈 Danh tiếng hồi phục: **+{recovered_rep}**", color=discord.Color.green())
+    await ctx.reply(embed=embed, mention_author=False)
+
+@cty.command()
+async def nangcap(ctx, stat: str):
+    stat = stat.lower(); user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
+    if not comp_id: return await ctx.reply("Bạn chưa có công ty!")
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Chỉ Sếp mới được nâng cấp!")
+    if stat == "cong":
+        current_lvl = comp.get("atk_level", 1); cost = current_lvl * 500000
+        if comp["treasury"] < cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{cost:,} 💰**!")
+        comp["treasury"] -= cost; comp["atk_level"] = current_lvl + 1
+        msg = f"⚔️ Nâng CÔNG lên Lv{current_lvl+1}! (Trừ {cost:,} 💰 từ quỹ)"
+    elif stat == "thu":
+        current_lvl = comp.get("def_level", 1); cost = current_lvl * 300000
+        if comp["treasury"] < cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{cost:,} 💰**!")
+        comp["treasury"] -= cost; comp["def_level"] = current_lvl + 1
+        msg = f"🛡️ Nâng KHIÊN THỦ lên Lv{current_lvl+1}! (Trừ {cost:,} 💰 từ quỹ)"
+    else: return await ctx.reply("⚠️ Dùng `k cty nangcap cong` hoặc `k cty nangcap thu`.")
+    save_company(comp_id)
+    await ctx.reply(embed=discord.Embed(description=msg, color=discord.Color.green()), mention_author=False)
+
+@cty.command()
+async def tuyen(ctx, member: discord.Member):
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
+    if not comp_id: return await ctx.reply("Bạn có công ty đâu mà đòi tuyển người!", mention_author=False)
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Chỉ Giám đốc và Chủ tịch mới được tuyển người!", mention_author=False)
+    if load_user(member.id).get("company"): return await ctx.reply("Người này đang làm việc cho công ty khác rồi.", mention_author=False)
+    view = CompanyInviteView(comp_id, comp["name"], member)
+    await ctx.send(f"🏢 {member.mention}, bạn có lá thư mời nhận việc tại **{comp['name']}**!", view=view)
+
+@cty.command()
+async def duoi(ctx, member: discord.Member):
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
+    if not comp_id: return
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Bạn không có quyền sa thải!", mention_author=False)
+    target_id = str(member.id)
+    if target_id not in comp["members"]: return await ctx.reply("Người này không có trong công ty!", mention_author=False)
+    if comp["members"][target_id] == "boss": return await ctx.reply("Không ai đuổi được sếp tổng đâu!", mention_author=False)
+    del comp["members"][target_id]
+    target_data = load_user(target_id); target_data["company"] = None
+    save_company(comp_id); save_user(target_id)
+    await ctx.reply(f"👢 Sa thải {member.mention} khỏi công ty!", mention_author=False)
 
 @cty.command()
 async def gop(ctx, amount: int):
     if amount <= 0: return
     user_id = str(ctx.author.id); user_data = load_user(user_id); comp_id = user_data.get("company")
-    if not comp_id: return await ctx.reply("Chưa gia nhập công ty.", mention_author=False)
-    if user_data.get("money", 0) < amount: return await ctx.reply("Ví không đủ!", mention_author=False)
-    comp = load_company(comp_id); user_data["money"] -= amount; comp["treasury"] += amount
+    if not comp_id: return await ctx.reply("Bạn chưa gia nhập công ty nào.", mention_author=False)
+    if user_data.get("money", 0) < amount: return await ctx.reply("Ví không đủ tiền!", mention_author=False)
+    comp = load_company(comp_id)
+    user_data["money"] -= amount; comp["treasury"] += amount
     save_user(user_id); save_company(comp_id)
-    await ctx.reply(f"💰 Cống hiến **{amount:,} 💰** vào quỹ. Tổng: **{comp['treasury']:,} 💰**.", mention_author=False)
+    await ctx.reply(f"💰 Bạn đã cống hiến **{amount:,} 💰** vào quỹ công ty.\nTổng quỹ: **{comp['treasury']:,} 💰**.", mention_author=False)
 
 @cty.command()
 async def thulai(ctx):
     user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch thu lãi!")
+    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch mới được thu lãi!", mention_author=False)
     now = datetime.now()
     last = datetime.strptime(comp.get("last_interest", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
-    if now - last < timedelta(days=1): return await ctx.reply("⏳ Mỗi ngày 1 lần.")
-    lai = min(int(comp["treasury"] * 0.03), 80000); comp["treasury"] += lai; comp["last_interest"] = now.strftime("%Y-%m-%d %H:%M:%S"); save_company(comp_id)
-    await ctx.reply(f"📈 Nhận **{lai:,} 💰** lãi! Tổng quỹ: **{comp['treasury']:,} 💰**.")
+    if now - last < timedelta(days=1): return await ctx.reply("⏳ Mỗi ngày chỉ được thu lãi 1 lần.", mention_author=False)
+    lai_nhan_duoc = min(int(comp["treasury"] * 0.03), 80000)
+    comp["treasury"] += lai_nhan_duoc; comp["last_interest"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    save_company(comp_id)
+    await ctx.reply(f"📈 Công ty nhận **{lai_nhan_duoc:,} 💰** lãi hôm nay!\nTổng quỹ: **{comp['treasury']:,} 💰**.", mention_author=False)
 
 @cty.command()
-async def tuyen(ctx, member: discord.Member):
+async def luong(ctx, amount: int):
     user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
-    if not comp_id: return await ctx.reply("Bạn có công ty đâu!", mention_author=False)
+    if not comp_id: return
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Không có quyền!")
-    if load_user(member.id).get("company"): return await ctx.reply("Người này đang ở công ty khác.")
-    await ctx.send(f"🏢 {member.mention}, thư mời tại **{comp['name']}**!", view=CompanyInviteView(comp_id, comp["name"], member))
+    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch mới được ký quỹ phát lương!", mention_author=False)
+    mem_count = len(comp["members"]); total_cost = amount * mem_count
+    if total_cost > comp["treasury"]: return await ctx.reply(f"Quỹ không đủ! Cần **{total_cost:,} 💰** cho {mem_count} người.", mention_author=False)
+    comp["treasury"] -= total_cost
+    for m_id in list(comp["members"].keys()):
+        m_data = load_user(m_id); m_data["money"] += amount; save_user(m_id)
+    save_company(comp_id)
+    await ctx.send(embed=discord.Embed(description=f"💸 Phát **{amount:,} 💰** lương cho mỗi nhân viên!\nTổng trừ quỹ: **{total_cost:,} 💰**", color=discord.Color.green()))
+
+@cty.command()
+async def chucvu(ctx, member: discord.Member, role: str):
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
+    if not comp_id: return
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch mới được set chức vụ!", mention_author=False)
+    target_id = str(member.id)
+    if target_id not in comp["members"]: return await ctx.reply("Người này không thuộc công ty.", mention_author=False)
+    if target_id == user_id: return await ctx.reply("Không thể tự đổi chức của bản thân!", mention_author=False)
+    if role not in ["quanly", "nhanvien"]: return await ctx.reply("Chức vụ phải là `quanly` hoặc `nhanvien`.", mention_author=False)
+    comp["members"][target_id] = role; save_company(comp_id)
+    await ctx.reply(f"✅ Đã đặt chức vụ {member.mention} thành **{comp['roles'][role]}**.", mention_author=False)
+
+@cty.command()
+async def doitenchuc(ctx, role: str, *, name: str):
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
+    if not comp_id: return
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch mới được đổi tên chức vụ!", mention_author=False)
+    if role not in ["boss", "quanly", "nhanvien"]: return await ctx.reply("Phải là `boss`, `quanly` hoặc `nhanvien`.", mention_author=False)
+    comp["roles"][role] = name; save_company(comp_id)
+    await ctx.reply(f"✅ Đổi tên `{role}` thành **{name}**.", mention_author=False)
 
 @cty.command()
 async def roi(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); comp_id = user_data.get("company")
-    if not comp_id: return await ctx.reply("Chưa gia nhập công ty!")
+    if not comp_id: return await ctx.reply("Bạn chưa gia nhập công ty nào!", mention_author=False)
     comp = load_company(comp_id)
-    if not comp: user_data["company"] = None; save_user(user_id); return await ctx.reply("Công ty không còn tồn tại.")
-    if comp["members"].get(user_id) == "boss":
+    if not comp:
+        user_data["company"] = None; save_user(user_id)
+        return await ctx.reply("Công ty của bạn đã không còn tồn tại.", mention_author=False)
+    my_role = comp["members"].get(user_id)
+    if my_role == "boss":
         COMPANY_CACHE.pop(comp_id, None); companies_col.delete_one({"_id": comp_id})
-        for m_id in list(comp["members"].keys()): md = load_user(m_id); md["company"] = None; save_user(m_id)
-        await ctx.reply(embed=discord.Embed(description="🏢 Chủ tịch bỏ trốn! Công ty **PHÁ SẢN**!", color=discord.Color.red()), mention_author=False)
+        for m_id in list(comp["members"].keys()):
+            m_data = load_user(m_id); m_data["company"] = None; save_user(m_id)
+        embed_bankrupt = discord.Embed(description="🏢 Chủ tịch bỏ trốn! Công ty **PHÁ SẢN**, toàn bộ nhân sự giải tán!", color=discord.Color.red())
+        embed_bankrupt.set_image(url=GIF_LINKS.get("bankrupt", ""))
+        await ctx.reply(embed=embed_bankrupt, mention_author=False)
     else:
         if user_id in comp["members"]: del comp["members"][user_id]
         user_data["company"] = None; save_user(user_id); save_company(comp_id)
-        await ctx.reply(embed=discord.Embed(description="🎒 Đã rời khỏi công ty.", color=discord.Color.dark_grey()), mention_author=False)
+        await ctx.reply(embed=discord.Embed(description="🎒 Bạn đã từ chức, thu dọn hành lý rời khỏi công ty.", color=discord.Color.dark_grey()), mention_author=False)
 
 # =====================================================================
 # HỆ THỐNG NGÂN HÀNG
