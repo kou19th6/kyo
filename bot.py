@@ -2503,7 +2503,8 @@ async def lichsu(ctx):
 
 @bot.group(invoke_without_command=True, aliases=['farm'])
 async def nongtrai(ctx):
-    user_data = load_user(ctx.author.id); farm = user_data.get("farm", {"seed": None, "plant_time": None})
+    user_data = load_user(ctx.author.id)
+    farm = user_data.get("farm", {"seed": None, "plant_time": None})
     embed = discord.Embed(title="🏡 NÔNG TRẠI VUI VẺ", color=discord.Color.green())
     seeds_str = "\n".join([f"`{k}`: {v['name']} | {v['cost']:,}💰 | {v['time_hours']}h" for k, v in FARM_SEEDS.items()])
     if not farm.get("seed"):
@@ -2512,7 +2513,10 @@ async def nongtrai(ctx):
         si = FARM_SEEDS.get(farm["seed"])
         if si:
             ht = datetime.strptime(farm["plant_time"], "%Y-%m-%d %H:%M:%S") + timedelta(hours=si["time_hours"])
-            embed.description = f"{'🌾 Chín rồi! `k farm thuhoach`' if datetime.now() >= ht else f'🌱 **{si[\"name\"]}** | Thu hoạch: <t:{int(ht.timestamp())}:R>'}"
+            if datetime.now() >= ht:
+                embed.description = "🌾 Chín rồi! `k farm thuhoach`"
+            else:
+                embed.description = f"🌱 **{si['name']}** | Thu hoạch: <t:{int(ht.timestamp())}:R>"
     await ctx.reply(embed=embed)
 
 @nongtrai.command()
