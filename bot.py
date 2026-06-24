@@ -2445,7 +2445,7 @@ async def nangcap(ctx, stat: str, levels: int = 1):
     if not comp_id: return await ctx.reply("Bạn chưa có công ty!")
     comp = load_company(comp_id)
     if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Chỉ Sếp mới được nâng cấp!")
-    if levels < 1 or levels > 10: return await ctx.reply("⚠️ Nâng tối đa 10 cấp 1 lần!")
+    if levels < 1 or levels > 100: return await ctx.reply("⚠️ Nâng tối đa 100 cấp 1 lần!")
 
     if stat == "cong":
         current_lvl = comp.get("atk_level", 1)
