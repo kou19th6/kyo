@@ -2945,19 +2945,218 @@ async def gacha(ctx):
 # =====================================================================
 # LỆNH INFO & GIAO DỊCH
 # =====================================================================
+# =====================================================================
+# HELP MENU - PHÂN TRANG (Next/Prev)
+# =====================================================================
+HELP_PAGES = [
+    {
+        "title": "🏦 KINH TẾ CƠ BẢN",
+        "color": discord.Color.green(),
+        "desc": (
+            "`k rank [@user]` — Xem căn cước, tài sản, level\n"
+            "`k bank` — Mở ngân hàng (gửi/rút/lãi suất)\n"
+            "`k bank gui <số/all>` — Gửi tiền vào ngân hàng\n"
+            "`k bank rut <số/all>` — Rút tiền ra ví\n"
+            "`k bank laisuat` — Nhận lãi suất hàng ngày (0.1%)\n"
+            "`k give @user <tiền>` — Chuyển khoản cho người khác\n"
+            "`k daily` — Điểm danh nhận lương + streak\n"
+            "`k lixi` — Lì xì free (CD 12h)\n"
+            "`k vay <tiền>` — Vay ngân hàng (lãi 20%, hạn 3 ngày)\n"
+            "`k tranno` — Trả nợ ngân hàng\n"
+            "`k top [tien/level/ca]` — Bảng xếp hạng\n"
+            "`k lichsu` (`ls`) — Lịch sử giao dịch của bạn\n"
+            "`k nhiemvu` — Xem nhiệm vụ hàng ngày\n"
+            "`k thanhtich [@user]` — Xem thành tích đã đạt\n"
+            "`k marry @user` — Cầu hôn (phí 1,000,000 💰)\n"
+            "`k lyhon` — Ly hôn (phí 500,000 💰)\n"
+            "`k dilamthem` (`work`) — Đi làm thêm (CD 45p)"
+        ),
+    },
+    {
+        "title": "📈 CHỨNG KHOÁN (k ck / trade)",
+        "color": discord.Color.blue(),
+        "desc": (
+            "`k ck` — Xem bảng giá thị trường\n"
+            "`k ck buy <MÃ> <SL>` — Mua theo giá thị trường\n"
+            "`k ck sell <MÃ> <SL/all>` — Bán theo giá thị trường\n"
+            "`k ck order <MÃ> buy/sell <SL> <GIÁ>` — Đặt lệnh chờ khớp giá\n"
+            "`k ck orders` — Xem lệnh chờ khớp\n"
+            "`k ck cancel <ID>` — Hủy lệnh chờ\n"
+            "`k ck sl <MÃ> <GIÁ>` — Đặt Stop-Loss (cắt lỗ tự động)\n"
+            "`k ck tp <MÃ> <GIÁ>` — Đặt Take-Profit (chốt lời tự động)\n"
+            "`k ck margin <MÃ> <SL>` — Mua ký quỹ (đòn bẩy x2)\n"
+            "`k ck short <MÃ> <SL>` — Bán khống (lãi khi giá xuống)\n"
+            "`k ck covershort <MÃ> <SL>` — Đóng vị thế bán khống\n"
+            "`k ck port [@user]` — Xem portfolio đầu tư\n"
+            "`k ck chart <MÃ>` — Biểu đồ giá 6 giờ qua\n"
+            "`k ck ipo` — Niêm yết công ty lên sàn (Chủ tịch)\n\n"
+            "💸 Spread 0.1% + Thuế bán 0.1% | ⏳ Cooldown 10 phút/lệnh\n"
+            "⚡ Cầu dao tự động: dừng nếu giá biến động >7%/phiên"
+        ),
+    },
+    {
+        "title": "🎮 CASINO (cược tối đa 300,000 💰, CD 6s)",
+        "color": discord.Color.gold(),
+        "desc": (
+            "`k coin <tiền/all>` — Tung xu\n"
+            "`k taixiu tai/xiu <tiền>` — Tài xỉu (3 xí ngầu)\n"
+            "`k baucua <cửa> <tiền>` — Bầu cua (bau/cua/tom/ca/ga/huou)\n"
+            "`k mayxeng <tiền>` (`nohu`/`slot`) — Máy xèng\n"
+            "`k vietlott <số 00-99> <tiền>` — Vé số x60\n"
+            "`k blackjack <tiền>` (`bj`/`21`) — Blackjack có nút bấm\n"
+            "`k vecao <tiền>` (`scratch`) — Vé cào 9 ô"
+        ),
+    },
+    {
+        "title": "🎁 PHÚC LỢI & MAY MẮN",
+        "color": discord.Color.purple(),
+        "desc": (
+            "`k vongquay` (`spin`/`wheel`) — Vòng quay free, hồi 20h\n"
+            "`k gacha` — Đập trứng thú cưng (CD 5p, phí 50,000 💰)\n"
+            "`k cuopnganhang` (`cuop`) — Cướp ngân hàng (CD 2h, rủi ro tù)"
+        ),
+    },
+    {
+        "title": "🌾 SINH HOẠT & NÔNG TRẠI",
+        "color": discord.Color.dark_green(),
+        "desc": (
+            "`k cauca` (`fish`) — Câu cá (CD 25s, cần Cần Câu)\n"
+            "`k daovang` (`mine`) — Đào vàng (CD 60s)\n"
+            "`k farm` — Xem nông trại\n"
+            "`k farm mua <hạt>` — Mua hạt giống\n"
+            "`k farm trong <hạt>` — Gieo hạt\n"
+            "`k farm thuhoach` — Thu hoạch\n"
+            "`k gym` — Xem phòng gym\n"
+            "`k gym nangcap` — Nâng cấp Gym (+5% ATK Duel)\n"
+            "`k gym tap` — Tập gym nhận XP\n"
+            "`k phai` — Đi thám hiểm AFK (4h/8h/12h)\n"
+            "`k cuahang` (`shop`) — Mua nhà/xe/danh hiệu/cần câu\n"
+            "`k choden` (`ban`/`sell`) — Cầm đồ / bán thú cưng"
+        ),
+    },
+    {
+        "title": "⚔️ PK & MINIGAME",
+        "color": discord.Color.red(),
+        "desc": (
+            "`k pk @user <tiền/all>` (`ott`) — Gạ kèo Oẳn Tù Tì\n"
+            "`k nhansinh` (`mophong`) — Mô phỏng nhân sinh (vé 500 💰)"
+        ),
+    },
+    {
+        "title": "🏢 CÔNG TY (k cty / congty)",
+        "color": discord.Color.dark_gold(),
+        "desc": (
+            "`k cty tao <tên>` — Thành lập công ty (phí 500,000 💰)\n"
+            "`k cty` — Xem bảng điều khiển công ty\n"
+            "`k cty gop <tiền>` — Góp quỹ công ty\n"
+            "`k cty thulai` — Thu lãi quỹ (1 lần/ngày)\n"
+            "`k cty dinhchinh` — Xử lý scandal, hồi danh tiếng\n"
+            "`k cty nangcap cong/thu <số lv>` — Nâng cấp Công/Thủ\n"
+            "`k cty tuyen @user` — Tuyển nhân viên (GĐ+)\n"
+            "`k cty duoi @user` — Sa thải nhân viên (GĐ+)\n"
+            "`k cty luong <tiền>` — Phát lương toàn công ty (Chủ tịch)\n"
+            "`k cty chucvu @user <role>` — Đặt chức vụ (Chủ tịch)\n"
+            "`k cty doitenchuc <role> <tên>` — Đổi tên chức vụ\n"
+            "`k cty roi` — Rời/giải tán công ty"
+        ),
+    },
+    {
+        "title": "⚔️ ĐẠI CHIẾN CÔNG TY (k daichien / dc / war)",
+        "color": discord.Color.dark_red(),
+        "desc": (
+            "`k daichien` — Bảng xếp hạng + cách chơi\n"
+            "`k daichien tan <tên cty>` — Thách đấu công ty khác\n"
+            "`k daichien info` — Thông tin sức mạnh công ty bạn\n"
+            "`k daichien lichsu` — Lịch sử trận đánh\n\n"
+            "💡 3 vòng, mỗi vòng chọn 1 trong 5 kỹ năng counter nhau.\n"
+            "Thắng: cướp 12% quỹ đối phương + 15 danh tiếng.\n"
+            "Thua: -20 danh tiếng, có thể dính scandal.\n"
+            "⏳ Cooldown 6 giờ / lần tấn công."
+        ),
+    },
+    {
+        "title": "🌸 KALLEN FANTASY (k kallen / kf)",
+        "color": discord.Color.magenta(),
+        "desc": (
+            "`k kallen` — Menu chính, xem tiến độ & vé\n"
+            "`k kallen choi` — Chọn nhân vật & chapter để chiến đấu\n"
+            "`k kallen muave [số lượng]` — Mua vé (30,000 💰/vé)\n"
+            "`k kallen nhanvat` — Xem danh sách nhân vật & kỹ năng\n"
+            "`k kallen mokuyen <tên>` — Mở khóa nhân vật bằng vật phẩm\n"
+            "`k kallen inventory` (`inv`) — Xem túi đồ Kallen Fantasy\n"
+            "`k kallen bancuahang` — Bán vật phẩm KF lấy tiền\n"
+            "`k kallen story <chương>` — Đọc lại cốt truyện\n\n"
+            "📖 6 Chapter (1 ẩn), mỗi Chapter có nhiều Wave + Boss riêng."
+        ),
+    },
+]
+
+
+class HelpPaginatorView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=120)
+        self.author = author
+        self.page = 0
+        self._update_buttons()
+
+    def _update_buttons(self):
+        self.btn_first.disabled = self.page <= 0
+        self.btn_prev.disabled = self.page <= 0
+        self.btn_next.disabled = self.page >= len(HELP_PAGES) - 1
+        self.btn_last.disabled = self.page >= len(HELP_PAGES) - 1
+        self.btn_page.label = f"{self.page + 1}/{len(HELP_PAGES)}"
+
+    def make_embed(self):
+        data = HELP_PAGES[self.page]
+        embed = discord.Embed(
+            title=f"📚 {data['title']}",
+            description=data["desc"],
+            color=data["color"]
+        )
+        if bot.user.avatar:
+            embed.set_thumbnail(url=bot.user.avatar.url)
+        embed.set_footer(text=f"Trang {self.page + 1}/{len(HELP_PAGES)} | Tiền tố lệnh: k")
+        return embed
+
+    @discord.ui.button(label="⏮", style=discord.ButtonStyle.secondary)
+    async def btn_first(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page = 0
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="◀ Trước", style=discord.ButtonStyle.primary)
+    async def btn_prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.page > 0:
+            self.page -= 1
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="1/1", style=discord.ButtonStyle.secondary, disabled=True)
+    async def btn_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pass
+
+    @discord.ui.button(label="Sau ▶", style=discord.ButtonStyle.primary)
+    async def btn_next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.page < len(HELP_PAGES) - 1:
+            self.page += 1
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="⏭", style=discord.ButtonStyle.secondary)
+    async def btn_last(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page = len(HELP_PAGES) - 1
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+
+
 @bot.command()
 async def help(ctx):
-    embed = discord.Embed(title="📚 BOT ECONOMY v8.0 - REAL MARKETS", description="Tiền tố: `k` (Ví dụ: `k rank`)", color=discord.Color.blurple())
-    if bot.user.avatar: embed.set_thumbnail(url=bot.user.avatar.url)
-    embed.add_field(name="🏦 KINH TẾ CƠ BẢN", value="`k rank` `k bank` `k give @user <tiền>`\n`k daily` `k lixi` `k top` `k ls`\n`k dilamthem` (CD:45p) `k nhiemvu`\n`k vay <tiền>` `k tranno`", inline=False)
-    embed.add_field(name="📈 CHỨNG KHOÁN", value="`k ck` - Xem thị trường\n`k ck buy/sell <MÃ> <SL>` - Mua/Bán\n`k ck order <MÃ> buy/sell <SL> <GIÁ>` - Lệnh giá\n`k ck sl/tp <MÃ> <GIÁ>` - Stop-Loss/Take-Profit\n`k ck margin <MÃ> <SL>` - Mua ký quỹ (đòn bẩy)\n`k ck short <MÃ> <SL>` - Bán khống\n`k ck port` `k ck chart <MÃ>`", inline=False)
-    embed.add_field(name="🎮 CASINO (MAX 300K, CD 6s)", value="`k coin` `k taixiu` `k baucua`\n`k nohu` `k vietlott <số>` `k blackjack`\n`k vecao <tiền>` - Vé cào 9 ô", inline=False)
-    embed.add_field(name="🎁 PHÚC LỢI", value="`k vongquay` - Vòng quay free/20h\n`k gacha` (CD:5p, 50k)\n`k cuopnganhang` (CD:2h)", inline=False)
-    embed.add_field(name="🌾 SINH HOẠT", value="`k cauca` (CD:25s) `k daovang` (CD:60s)\n`k farm` `k dilamthem` `k gym`", inline=False)
-    embed.add_field(name="⚔️ PK & GAME", value="`k pk @user <tiền>` `k duel @user <tiền>`\n`k nhansinh` `k marry @user`", inline=False)
-    embed.add_field(name="🏢 CÔNG TY", value="`k cty tao <tên>` `k cty` `k daichien`", inline=False)
-    embed.set_footer(text="v8.0")
-    await ctx.reply(embed=embed, mention_author=False)
+    view = HelpPaginatorView(ctx.author)
+    await ctx.reply(embed=view.make_embed(), view=view, mention_author=False)
 
 @bot.command()
 async def rank(ctx, member: discord.Member = None):
