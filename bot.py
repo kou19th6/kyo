@@ -2677,11 +2677,18 @@ async def thulai(ctx):
 except Exception:
     last = datetime(2000, 1, 1)
 
+   try:
+        last = datetime.strptime(comp.get("last_interest", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        last = datetime(2000, 1, 1)
+
     if now - last < timedelta(days=1): return await ctx.reply("⏳ Mỗi ngày chỉ được thu lãi 1 lần.", mention_author=False)
     lai_nhan_duoc = min(int(comp["treasury"] * 0.03), 80000)
     comp["treasury"] += lai_nhan_duoc; comp["last_interest"] = now.strftime("%Y-%m-%d %H:%M:%S")
     save_company(comp_id)
     await ctx.reply(f"📈 Công ty nhận **{lai_nhan_duoc:,} 💰** lãi hôm nay!\nTổng quỹ: **{comp['treasury']:,} 💰**.", mention_author=False)
+
+@cty.command()
 
 # ── VAY VỐN / TRẢ NỢ CÔNG TY ──────────────────────────────────────────
 @cty.command(name="vaycty")
@@ -4052,8 +4059,10 @@ async def run_battle(interaction_or_ctx, atk_comp, def_comp, atk_boss_member):
         return await channel.send("❌ Không tìm thấy Chủ Tịch phòng thủ!")
 
     # Lấy Member object
-    try:
-        async def run_battle(interaction_or_ctx, atk_comp, def_comp, atk_boss_member):
+   try:
+        def_boss_member = await guild.fetch_member(int(def_boss_id))
+    except Exception:
+        def_boss_member = None
     # Lấy channel và guild đúng cách
     if hasattr(interaction_or_ctx, 'channel'):
         channel = interaction_or_ctx.channel
