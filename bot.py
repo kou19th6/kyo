@@ -4537,33 +4537,219 @@ async def lichsu(ctx):
         color=discord.Color.blue()
     )
     await ctx.reply(embed=embed, mention_author=False)
+
 # =====================================================================
-# KALLEN FANTASY — DATA FILE
-# File: kallen_data.py  |  Import vào bot.py
+# KALLEN FANTASY v2.0 — FULL UPGRADE MODULE
+# Dán toàn bộ file này vào bot.py, thay thế phần Kallen Fantasy cũ
+# Yêu cầu: discord.py, pymongo, asyncio, random, datetime đã import
 # =====================================================================
 
-# ── VÉ VÀO CỬA ───────────────────────────────────────────────────────
-KF_TICKET_PRICE  = 30000   # Giá 1 vé
-KF_TICKET_ITEM   = "Vé Kallen Fantasy 🎟️"
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 1: CONSTANTS & DATA
+# ══════════════════════════════════════════════════════════════════════
+
+KF_TICKET_PRICE = 30_000
+KF_TICKET_ITEM  = "Vé Kallen Fantasy 🎟️"
+
+# ── TRANG BỊ ──────────────────────────────────────────────────────────
+KF_EQUIPMENT = {
+    # ─ VŨ KHÍ ─
+    "kiem_kaslana": {
+        "name": "⚔️ Kiếm Kaslana Thánh",
+        "type": "weapon", "slot": "weapon",
+        "rarity": "legendary",
+        "atk": 40, "def": 0, "hp": 0, "crit": 10,
+        "desc": "Thanh kiếm truyền đời của dòng họ Kaslana. ATK +40, CRIT +10%",
+        "craft": {"Giọt Máu Herrscher 🩸": 3, "Tinh Thể Honkai 💠": 5},
+        "buy": 0, "sell": 80_000,
+        "char_bonus": {"kallen": "Chí mạng gây +50% sát thương thêm"},
+    },
+    "truong_giao_fuhua": {
+        "name": "🪃 Trường Giáo Phượng Hoàng",
+        "type": "weapon", "slot": "weapon",
+        "rarity": "epic",
+        "atk": 30, "def": 5, "hp": 20, "crit": 5,
+        "desc": "Vũ khí của Fu Hua. ATK +30, DEF +5, HP +20",
+        "craft": {"Lông Vũ Fu Hua 🪶": 3, "Tinh Thể Honkai 💠": 3},
+        "buy": 0, "sell": 50_000,
+        "char_bonus": {"fuhua": "Hồi thêm 20 HP mỗi khi giết kẻ thù"},
+    },
+    "quat_onmyo": {
+        "name": "🪭 Quạt Onmyo Hồ Ly",
+        "type": "weapon", "slot": "weapon",
+        "rarity": "epic",
+        "atk": 35, "def": 0, "hp": 0, "crit": 8,
+        "desc": "Quạt phép của Yae Sakura. ATK +35, CRIT +8%",
+        "craft": {"Hoa Anh Đào Yae 🌸": 4, "Tinh Thể Honkai 💠": 2},
+        "buy": 0, "sell": 45_000,
+        "char_bonus": {"sakura": "Kỹ năng hồ ly gây thêm 20% sát thương"},
+    },
+    "sung_laser_otto": {
+        "name": "🔬 Súng Laser Schicksal",
+        "type": "weapon", "slot": "weapon",
+        "rarity": "epic",
+        "atk": 28, "def": 10, "hp": 30, "crit": 3,
+        "desc": "Vũ khí khoa học của Otto. ATK +28, DEF +10, HP +30",
+        "craft": {"Thiết Phẩm Kallen ⚙️": 4, "Tinh Thể Honkai 💠": 3},
+        "buy": 0, "sell": 40_000,
+        "char_bonus": {"otto": "Phản đòn thêm 10% sát thương"},
+    },
+    "kiem_buong_toi": {
+        "name": "🌙 Kiếm Bóng Tối Kevin",
+        "type": "weapon", "slot": "weapon",
+        "rarity": "mythic",
+        "atk": 60, "def": 10, "hp": 50, "crit": 15,
+        "desc": "Vũ khí của Kevin Kaslana. ATK +60, DEF +10, HP +50, CRIT +15%",
+        "craft": {"Cốt Tủy Kevin ❄️": 4, "Giọt Máu Herrscher 🩸": 2, "Tinh Thể Honkai 💠": 5},
+        "buy": 0, "sell": 200_000,
+        "char_bonus": {"kevin": "Mỗi lần đánh, sát thương tăng thêm 3% tích lũy"},
+    },
+    "vu_khi_thuong": {
+        "name": "🗡️ Kiếm Sắt Thường",
+        "type": "weapon", "slot": "weapon",
+        "rarity": "common",
+        "atk": 10, "def": 0, "hp": 0, "crit": 0,
+        "desc": "Vũ khí phổ thông. ATK +10",
+        "craft": {}, "buy": 5_000, "sell": 2_000,
+        "char_bonus": {},
+    },
+    # ─ GIÁP ─
+    "giap_kaslana": {
+        "name": "🛡️ Giáp Hiệp Sĩ Kaslana",
+        "type": "armor", "slot": "armor",
+        "rarity": "legendary",
+        "atk": 0, "def": 50, "hp": 100, "crit": 0,
+        "desc": "Giáp của dòng họ Kaslana. DEF +50, HP +100",
+        "craft": {"Thiết Phẩm Kallen ⚙️": 5, "Lông Vũ Fu Hua 🪶": 2},
+        "buy": 0, "sell": 90_000,
+        "char_bonus": {"kallen": "Không chết khi HP xuống 0, hồi 1 HP (1 lần/trận)"},
+    },
+    "giap_phoenix": {
+        "name": "🦅 Giáp Phượng Hoàng",
+        "type": "armor", "slot": "armor",
+        "rarity": "epic",
+        "atk": 5, "def": 35, "hp": 60, "crit": 0,
+        "desc": "Giáp của Fu Hua. DEF +35, HP +60, ATK +5",
+        "craft": {"Lông Vũ Fu Hua 🪶": 4, "Tinh Thể Honkai 💠": 2},
+        "buy": 0, "sell": 55_000,
+        "char_bonus": {"fuhua": "30% cơ hội né miễn phí khi bị tấn công"},
+    },
+    "ao_holo": {
+        "name": "🌸 Áo Onmyo Hồ Ly",
+        "type": "armor", "slot": "armor",
+        "rarity": "epic",
+        "atk": 8, "def": 25, "hp": 40, "crit": 3,
+        "desc": "Trang phục Yae Sakura. ATK +8, DEF +25, HP +40",
+        "craft": {"Hoa Anh Đào Yae 🌸": 3, "Mảnh Nhớ Otto 💌": 2},
+        "buy": 0, "sell": 45_000,
+        "char_bonus": {"sakura": "Sau khi dùng ULT, hồi 30 HP"},
+    },
+    "ao_lab_otto": {
+        "name": "🧪 Áo Lab Schicksal",
+        "type": "armor", "slot": "armor",
+        "rarity": "rare",
+        "atk": 5, "def": 20, "hp": 50, "crit": 0,
+        "desc": "Áo của Otto. ATK +5, DEF +20, HP +50",
+        "craft": {"Mảnh Nhớ Otto 💌": 3, "Thiết Phẩm Kallen ⚙️": 2},
+        "buy": 0, "sell": 30_000,
+        "char_bonus": {"otto": "Phản đòn kích hoạt từ lần DEF đầu tiên mỗi trận"},
+    },
+    "giap_bong_toi": {
+        "name": "❄️ Giáp Băng Kevin",
+        "type": "armor", "slot": "armor",
+        "rarity": "mythic",
+        "atk": 10, "def": 60, "hp": 120, "crit": 5,
+        "desc": "Giáp của Kevin. DEF +60, HP +120, ATK +10, CRIT +5%",
+        "craft": {"Cốt Tủy Kevin ❄️": 3, "Giọt Máu Herrscher 🩸": 3, "Tinh Thể Honkai 💠": 4},
+        "buy": 0, "sell": 180_000,
+        "char_bonus": {"kevin": "Mỗi lần bị đánh, tích 1 charge; 5 charge → tự né 1 đòn"},
+    },
+    "giap_thuong": {
+        "name": "🪖 Giáp Sắt Thường",
+        "type": "armor", "slot": "armor",
+        "rarity": "common",
+        "atk": 0, "def": 10, "hp": 20, "crit": 0,
+        "desc": "Giáp phổ thông. DEF +10, HP +20",
+        "craft": {}, "buy": 5_000, "sell": 2_000,
+        "char_bonus": {},
+    },
+    # ─ PHỤ KIỆN ─
+    "vong_co": {
+        "name": "💍 Vòng Cổ Honkai",
+        "type": "accessory", "slot": "accessory",
+        "rarity": "rare",
+        "atk": 5, "def": 5, "hp": 30, "crit": 5,
+        "desc": "Vòng cổ có tinh thể Honkai. ATK +5, DEF +5, HP +30, CRIT +5%",
+        "craft": {"Tinh Thể Honkai 💠": 3},
+        "buy": 15_000, "sell": 8_000,
+        "char_bonus": {},
+    },
+    "nhan_herrscher": {
+        "name": "💎 Nhẫn Herrscher",
+        "type": "accessory", "slot": "accessory",
+        "rarity": "legendary",
+        "atk": 15, "def": 10, "hp": 50, "crit": 8,
+        "desc": "Nhẫn của Herrscher. ATK +15, DEF +10, HP +50, CRIT +8%",
+        "craft": {"Giọt Máu Herrscher 🩸": 4, "Tinh Thể Honkai 💠": 3},
+        "buy": 0, "sell": 100_000,
+        "char_bonus": {},
+    },
+    "bua_ho_menh": {
+        "name": "📿 Bùa Hộ Mệnh Onmyo",
+        "type": "accessory", "slot": "accessory",
+        "rarity": "epic",
+        "atk": 0, "def": 15, "hp": 40, "crit": 3,
+        "desc": "Bùa của Yae Sakura. DEF +15, HP +40, CRIT +3%",
+        "craft": {"Hoa Anh Đào Yae 🌸": 2, "Mảnh Nhớ Otto 💌": 2},
+        "buy": 0, "sell": 35_000,
+        "char_bonus": {"sakura": "10% cơ hội hồi 20 HP mỗi lượt"},
+    },
+    "phu_kien_thuong": {
+        "name": "🔮 Đá Ma Lực Nhỏ",
+        "type": "accessory", "slot": "accessory",
+        "rarity": "common",
+        "atk": 3, "def": 3, "hp": 10, "crit": 2,
+        "desc": "Đá phổ thông. ATK +3, DEF +3, HP +10, CRIT +2%",
+        "craft": {}, "buy": 3_000, "sell": 1_000,
+        "char_bonus": {},
+    },
+}
+
+RARITY_COLOR = {
+    "common":    "⚪ Thường",
+    "rare":      "🔵 Hiếm",
+    "epic":      "🟣 Sử Thi",
+    "legendary": "🟡 Huyền Thoại",
+    "mythic":    "🌈 Thần Thoại",
+}
 
 # ── VẬT PHẨM ĐỘC QUYỀN ───────────────────────────────────────────────
 KF_EXCLUSIVE_ITEMS = {
-    "Thiết Phẩm Kallen ⚙️":   {"type": "material", "desc": "Mảnh thép từ kiếm Kallen",        "sell": 50000},
-    "Mảnh Nhớ Otto 💌":        {"type": "material", "desc": "Ký ức Otto về Kallen",             "sell": 40000},
-    "Hoa Anh Đào Yae 🌸":      {"type": "material", "desc": "Bông hoa Yae Sakura ban tặng",     "sell": 45000},
-    "Lông Vũ Fu Hua 🪶":       {"type": "material", "desc": "Lông vũ của Phoenix Fu Hua",       "sell": 55000},
-    "Tinh Thể Honkai 💠":      {"type": "material", "desc": "Năng lượng Honkai tinh khiết",     "sell": 80000},
-    "Giọt Máu Herrscher 🩸":   {"type": "material", "desc": "Từ Herrscher bị đánh bại",        "sell": 120000},
-    "Cốt Tủy Kevin ❄️":        {"type": "material", "desc": "Sức mạnh Kevin Kaslana",           "sell": 150000},
+    "Thiết Phẩm Kallen ⚙️":  {"type": "material", "desc": "Mảnh thép từ kiếm Kallen",         "sell": 50_000},
+    "Mảnh Nhớ Otto 💌":       {"type": "material", "desc": "Ký ức Otto về Kallen",              "sell": 40_000},
+    "Hoa Anh Đào Yae 🌸":     {"type": "material", "desc": "Bông hoa Yae Sakura ban tặng",      "sell": 45_000},
+    "Lông Vũ Fu Hua 🪶":      {"type": "material", "desc": "Lông vũ của Phoenix Fu Hua",        "sell": 55_000},
+    "Tinh Thể Honkai 💠":     {"type": "material", "desc": "Năng lượng Honkai tinh khiết",      "sell": 80_000},
+    "Giọt Máu Herrscher 🩸":  {"type": "material", "desc": "Từ Herrscher bị đánh bại",         "sell": 120_000},
+    "Cốt Tủy Kevin ❄️":       {"type": "material", "desc": "Sức mạnh Kevin Kaslana",            "sell": 150_000},
+    "Hồn Ngọc Elysia 💗":     {"type": "material", "desc": "Ngọc tình yêu của Elysia",         "sell": 90_000},
+    "Chuỗi Hạt Aponia 🙏":    {"type": "material", "desc": "Chuỗi hạt thánh của Aponia",       "sell": 70_000},
+    "Mảnh Ký Ức Seele 👻":    {"type": "material", "desc": "Ký ức Seele từ hư không",          "sell": 60_000},
+    "Vảy Rồng Vua 🐉":        {"type": "material", "desc": "Vảy rồng từ chương bí ẩn",         "sell": 200_000},
+    "Bụi Sao Trời 🌟":        {"type": "material", "desc": "Bụi sao từ thiên hà KF",           "sell": 300_000},
 }
 
 KF_EXCLUSIVE_TITLES = {
-    "Hiệp Sĩ Hắc Bạch ⚔️":    {"desc": "Hoàn thành Chapter 1",  "req_chapter": 1},
-    "Người Bảo Vệ Nhân Loại 🛡️": {"desc": "Hoàn thành Chapter 2", "req_chapter": 2},
-    "Kẻ Diệt Honkai 💠":       {"desc": "Hoàn thành Chapter 3",  "req_chapter": 3},
-    "Thợ Săn Herrscher 🩸":    {"desc": "Hoàn thành Chapter 4",  "req_chapter": 4},
-    "Huyền Thoại Xà Hầu 🌌":  {"desc": "Hoàn thành Chapter 5",  "req_chapter": 5},
-    "Người Kế Thừa Kevin 👑":  {"desc": "Hoàn thành tất cả",     "req_chapter": 6},
+    "Hiệp Sĩ Hắc Bạch ⚔️":      {"req_chapter": 1},
+    "Người Bảo Vệ Nhân Loại 🛡️": {"req_chapter": 2},
+    "Kẻ Diệt Honkai 💠":          {"req_chapter": 3},
+    "Thợ Săn Herrscher 🩸":       {"req_chapter": 4},
+    "Huyền Thoại Xà Hầu 🌌":     {"req_chapter": 5},
+    "Người Kế Thừa Kevin 👑":     {"req_chapter": 6},
+    "Kẻ Chinh Phục Vũ Trụ 🌠":   {"req_chapter": 7},
+    "Chúa Tể Bóng Tối 🌑":       {"req_chapter": 8},
+    "Thần Chiến Honkai 🔱":       {"req_chapter": 9},
+    "Truyền Nhân Bất Tử 💎":     {"req_raid": True},
 }
 
 # ── NHÂN VẬT ─────────────────────────────────────────────────────────
@@ -4571,451 +4757,822 @@ KF_CHARACTERS = {
     "kallen": {
         "name": "Kallen Kaslana ⚔️",
         "title": "Hiệp Sĩ Trắng",
-        "hp": 350, "atk": 80, "def": 40,
-        "element": "Vật Lý",
+        "hp": 350, "atk": 80, "def": 40, "crit": 15,
+        "element": "Vật Lý ⚪",
         "passive": "Hiệp Sĩ Danh Dự: Chí mạng +15%, sát thương Boss +20%",
+        "avatar": "https://i.imgur.com/KallenAvatar.png",
+        "banner": "https://i.imgur.com/KallenBanner.png",
         "skills": {
-            "atk":  {"name": "Kiếm Chém Bạo Phong 🌪️",   "mp": 0,  "mult": 1.2,  "desc": "Chém liên hoàn 3 nhát, sát thương x1.2"},
-            "def":  {"name": "Khiên Thánh Kaslana 🛡️",    "mp": 20, "mult": 0,    "desc": "Giảm 40% sát thương nhận vào 1 lượt"},
-            "ult":  {"name": "Thánh Nữ Phán Quyết ✨",     "mp": 60, "mult": 3.5,  "desc": "Triệu hồi ánh sáng thánh, x3.5 sát thương"},
+            "atk": {"name": "Kiếm Chém Bạo Phong 🌪️",  "mp": 0,  "mult": 1.2,  "desc": "Chém liên hoàn 3 nhát, x1.2 sát thương"},
+            "def": {"name": "Khiên Thánh Kaslana 🛡️",   "mp": 20, "mult": 0,    "desc": "Giảm 40% sát thương 1 lượt"},
+            "ult": {"name": "Thánh Nữ Phán Quyết ✨",    "mp": 60, "mult": 3.5,  "desc": "Ánh sáng thánh x3.5, Boss +20%"},
         },
-        "unlock": 0,  # Mở sẵn
-        "lore": "Kallen Kaslana, hiệp sĩ trắng của dòng họ Kaslana. Cô chiến đấu vì tình yêu với loài người."
+        "unlock": 0,
+        "lore": "Kallen Kaslana — hiệp sĩ của dòng họ Kaslana. Cô chiến đấu vì tình yêu với loài người, không màng đến cái chết.",
+        "upgrade_stat": "atk",
     },
     "fuhua": {
         "name": "Fu Hua 🦅",
         "title": "Phượng Hoàng Bất Tử",
-        "hp": 300, "atk": 90, "def": 30,
-        "element": "Gió",
+        "hp": 300, "atk": 90, "def": 30, "crit": 12,
+        "element": "Gió 🌬️",
         "passive": "Bất Tử Phượng Hoàng: Hồi 30 HP khi giết kẻ thù",
+        "avatar": "https://i.imgur.com/FuHuaAvatar.png",
+        "banner": "https://i.imgur.com/FuHuaBanner.png",
         "skills": {
-            "atk":  {"name": "Song Chưởng Phong Vũ 🌬️",   "mp": 0,  "mult": 1.3,  "desc": "Đòn tay tốc độ cao, x1.3 sát thương"},
-            "def":  {"name": "Tâm Linh Tĩnh Lặng 🧘",     "mp": 25, "mult": 0,    "desc": "Né tránh hoàn toàn 1 đòn kế tiếp"},
-            "ult":  {"name": "Hồi Sinh Phượng Hoàng 🔥",   "mp": 60, "mult": 2.8,  "desc": "Hồi 80 HP + tấn công x2.8"},
+            "atk": {"name": "Song Chưởng Phong Vũ 🌬️",  "mp": 0,  "mult": 1.3,  "desc": "Đòn tay tốc độ cao, x1.3 + hồi HP"},
+            "def": {"name": "Tâm Linh Tĩnh Lặng 🧘",    "mp": 25, "mult": 0,    "desc": "Né hoàn toàn 1 đòn tiếp theo"},
+            "ult": {"name": "Hồi Sinh Phượng Hoàng 🔥",  "mp": 60, "mult": 2.8,  "desc": "Hồi 80 HP + tấn công x2.8"},
         },
         "unlock": 0,
-        "lore": "Fu Hua, bất tử suốt 50.000 năm. Cô từng là cố vấn của Shenzhou và là Phoenix thực sự."
+        "lore": "Fu Hua — bất tử suốt 50.000 năm. Từng là cố vấn của Shenzhou và là Phoenix thực sự của nhân loại.",
+        "upgrade_stat": "def",
     },
     "sakura": {
         "name": "Yae Sakura 🌸",
         "title": "Hồ Ly Onmyoji",
-        "hp": 280, "atk": 100, "def": 20,
-        "element": "Lửa",
+        "hp": 280, "atk": 100, "def": 20, "crit": 20,
+        "element": "Lửa 🔥",
         "passive": "Linh Hồn Bất Diệt: Sát thương kỹ năng +25%",
+        "avatar": "https://i.imgur.com/SakuraAvatar.png",
+        "banner": "https://i.imgur.com/SakuraBanner.png",
         "skills": {
-            "atk":  {"name": "Hồ Ly Hỏa Thuật 🦊",        "mp": 0,  "mult": 1.4,  "desc": "Ném lửa hồ ly, sát thương x1.4"},
-            "def":  {"name": "Bùa Hộ Mệnh Onmyo 📿",      "mp": 20, "mult": 0,    "desc": "Hút 25% sát thương của đòn tiếp theo thành HP"},
-            "ult":  {"name": "Trăm Hồ Ly Hỏa Vũ 🌺",     "mp": 60, "mult": 4.0,  "desc": "Triệu hồi 100 hồ ly, x4.0 sát thương"},
+            "atk": {"name": "Hồ Ly Hỏa Thuật 🦊",       "mp": 0,  "mult": 1.4,  "desc": "Ném lửa hồ ly x1.4"},
+            "def": {"name": "Bùa Hộ Mệnh Onmyo 📿",     "mp": 20, "mult": 0,    "desc": "Hút 25% sát thương thành HP"},
+            "ult": {"name": "Trăm Hồ Ly Hỏa Vũ 🌺",     "mp": 60, "mult": 4.0,  "desc": "Triệu hồi 100 hồ ly, x4.0"},
         },
         "unlock": 0,
-        "lore": "Yae Sakura, Onmyoji hồ ly đến từ Yae Village. Linh hồn cô gắn liền với Higokumaru."
+        "lore": "Yae Sakura — Onmyoji hồ ly đến từ Yae Village. Linh hồn cô gắn liền với Higokumaru trong muôn đời.",
+        "upgrade_stat": "atk",
     },
     "otto": {
         "name": "Otto Apocalypse 🧪",
         "title": "Giám Đốc Schicksal",
-        "hp": 260, "atk": 95, "def": 35,
-        "element": "Băng",
-        "passive": "Thiên Tài Khoa Học: 20% cơ hội debuff kẻ thù -20% DEF",
+        "hp": 260, "atk": 95, "def": 35, "crit": 8,
+        "element": "Băng 🧊",
+        "passive": "Thiên Tài Khoa Học: 20% debuff kẻ thù -20% DEF",
+        "avatar": "https://i.imgur.com/OttoAvatar.png",
+        "banner": "https://i.imgur.com/OttoBanner.png",
         "skills": {
-            "atk":  {"name": "Thần Kinh Băng Giá 🧊",     "mp": 0,  "mult": 1.35, "desc": "Phóng băng tinh thể, x1.35"},
-            "def":  {"name": "Lá Chắn Năng Lượng ⚡",     "mp": 30, "mult": 0,    "desc": "Giảm 50% sát thương, phản 20% lại kẻ thù"},
-            "ult":  {"name": "Khải Huyền Otto ❄️",         "mp": 70, "mult": 3.8,  "desc": "Kích hoạt Project Prometheus, x3.8"},
+            "atk": {"name": "Thần Kinh Băng Giá 🧊",    "mp": 0,  "mult": 1.35, "desc": "Phóng băng tinh thể, x1.35"},
+            "def": {"name": "Lá Chắn Năng Lượng ⚡",    "mp": 30, "mult": 0,    "desc": "Giảm 50% sát thương + phản 20%"},
+            "ult": {"name": "Khải Huyền Otto ❄️",        "mp": 70, "mult": 3.8,  "desc": "Kích hoạt Prometheus, x3.8"},
         },
-        "unlock": 1,  # Cần mở bằng vật phẩm
+        "unlock": 1,
         "unlock_item": "Thiết Phẩm Kallen ⚙️",
         "unlock_count": 3,
-        "lore": "Otto Apocalypse, Giám Đốc Schicksal. Mọi việc ông làm đều vì Kallen."
+        "lore": "Otto Apocalypse — Giám đốc tổ chức Schicksal. Mọi việc ông làm đều xuất phát từ tình yêu dành cho Kallen.",
+        "upgrade_stat": "def",
     },
     "kevin": {
         "name": "Kevin Kaslana ❄️",
         "title": "Người Cuối Cùng",
-        "hp": 400, "atk": 110, "def": 50,
-        "element": "Tối",
-        "passive": "Vũ Khí Cuối Cùng: Sát thương tăng 5% mỗi lượt (tích lũy)",
+        "hp": 400, "atk": 110, "def": 50, "crit": 10,
+        "element": "Tối 🌑",
+        "passive": "Vũ Khí Cuối Cùng: Sát thương tăng 5% mỗi lượt (tích lũy, max 50%)",
+        "avatar": "https://i.imgur.com/KevinAvatar.png",
+        "banner": "https://i.imgur.com/KevinBanner.png",
         "skills": {
-            "atk":  {"name": "Trảm Hồn Đao 🗡️",           "mp": 0,  "mult": 1.5,  "desc": "Đòn đơn cực mạnh, x1.5"},
-            "def":  {"name": "Tịch Diệt Thể Xác 💀",       "mp": 40, "mult": 0,    "desc": "Bất tử 1 lượt, hồi 50 HP"},
-            "ult":  {"name": "Ánh Trăng Cuối Cùng 🌙",     "mp": 80, "mult": 5.0,  "desc": "Tuyệt chiêu Kevin, x5.0 sát thương"},
+            "atk": {"name": "Trảm Hồn Đao 🗡️",          "mp": 0,  "mult": 1.5,  "desc": "Đòn đơn cực mạnh, x1.5 + tích stack"},
+            "def": {"name": "Tịch Diệt Thể Xác 💀",      "mp": 40, "mult": 0,    "desc": "Bất tử 1 lượt, hồi 50 HP"},
+            "ult": {"name": "Ánh Trăng Cuối Cùng 🌙",    "mp": 80, "mult": 5.0,  "desc": "Tuyệt chiêu Kevin x5.0, reset stack"},
         },
         "unlock": 2,
         "unlock_item": "Cốt Tủy Kevin ❄️",
         "unlock_count": 2,
-        "lore": "Kevin Kaslana, người cuối cùng đứng vững trước làn sóng Honkai thứ 3. Anh gánh chịu mọi thứ một mình."
+        "lore": "Kevin Kaslana — người cuối cùng đứng vững trước làn sóng Honkai. Anh gánh chịu mọi thứ trong cô đơn suốt nghìn năm.",
+        "upgrade_stat": "atk",
     },
     "elysia": {
         "name": "Elysia 🌟",
-        "title": "Cô Gái Đẹp Nhất",
-        "hp": 320, "atk": 88, "def": 32,
-        "element": "Sinh Học",
-        "passive": "Yêu Thương Vô Điều Kiện: Hồi 15 HP mỗi đầu lượt",
+        "title": "Nữ Hoàng HoV",
+        "hp": 320, "atk": 88, "def": 32, "crit": 10,
+        "element": "Sinh Học 🌿",
+        "passive": "Yêu Thương Vô Điều Kiện: Hồi 15 HP đầu mỗi lượt",
+        "avatar": "https://i.imgur.com/ElysiaAvatar.png",
+        "banner": "https://i.imgur.com/ElysiaBanner.png",
         "skills": {
-            "atk":  {"name": "Mũi Tên Tình Yêu 💘",        "mp": 0,  "mult": 1.25, "desc": "Bắn mũi tên hồng, x1.25"},
-            "def":  {"name": "Ôm Ấp Che Chở 🤗",           "mp": 20, "mult": 0,    "desc": "Hồi 60 HP và tăng DEF thêm 30% lượt này"},
-            "ult":  {"name": "Lời Tạm Biệt Elysia 🌸",     "mp": 60, "mult": 3.2,  "desc": "Nụ hôn tạm biệt, x3.2 + hồi 50 HP"},
+            "atk": {"name": "Mũi Tên Tình Yêu 💘",       "mp": 0,  "mult": 1.25, "desc": "Mũi tên hồng x1.25"},
+            "def": {"name": "Ôm Ấp Che Chở 🤗",          "mp": 20, "mult": 0,    "desc": "Hồi 60 HP + DEF +30%"},
+            "ult": {"name": "Lời Tạm Biệt Elysia 🌸",    "mp": 60, "mult": 3.2,  "desc": "x3.2 + hồi 50 HP"},
         },
         "unlock": 1,
-        "unlock_item": "Hoa Anh Đào Yae 🌸",
+        "unlock_item": "Hồn Ngọc Elysia 💗",
         "unlock_count": 2,
-        "lore": "Elysia, thành viên HoV và là 'cô gái đẹp nhất'. Cô yêu loài người theo cách riêng của mình."
+        "lore": "Elysia — thành viên HoV và là 'cô gái đẹp nhất'. Tình yêu của cô dành cho loài người là vô điều kiện.",
+        "upgrade_stat": "hp",
     },
     "aponia": {
         "name": "Aponia 📿",
         "title": "Nữ Tu Trừng Phạt",
-        "hp": 290, "atk": 92, "def": 38,
-        "element": "Thánh",
-        "passive": "Tội Lỗi & Trừng Phạt: Đòn tấn công có 25% gây choáng 1 lượt",
+        "hp": 290, "atk": 92, "def": 38, "crit": 12,
+        "element": "Thánh ✝️",
+        "passive": "Tội Lỗi & Trừng Phạt: 25% gây choáng 1 lượt khi ATK",
+        "avatar": "https://i.imgur.com/AponiaAvatar.png",
+        "banner": "https://i.imgur.com/AponiaBanner.png",
         "skills": {
-            "atk":  {"name": "Roi Trừng Phạt ⛓️",          "mp": 0,  "mult": 1.3,  "desc": "Quật roi thánh, x1.3 + 25% choáng"},
-            "def":  {"name": "Cầu Nguyện Bảo Hộ 🙏",       "mp": 25, "mult": 0,    "desc": "Giảm 45% sát thương + phản 15%"},
-            "ult":  {"name": "Phán Xét Cuối Cùng ✝️",       "mp": 65, "mult": 3.6,  "desc": "Mưa thánh quang trừng phạt, x3.6"},
+            "atk": {"name": "Roi Trừng Phạt ⛓️",         "mp": 0,  "mult": 1.3,  "desc": "Quật roi thánh x1.3, 25% choáng"},
+            "def": {"name": "Cầu Nguyện Bảo Hộ 🙏",      "mp": 25, "mult": 0,    "desc": "Giảm 45% sát thương + phản 15%"},
+            "ult": {"name": "Phán Xét Cuối Cùng ✝️",      "mp": 65, "mult": 3.6,  "desc": "Mưa thánh quang x3.6"},
         },
         "unlock": 1,
-        "unlock_item": "Lông Vũ Fu Hua 🪶",
+        "unlock_item": "Chuỗi Hạt Aponia 🙏",
         "unlock_count": 2,
-        "lore": "Aponia, Nữ Tu của HoV. Cô tin rằng tội lỗi phải được trừng phạt — kể cả tội của chính mình."
+        "lore": "Aponia — Nữ Tu của HoV. Cô tin rằng tội lỗi phải được trừng phạt, kể cả tội của chính mình.",
+        "upgrade_stat": "def",
+    },
+    "seele": {
+        "name": "Seele 👻",
+        "title": "Linh Hồn Từ Hư Không",
+        "hp": 270, "atk": 115, "def": 15, "crit": 25,
+        "element": "Tâm Linh 🔮",
+        "passive": "Bướm Đêm: Khi chí mạng, đánh thêm 1 lần nữa",
+        "avatar": "https://i.imgur.com/SeeleAvatar.png",
+        "banner": "https://i.imgur.com/SeeleBanner.png",
+        "skills": {
+            "atk": {"name": "Lưỡi Hái Bóng Tối 🌑",     "mp": 0,  "mult": 1.5,  "desc": "Lưỡi hái linh hồn x1.5, CRIT cao"},
+            "def": {"name": "Bóng Ma Biến Mất 👻",       "mp": 30, "mult": 0,    "desc": "Né 1 đòn + phản công x0.5"},
+            "ult": {"name": "Vũ Khúc Bướm Đen 🦋",       "mp": 70, "mult": 4.5,  "desc": "Hóa thân bướm đêm x4.5, CRIT gấp đôi"},
+        },
+        "unlock": 2,
+        "unlock_item": "Mảnh Ký Ức Seele 👻",
+        "unlock_count": 3,
+        "lore": "Seele — linh hồn nhân tạo được Otto tạo ra. Cô tồn tại giữa ranh giới sống và chết, mang ký ức về Kallen.",
+        "upgrade_stat": "atk",
+    },
+    "vill_v": {
+        "name": "Vill-V 🎭",
+        "title": "Màn Trình Diễn Cuối",
+        "hp": 310, "atk": 85, "def": 45, "crit": 15,
+        "element": "Điện ⚡",
+        "passive": "Nhân Cách Phân Liệt: Mỗi lượt đổi giữa ATK và DEF chế độ ngẫu nhiên",
+        "avatar": "https://i.imgur.com/VillVAvatar.png",
+        "banner": "https://i.imgur.com/VillVBanner.png",
+        "skills": {
+            "atk": {"name": "Điện Kịch Trường 🎭",       "mp": 0,  "mult": 1.35, "desc": "Điện giật sân khấu x1.35"},
+            "def": {"name": "Màn Ảo Thuật 🎩",           "mp": 25, "mult": 0,    "desc": "Phân thân thoát đòn + phản 25%"},
+            "ult": {"name": "Màn Biểu Diễn Cuối ⚡",     "mp": 65, "mult": 3.8,  "desc": "Toàn bộ điện năng x3.8"},
+        },
+        "unlock": 2,
+        "unlock_item": "Bụi Sao Trời 🌟",
+        "unlock_count": 2,
+        "lore": "Vill-V — thành viên bí ẩn của HoV. Cô luôn đeo mặt nạ và hành động như diễn viên trên sân khấu định mệnh.",
+        "upgrade_stat": "def",
+    },
+    "pardofelis": {
+        "name": "Pardofelis 🐱",
+        "title": "Mèo Con HoV",
+        "hp": 340, "atk": 75, "def": 55, "crit": 8,
+        "element": "Đất 🌍",
+        "passive": "Trữ Năng Lượng: Mỗi lần bị đánh, tích 10 MP thêm",
+        "avatar": "https://i.imgur.com/PardoAvatar.png",
+        "banner": "https://i.imgur.com/PardoBanner.png",
+        "skills": {
+            "atk": {"name": "Móng Vuốt Đất 🐾",          "mp": 0,  "mult": 1.2,  "desc": "Cào đất x1.2, nhanh và chắc"},
+            "def": {"name": "Lãnh Thổ Mèo 🐱",           "mp": 20, "mult": 0,    "desc": "Giảm 50% sát thương + hồi 20 HP"},
+            "ult": {"name": "Roar Của Chúa Tể Đất 🌋",   "mp": 60, "mult": 3.0,  "desc": "Chấn động đất x3.0, choáng kẻ thù 2 lượt"},
+        },
+        "unlock": 1,
+        "unlock_item": "Tinh Thể Honkai 💠",
+        "unlock_count": 4,
+        "lore": "Pardofelis — mèo con đáng yêu của HoV. Đừng để vẻ ngoài đánh lừa bạn, cô ấy có thể nghiền nát đá.",
+        "upgrade_stat": "def",
     },
 }
 
-# ── KẺ THÙ THEO CHAPTER ──────────────────────────────────────────────
+# ── SKILLS HỆ THỐNG ───────────────────────────────────────────────────
+SKILLS = {
+    "tan_cong":  {"name": "⚔️ Tấn Công",  "emoji": "⚔️", "beats": "phong_thu", "bonus_atk": 1.4, "bonus_def": 1.0, "desc": "Dồn lực đánh thẳng"},
+    "phong_thu": {"name": "🛡️ Phòng Thủ", "emoji": "🛡️", "beats": "phan_cong", "bonus_atk": 0.7, "bonus_def": 1.6, "desc": "Lập thế thủ chắc"},
+    "phan_cong": {"name": "🔄 Phản Công",  "emoji": "🔄", "beats": "tan_cong",  "bonus_atk": 1.2, "bonus_def": 1.2, "desc": "Chờ đòn rồi trả"},
+    "do_bo":     {"name": "🎯 Đổ Bộ",      "emoji": "🎯", "beats": None,         "bonus_atk": 1.8, "bonus_def": 0.5, "desc": "All-in mạo hiểm"},
+    "mai_phuc":  {"name": "🌑 Mai Phục",   "emoji": "🌑", "beats": "do_bo",      "bonus_atk": 1.5, "bonus_def": 0.9, "desc": "Bẫy đòn đổ bộ"},
+}
+
+BATTLE_EVENTS = [
+    {"msg": "⚡ Sét đánh kho vũ khí ATK! ATK -{atk} giảm 20%.", "atk_mult": 0.8, "def_mult": 1.0},
+    {"msg": "🔥 Lửa bùng trại phòng thủ! DEF -{def} giảm 20%.", "atk_mult": 1.0, "def_mult": 0.8},
+    {"msg": "🌪️ Bão cát phủ chiến trường! Cả 2 -10%.",           "atk_mult": 0.9, "def_mult": 0.9},
+    {"msg": "💊 Viện trợ y tế đến! DEF +15%.",                    "atk_mult": 1.0, "def_mult": 1.15},
+    {"msg": "🚀 Tiếp viện bí mật! ATK +20%.",                     "atk_mult": 1.2, "def_mult": 1.0},
+    {"msg": "🤝 Không có sự kiện — chiến đấu bình thường.",       "atk_mult": 1.0, "def_mult": 1.0},
+    {"msg": "🤝 Không có sự kiện — chiến đấu bình thường.",       "atk_mult": 1.0, "def_mult": 1.0},
+]
+
+PRIZE_STEAL_RATE = 0.12
+REP_WIN_BONUS    = 15
+REP_LOSE_PENALTY = 20
+REP_SCANDAL_THRES= 30
+CRIT_CHANCE      = 0.12
+
+# ── CHƯƠNG CHÍNH ──────────────────────────────────────────────────────
 KF_CHAPTERS = [
-    # ── CHAPTER 1: Cánh Đồng Quá Khứ ────────────────────────────────
     {
-        "id": 1,
-        "title": "Chapter 1: Cánh Đồng Quá Khứ",
+        "id": 1, "title": "Chapter 1: Cánh Đồng Quá Khứ",
         "story_intro": (
             "🌸 **Edo, Nhật Bản — Năm 1600**\n\n"
             "Kallen Kaslana đặt chân đến vùng đất Nhật Bản đầy khói lửa. "
             "Làng Yae bị tấn công bởi những xác sống Honkai. "
-            "Tiếng la hét vang khắp đêm đen...\n\n"
-            "*\"Ta sẽ bảo vệ tất cả các ngươi!\"* — Kallen rút kiếm."
+            "Tiếng la hét vang khắp đêm đen..."
         ),
         "story_mid": (
             "⚔️ **Giữa trận chiến...**\n\n"
-            "Kallen gặp một cô bé hồ ly nhỏ đang khóc bên xác mẹ. "
-            "Đôi mắt hồng của cô bé nhìn Kallen với ánh mắt sợ hãi lẫn tin tưởng.\n\n"
+            "Một cô bé hồ ly nhỏ đang khóc bên xác mẹ. "
+            "Đôi mắt hồng nhìn Kallen với ánh mắt sợ hãi lẫn tin tưởng.\n\n"
             "*\"Đừng sợ... Ta sẽ không để chúng làm hại ngươi.\"*"
         ),
         "story_end": (
             "🌅 **Bình minh ló dạng...**\n\n"
             "Kallen đánh lui đợt tấn công đầu tiên. Cô bé hồ ly — Yae Sakura — "
-            "nhìn Kallen với đôi mắt ngưỡng mộ. Một tình bạn bắt đầu."
+            "nhìn với đôi mắt ngưỡng mộ. Một tình bạn bắt đầu từ đây."
         ),
         "enemies": [
-            {"name": "Zombie Honkai 🧟",    "hp": 120, "atk": 25, "def": 5,  "xp": 30,  "drop": "Thiết Phẩm Kallen ⚙️", "drop_rate": 0.4},
-            {"name": "Zombie Chiến Binh 🧟‍♂️","hp": 160, "atk": 35, "def": 10, "xp": 50,  "drop": "Thiết Phẩm Kallen ⚙️", "drop_rate": 0.5},
-            {"name": "Zombie Samurai ⚔️🧟", "hp": 200, "atk": 45, "def": 15, "xp": 70,  "drop": "Tinh Thể Honkai 💠",   "drop_rate": 0.2},
+            {"name": "Zombie Honkai 🧟",     "hp": 120, "atk": 25, "def": 5,  "xp": 30,  "drop": "Thiết Phẩm Kallen ⚙️", "drop_rate": 0.4},
+            {"name": "Zombie Chiến Binh 🧟‍♂️", "hp": 160, "atk": 35, "def": 10, "xp": 50,  "drop": "Thiết Phẩm Kallen ⚙️", "drop_rate": 0.5},
+            {"name": "Zombie Samurai ⚔️🧟",  "hp": 200, "atk": 45, "def": 15, "xp": 70,  "drop": "Tinh Thể Honkai 💠",    "drop_rate": 0.2},
         ],
         "boss": {
-            "name": "Trùm Zombie — Oni Độc 👹",
-            "hp": 500, "atk": 65, "def": 20,
-            "xp": 200, "money": 30000,
+            "name": "Oni Độc — Trùm Zombie 👹",
+            "hp": 500, "atk": 65, "def": 20, "xp": 200, "money": 30_000,
             "drop_item": "Thiết Phẩm Kallen ⚙️", "drop_count": 2,
             "title_reward": "Hiệp Sĩ Hắc Bạch ⚔️",
-            "skills": ["Tiếng Gầm Oni 😱 (làm choáng 1 lượt)", "Đấm Sấm Sét 💥 (x1.8 sát thương)"],
-            "lore": "Một Oni Nhật Bản bị nhiễm Honkai, sức mạnh tăng gấp bội nhưng mất đi lý trí."
+            "skills": ["Tiếng Gầm Oni 😱 (choáng 1 lượt)", "Đấm Sấm Sét 💥 (x1.8)"],
+            "lore": "Oni Nhật Bản bị nhiễm Honkai, sức mạnh tăng gấp bội nhưng mất đi lý trí.",
         },
-        "waves": 3,
-        "ticket_cost": 1,
-        "reward_money": 15000,
+        "waves": 3, "ticket_cost": 1, "reward_money": 15_000,
     },
-
-    # ── CHAPTER 2: Bóng Tối Schicksal ────────────────────────────────
     {
-        "id": 2,
-        "title": "Chapter 2: Bóng Tối Schicksal",
+        "id": 2, "title": "Chapter 2: Bóng Tối Schicksal",
         "story_intro": (
             "🏰 **Lâu đài Schicksal — Châu Âu**\n\n"
-            "Kallen nhận lệnh từ tổ chức Schicksal tiêu diệt ổ Honkai tại lâu đài cũ. "
-            "Nhưng khi bước vào, cô cảm nhận được điều gì đó không ổn...\n\n"
-            "Otto Apocalypse — thiên tài trẻ tuổi của Schicksal — âm thầm dõi theo."
+            "Kallen nhận lệnh tiêu diệt ổ Honkai tại lâu đài cũ. "
+            "Nhưng khi bước vào, cô cảm nhận điều gì đó không ổn...\n\n"
+            "Otto Apocalypse âm thầm dõi theo."
         ),
         "story_mid": (
             "🧪 **Phòng thí nghiệm bí mật...**\n\n"
-            "Kallen phát hiện Schicksal đang thực hiện thí nghiệm trên con người nhiễm Honkai. "
-            "Otto xuất hiện, đôi mắt lạnh lùng nhìn cô:\n\n"
-            "*\"Đây là vì sự sống còn của nhân loại, Kallen. Ngươi có hiểu không?\"*\n\n"
-            "Kallen siết chặt kiếm. Cô không thể chấp nhận điều này."
+            "Kallen phát hiện Schicksal đang thực hiện thí nghiệm trên người. "
+            "Otto xuất hiện, đôi mắt lạnh lùng:\n\n"
+            "*\"Đây là vì sự sống còn của nhân loại. Ngươi có hiểu không?\"*"
         ),
         "story_end": (
             "💔 **Vết nứt đầu tiên...**\n\n"
             "Kallen tiêu diệt thí nghiệm thất bại nhưng không thể ngăn Otto. "
-            "Lần đầu tiên, cô nghi ngờ tổ chức mình phục vụ. "
-            "Otto nhìn theo bóng cô với ánh mắt phức tạp."
+            "Lần đầu tiên, cô nghi ngờ tổ chức mình phục vụ."
         ),
         "enemies": [
-            {"name": "Lính Schicksal Phản Bội 🗡️", "hp": 180, "atk": 40, "def": 15, "xp": 60,  "drop": "Mảnh Nhớ Otto 💌",    "drop_rate": 0.4},
-            {"name": "Thực Nghiệm Thể 🧬",           "hp": 220, "atk": 50, "def": 20, "xp": 80,  "drop": "Tinh Thể Honkai 💠",  "drop_rate": 0.3},
-            {"name": "Golem Schicksal 🤖",            "hp": 280, "atk": 60, "def": 30, "xp": 100, "drop": "Mảnh Nhớ Otto 💌",   "drop_rate": 0.5},
+            {"name": "Lính Phản Bội 🗡️",   "hp": 180, "atk": 40, "def": 15, "xp": 60,  "drop": "Mảnh Nhớ Otto 💌",   "drop_rate": 0.4},
+            {"name": "Thực Nghiệm Thể 🧬",  "hp": 220, "atk": 50, "def": 20, "xp": 80,  "drop": "Tinh Thể Honkai 💠",  "drop_rate": 0.3},
+            {"name": "Golem Schicksal 🤖",   "hp": 280, "atk": 60, "def": 30, "xp": 100, "drop": "Mảnh Nhớ Otto 💌",   "drop_rate": 0.5},
         ],
         "boss": {
-            "name": "Thí Nghiệm Thất Bại — Monstrum ☣️",
-            "hp": 700, "atk": 80, "def": 30,
-            "xp": 300, "money": 50000,
+            "name": "Monstrum ☣️ — Thí Nghiệm Thất Bại",
+            "hp": 700, "atk": 80, "def": 30, "xp": 300, "money": 50_000,
             "drop_item": "Mảnh Nhớ Otto 💌", "drop_count": 2,
             "title_reward": "Người Bảo Vệ Nhân Loại 🛡️",
-            "skills": ["Axit Honkai 🧪 (đốt -20 HP/lượt)", "Tăng Tốc Đột Biến 💉 (x2.0 sát thương)"],
-            "lore": "Con người bị biến đổi bởi thí nghiệm Honkai của Schicksal. Không còn nhân tính."
+            "skills": ["Axit Honkai 🧪 (đốt -20 HP/lượt)", "Tăng Tốc Đột Biến 💉 (x2.0)"],
+            "lore": "Người bị biến đổi bởi thí nghiệm Honkai. Không còn nhân tính.",
         },
-        "waves": 3,
-        "ticket_cost": 1,
-        "reward_money": 25000,
+        "waves": 3, "ticket_cost": 1, "reward_money": 25_000,
     },
-
-    # ── CHAPTER 3: Herrscher Xuất Hiện ───────────────────────────────
     {
-        "id": 3,
-        "title": "Chapter 3: Herrscher Xuất Hiện",
+        "id": 3, "title": "Chapter 3: Herrscher Xuất Hiện",
         "story_intro": (
             "🌊 **Biển Nhật Bản — Đêm Bão**\n\n"
-            "Một Herrscher — hiện thân của ý chí Honkai — xuất hiện tại bờ biển. "
-            "Làn sóng năng lượng hủy diệt cuộn qua, xóa sạch mọi thứ trong tầm mắt.\n\n"
-            "Fu Hua hạ cánh bên cạnh Kallen, đôi mắt bình thản:\n"
-            "*\"Đây là trận chiến của chúng ta, Kallen.\"*"
+            "Một Herrscher xuất hiện tại bờ biển. "
+            "Làn sóng năng lượng hủy diệt cuộn qua, xóa sạch mọi thứ.\n\n"
+            "Fu Hua hạ cánh bên cạnh: *\"Đây là trận chiến của chúng ta.\"*"
         ),
         "story_mid": (
             "💠 **Trong vòng xoáy Honkai...**\n\n"
-            "Herrscher cười lạnh:\n"
-            "*\"Các ngươi... những con sâu yếu đuối. Honkai sẽ thanh tẩy thế giới này!\"*\n\n"
-            "Kallen không nao núng. Cô nhớ đến những khuôn mặt cô đã bảo vệ — "
-            "Yae Sakura, những dân làng, Otto dù sao đi nữa...\n\n"
-            "Ánh sáng kiếm bùng lên."
+            "Herrscher cười lạnh: *\"Các ngươi — những con sâu yếu đuối. "
+            "Honkai sẽ thanh tẩy thế giới này!\"*\n\n"
+            "Ánh sáng kiếm bùng lên trong đêm tối."
         ),
         "story_end": (
             "✨ **Sau cơn bão...**\n\n"
-            "Herrscher bị đánh lui nhưng chưa bị tiêu diệt. "
-            "Fu Hua nhìn Kallen với ánh mắt đánh giá lại:\n"
+            "Herrscher bị đánh lui. Fu Hua nhìn với ánh mắt đánh giá:\n"
             "*\"Ngươi mạnh hơn ta nghĩ. Nhưng trận chiến thật sự... còn chưa bắt đầu.\"*"
         ),
         "enemies": [
-            {"name": "Hầu Vệ Honkai ⚡",    "hp": 250, "atk": 55, "def": 20, "xp": 90,  "drop": "Tinh Thể Honkai 💠",  "drop_rate": 0.5},
+            {"name": "Hầu Vệ Honkai ⚡",    "hp": 250, "atk": 55, "def": 20, "xp": 90,  "drop": "Tinh Thể Honkai 💠",   "drop_rate": 0.5},
             {"name": "Cánh Tay Herrscher 🌊","hp": 300, "atk": 65, "def": 25, "xp": 110, "drop": "Giọt Máu Herrscher 🩸","drop_rate": 0.25},
             {"name": "Phân Thân Honkai 👁️",  "hp": 350, "atk": 75, "def": 30, "xp": 130, "drop": "Giọt Máu Herrscher 🩸","drop_rate": 0.3},
         ],
         "boss": {
             "name": "Herrscher of the Void 🌌",
-            "hp": 1000, "atk": 100, "def": 40,
-            "xp": 500, "money": 80000,
+            "hp": 1_000, "atk": 100, "def": 40, "xp": 500, "money": 80_000,
             "drop_item": "Giọt Máu Herrscher 🩸", "drop_count": 3,
             "title_reward": "Kẻ Diệt Honkai 💠",
-            "skills": [
-                "Hủy Diệt Hư Không 🌑 (x2.5 sát thương)",
-                "Biển Honkai 🌊 (gây 30 sát thương cho tất cả)",
-                "Hấp Thụ Năng Lượng 💠 (hồi 100 HP)",
-            ],
-            "lore": "Herrscher of the Void — ý chí hủy diệt thuần túy của Honkai. Không có thù hận, chỉ có hủy diệt."
+            "skills": ["Hủy Diệt Hư Không 🌑 (x2.5)", "Biển Honkai 🌊 (30 ST cố định)", "Hấp Thụ 💠 (hồi 100 HP)"],
+            "lore": "Herrscher of the Void — ý chí hủy diệt thuần túy của Honkai.",
         },
-        "waves": 4,
-        "ticket_cost": 2,
-        "reward_money": 60000,
+        "waves": 4, "ticket_cost": 2, "reward_money": 60_000,
     },
-
-    # ── CHAPTER 4: Ký Ức Và Phản Bội ─────────────────────────────────
     {
-        "id": 4,
-        "title": "Chapter 4: Ký Ức Và Phản Bội",
+        "id": 4, "title": "Chapter 4: Ký Ức Và Phản Bội",
         "story_intro": (
             "🕯️ **Lâu đài Schicksal — Phòng Ký Ức**\n\n"
-            "Otto đã tìm ra cách hồi sinh Kallen bằng Seele — linh hồn nhân tạo. "
-            "Nhưng kế hoạch của ông đòi hỏi hy sinh không thể chấp nhận được.\n\n"
-            "Yae Sakura — giờ đã lớn — nhìn Otto với đôi mắt căm hận:\n"
-            "*\"Ông sẽ không đụng đến Kallen!\"*"
+            "Otto tìm ra cách hồi sinh Kallen bằng Seele. "
+            "Nhưng kế hoạch đòi hỏi hi sinh không thể chấp nhận.\n\n"
+            "Yae Sakura nhìn Otto với đôi mắt căm hận: *\"Ông sẽ không đụng đến Kallen!\"*"
         ),
         "story_mid": (
             "💔 **Sự thật được hé lộ...**\n\n"
-            "Otto tiết lộ kế hoạch: ông đã hi sinh hàng nghìn người để thu thập "
-            "đủ năng lượng Honkai hồi sinh Kallen.\n\n"
-            "Kallen — hiện diện qua Seele — nhìn Otto với đôi mắt buồn bã:\n"
-            "*\"Otto... tại sao ngươi lại làm vậy? Ta không muốn trở về với cái giá này.\"*\n\n"
+            "Otto đã hi sinh hàng nghìn người để thu thập năng lượng Honkai.\n\n"
+            "Kallen — qua Seele — nhìn Otto với đôi mắt buồn:\n"
+            "*\"Otto... tại sao ngươi lại làm vậy?\"*\n\n"
             "Lần đầu tiên, Otto Apocalypse khóc."
         ),
         "story_end": (
             "🌙 **Chọn lựa cuối cùng...**\n\n"
-            "Kallen chọn ở lại với Seele thay vì để Otto tiếp tục kế hoạch. "
-            "Yae Sakura giữ lời hứa với Kallen — bảo vệ thế giới thay cô.\n\n"
+            "Kallen chọn ở lại với Seele. Yae Sakura tiếp tục chiến đấu thay Kallen.\n\n"
             "*\"Đây là kết thúc đẹp nhất có thể... phải không, Otto?\"*"
         ),
         "enemies": [
-            {"name": "Lính Phản Bội Schicksal 🗡️","hp": 300, "atk": 70, "def": 30, "xp": 120, "drop": "Mảnh Nhớ Otto 💌",    "drop_rate": 0.5},
-            {"name": "Golem Ký Ức 🤖",              "hp": 380, "atk": 80, "def": 35, "xp": 150, "drop": "Lông Vũ Fu Hua 🪶",   "drop_rate": 0.3},
-            {"name": "Seele Sai Lệch 👻",            "hp": 420, "atk": 90, "def": 25, "xp": 180, "drop": "Tinh Thể Honkai 💠", "drop_rate": 0.4},
+            {"name": "Lính Phản Bội Elite 🗡️","hp": 300, "atk": 70, "def": 30, "xp": 120, "drop": "Mảnh Nhớ Otto 💌",  "drop_rate": 0.5},
+            {"name": "Golem Ký Ức 🤖",         "hp": 380, "atk": 80, "def": 35, "xp": 150, "drop": "Lông Vũ Fu Hua 🪶", "drop_rate": 0.3},
+            {"name": "Seele Sai Lệch 👻",       "hp": 420, "atk": 90, "def": 25, "xp": 180, "drop": "Mảnh Ký Ức Seele 👻","drop_rate": 0.4},
         ],
         "boss": {
-            "name": "Otto Apocalypse — Dạng Bóng Tối 🧪💀",
-            "hp": 1200, "atk": 110, "def": 50,
-            "xp": 700, "money": 100000,
+            "name": "Otto — Dạng Bóng Tối 🧪💀",
+            "hp": 1_200, "atk": 110, "def": 50, "xp": 700, "money": 100_000,
             "drop_item": "Mảnh Nhớ Otto 💌", "drop_count": 3,
             "title_reward": "Thợ Săn Herrscher 🩸",
-            "skills": [
-                "Khải Huyền Đen ☠️ (x3.0 sát thương)",
-                "Lá Chắn Ký Ức 🛡️ (miễn nhiễm 1 đòn)",
-                "Triệu Hồi Seele 👻 (hồi 150 HP)",
-            ],
-            "lore": "Otto khi bị dồn đến cùng cực. Sức mạnh của ông đến từ tình yêu tuyệt vọng — và đó là điều nguy hiểm nhất."
+            "skills": ["Khải Huyền Đen ☠️ (x3.0)", "Lá Chắn Ký Ức 🛡️ (miễn 1 đòn)", "Triệu Hồi Seele 👻 (hồi 150 HP)"],
+            "lore": "Otto khi bị dồn đến cùng cực. Sức mạnh đến từ tình yêu tuyệt vọng.",
         },
-        "waves": 4,
-        "ticket_cost": 2,
-        "reward_money": 90000,
+        "waves": 4, "ticket_cost": 2, "reward_money": 90_000,
     },
-
-    # ── CHAPTER 5: Làn Sóng Cuối Cùng ────────────────────────────────
     {
-        "id": 5,
-        "title": "Chapter 5: Làn Sóng Cuối Cùng",
+        "id": 5, "title": "Chapter 5: Làn Sóng Cuối Cùng",
         "story_intro": (
             "❄️ **Bắc Cực — Nơi Kevin Chiến Đấu Một Mình**\n\n"
-            "Làn sóng Honkai thứ 3 bùng phát. Kevin Kaslana — người cuối cùng còn đứng vững — "
-            "chiến đấu không ngừng nghỉ trong suốt 1000 năm.\n\n"
-            "Elysia đặt tay lên vai Kevin:\n"
-            "*\"Kevin... đã đến lúc nghỉ ngơi rồi. Để chúng tôi tiếp quản.\"*"
+            "Làn sóng Honkai thứ 3 bùng phát. Kevin chiến đấu suốt 1000 năm.\n\n"
+            "Elysia đặt tay lên vai: *\"Kevin... đã đến lúc nghỉ ngơi rồi.\"*"
         ),
         "story_mid": (
             "🌌 **Giữa thiên hà Honkai...**\n\n"
-            "Aponia, Elysia, Fu Hua — Herrschers of Human cùng đứng bên Kevin. "
-            "Họ không chiến đấu vì nhiệm vụ nữa. Họ chiến đấu vì nhau.\n\n"
-            "Herrscher cuối cùng xuất hiện — mạnh hơn tất cả những gì từng đối mặt:\n"
-            "*\"Các ngươi... dám chống lại ý chí của vũ trụ?\"*\n\n"
-            "*\"Ừ.\"* — Kevin mỉm cười lần đầu tiên sau nghìn năm."
+            "Aponia, Elysia, Fu Hua — cùng đứng bên Kevin.\n\n"
+            "Herrscher cuối cùng xuất hiện — mạnh hơn tất cả:\n"
+            "*\"Các ngươi dám chống lại ý chí vũ trụ?\"*\n\n"
+            "*\"Ừ.\"* — Kevin mỉm cười lần đầu sau nghìn năm."
         ),
         "story_end": (
             "🌅 **Bình Minh Mới...**\n\n"
-            "Honkai bị đánh lui. Kevin cuối cùng có thể nghỉ ngơi. "
-            "Kallen — dù chỉ qua Seele — nhìn xuống từ xa:\n\n"
-            "*\"Cảm ơn các bạn... đã tiếp tục chiến đấu thay tôi.\"*\n\n"
-            "Thế giới được cứu. Không phải bởi một người anh hùng — "
-            "mà bởi tình yêu của tất cả họ dành cho nhau."
+            "Honkai bị đánh lui. Kevin cuối cùng có thể nghỉ ngơi.\n\n"
+            "Thế giới được cứu bởi tình yêu của tất cả họ dành cho nhau."
         ),
         "enemies": [
-            {"name": "Quân Đoàn Honkai Cuối 💀",  "hp": 400, "atk": 90,  "def": 40, "xp": 200, "drop": "Giọt Máu Herrscher 🩸","drop_rate": 0.5},
-            {"name": "Herrscher Phân Thân 🌑",      "hp": 500, "atk": 110, "def": 45, "xp": 250, "drop": "Cốt Tủy Kevin ❄️",    "drop_rate": 0.3},
-            {"name": "Vệ Binh Vũ Trụ ⭐",          "hp": 600, "atk": 120, "def": 50, "xp": 300, "drop": "Tinh Thể Honkai 💠",  "drop_rate": 0.4},
+            {"name": "Quân Đoàn Honkai 💀",  "hp": 400, "atk": 90,  "def": 40, "xp": 200, "drop": "Giọt Máu Herrscher 🩸","drop_rate": 0.5},
+            {"name": "Herrscher Phân Thân 🌑","hp": 500, "atk": 110, "def": 45, "xp": 250, "drop": "Cốt Tủy Kevin ❄️",    "drop_rate": 0.3},
+            {"name": "Vệ Binh Vũ Trụ ⭐",    "hp": 600, "atk": 120, "def": 50, "xp": 300, "drop": "Tinh Thể Honkai 💠",   "drop_rate": 0.4},
         ],
         "boss": {
             "name": "Herrscher of Finality — Kẻ Tận Thế 🌌💀",
-            "hp": 2000, "atk": 150, "def": 60,
-            "xp": 1000, "money": 200000,
+            "hp": 2_000, "atk": 150, "def": 60, "xp": 1_000, "money": 200_000,
             "drop_item": "Cốt Tủy Kevin ❄️", "drop_count": 3,
             "title_reward": "Huyền Thoại Xà Hầu 🌌",
-            "skills": [
-                "Hủy Diệt Toàn Cõi ☄️ (x4.0 sát thương)",
-                "Honkai Tuyệt Đối 🌌 (gây 80 sát thương cố định)",
-                "Tái Sinh Vũ Trụ ♾️ (hồi 300 HP, chỉ dùng 1 lần)",
-                "Áp Chế Tuyệt Đối 💀 (bỏ qua 50% DEF của bạn)",
-            ],
-            "lore": "Herrscher of Finality — hiện thân của sự kết thúc. Đây là lý do tại sao Honkai tồn tại."
+            "skills": ["Hủy Diệt Toàn Cõi ☄️ (x4.0)", "Honkai Tuyệt Đối 🌌 (80 ST cố định)", "Tái Sinh ♾️ (hồi 300 HP, 1 lần)"],
+            "lore": "Herrscher of Finality — hiện thân của sự kết thúc.",
         },
-        "waves": 5,
-        "ticket_cost": 3,
-        "reward_money": 180000,
+        "waves": 5, "ticket_cost": 3, "reward_money": 180_000,
     },
-
-    # ── CHAPTER 6: Lời Hứa Vĩnh Cửu (SECRET) ────────────────────────
     {
-        "id": 6,
-        "title": "Chapter 6: Lời Hứa Vĩnh Cửu ✨ [SECRET]",
+        "id": 6, "title": "Chapter 6: Lời Hứa Vĩnh Cửu ✨ [SECRET]",
         "story_intro": (
             "🌸 **Vùng Ký Ức — Nơi Không Có Thời Gian**\n\n"
-            "Sau tất cả những trận chiến... Kallen thức dậy trong một vùng ánh sáng dịu dàng. "
-            "Tất cả những người cô yêu thương đều ở đây:\n\n"
+            "Sau tất cả chiến đấu... Kallen thức dậy trong ánh sáng dịu dàng. "
+            "Tất cả những người cô yêu thương đều ở đây.\n\n"
             "Otto. Fu Hua. Yae Sakura. Kevin. Elysia. Aponia.\n\n"
-            "*\"Đây là... thiên đường sao?\"* — Kallen hỏi.\n"
+            "*\"Đây là... thiên đường sao?\"*\n"
             "*\"Không,\"* Elysia mỉm cười. *\"Đây là ký ức của tất cả chúng ta về ngươi.\"*"
         ),
         "story_mid": (
             "💫 **Thử thách cuối cùng...**\n\n"
             "Ngay cả trong ký ức, Honkai vẫn tìm đến. "
-            "Một thực thể bóng tối xuất hiện — tổng hợp của mọi Herrscher từng tồn tại.\n\n"
-            "*\"Tình yêu của các ngươi chỉ là ảo tưởng. Kallen sẽ biến mất. "
-            "Mọi thứ sẽ biến mất. Honkai là sự thật duy nhất.\"*\n\n"
-            "Kallen đứng dậy. Lần này không phải một mình."
+            "Một thực thể bóng tối xuất hiện — tổng hợp của mọi Herrscher.\n\n"
+            "*\"Tình yêu của các ngươi chỉ là ảo tưởng!\"*"
         ),
         "story_end": (
             "🌟 **Lời hứa...**\n\n"
-            "Sau trận chiến cuối cùng, Kallen nhìn tất cả mọi người:\n\n"
-            "*\"Tôi hiểu rồi. Tôi không cần phải tồn tại mãi mãi. "
-            "Chỉ cần các bạn nhớ đến tôi — tôi sẽ luôn ở đây.\"*\n\n"
-            "Otto cúi đầu, giọng vỡ ra:\n"
-            "*\"Ta xin lỗi, Kallen. Ta... Ta yêu ngươi.\"*\n\n"
-            "Ánh sáng bao phủ tất cả. Thế giới tiếp tục tồn tại.\n"
+            "*\"Tôi không cần tồn tại mãi mãi. Chỉ cần các bạn nhớ đến tôi.\"*\n\n"
+            "Otto cúi đầu, giọng vỡ ra: *\"Ta... Ta yêu ngươi.\"*\n\n"
             "**Vì tình yêu — không bao giờ thực sự mất đi.**"
         ),
         "enemies": [
-            {"name": "Bóng Tối Ký Ức 👻",           "hp": 500,  "atk": 100, "def": 50, "xp": 300, "drop": "Cốt Tủy Kevin ❄️",    "drop_rate": 0.5},
-            {"name": "Herrscher Bóng Tối 🌑",         "hp": 700,  "atk": 130, "def": 55, "xp": 400, "drop": "Giọt Máu Herrscher 🩸","drop_rate": 0.4},
-            {"name": "Phantom Kallen 👁️",             "hp": 800,  "atk": 140, "def": 60, "xp": 500, "drop": "Thiết Phẩm Kallen ⚙️","drop_rate": 0.6},
+            {"name": "Bóng Tối Ký Ức 👻",    "hp": 500, "atk": 100, "def": 50, "xp": 300, "drop": "Cốt Tủy Kevin ❄️",   "drop_rate": 0.5},
+            {"name": "Herrscher Bóng Tối 🌑", "hp": 700, "atk": 130, "def": 55, "xp": 400, "drop": "Giọt Máu Herrscher 🩸","drop_rate": 0.4},
+            {"name": "Phantom 👁️",             "hp": 800, "atk": 140, "def": 60, "xp": 500, "drop": "Thiết Phẩm Kallen ⚙️","drop_rate": 0.6},
         ],
         "boss": {
             "name": "Tổng Hợp Herrscher — Bóng Tối Tuyệt Đối 🌑✨",
-            "hp": 3000, "atk": 180, "def": 70,
-            "xp": 2000, "money": 500000,
+            "hp": 3_000, "atk": 180, "def": 70, "xp": 2_000, "money": 500_000,
             "drop_item": "Tinh Thể Honkai 💠", "drop_count": 5,
             "title_reward": "Người Kế Thừa Kevin 👑",
-            "skills": [
-                "Hư Vô Tuyệt Đối 🌑 (x5.0 sát thương)",
-                "Xóa Bỏ Ký Ức 👁️ (vô hiệu hóa skill 1 lượt)",
-                "Phục Hồi Tuyệt Đỉnh ♾️ (hồi 500 HP, 2 lần)",
-                "Bóng Tối Vĩnh Cửu 💀 (x3.0 + debuff -30% ATK)",
-                "Lời Nguyền Honkai ☠️ (đốt 50 HP/lượt trong 3 lượt)",
-            ],
-            "lore": "Tổng hợp của tất cả Herrscher từng tồn tại. Đây là thử thách cuối cùng — và cũng là lời tạm biệt với Kallen."
+            "skills": ["Hư Vô Tuyệt Đối 🌑 (x5.0)", "Xóa Bỏ Ký Ức 👁️ (vô hiệu skill 1 lượt)", "Phục Hồi ♾️ (hồi 500 HP, 2 lần)", "Lời Nguyền ☠️ (đốt 50 HP/lượt x3)"],
+            "lore": "Tổng hợp của tất cả Herrscher từng tồn tại.",
         },
-        "waves": 6,
-        "ticket_cost": 5,
-        "reward_money": 500000,
-        "secret": True,  # Chỉ mở khi clear chapter 5
+        "waves": 6, "ticket_cost": 5, "reward_money": 500_000,
+        "secret": True,
+    },
+    {
+        "id": 7, "title": "Chapter 7: Bình Minh Của Vũ Trụ 🌌",
+        "story_intro": (
+            "🌠 **Không Gian Sâu — Vượt Ra Ngoài Trái Đất**\n\n"
+            "Sau khi Honkai bị đánh lui, một nguồn năng lượng mới xuất hiện từ không gian. "
+            "Các nhà khoa học phát hiện đây là Honkai thế hệ mới — thông minh hơn, mạnh hơn.\n\n"
+            "Seele bay vào vũ trụ đầu tiên, đôi cánh bướm mở rộng trong bóng tối vũ trụ."
+        ),
+        "story_mid": (
+            "🔮 **Trong bóng tối vũ trụ...**\n\n"
+            "Seele tìm thấy một hành tinh bị Honkai hóa hoàn toàn. "
+            "Trên đó, một thực thể tự xưng là 'Ý Chí Vũ Trụ' nói chuyện với cô:\n\n"
+            "*\"Ta không phải kẻ thù. Ta là ký ức của tất cả vũ trụ.\"*\n\n"
+            "Seele run nhẹ nhưng không rút lui."
+        ),
+        "story_end": (
+            "🌟 **Bình Minh Vũ Trụ...**\n\n"
+            "Seele hiểu ra: Honkai không phải ác — nó chỉ là năng lượng mất kiểm soát. "
+            "Cô mở ra cánh cổng để tất cả mọi người cùng chiến đấu.\n\n"
+            "*\"Lần này... chúng ta chiến đấu cùng nhau.\"*"
+        ),
+        "enemies": [
+            {"name": "Honkai Vũ Trụ Cấp 1 🛸", "hp": 600,  "atk": 130, "def": 60, "xp": 350, "drop": "Bụi Sao Trời 🌟",   "drop_rate": 0.4},
+            {"name": "Honkai Vũ Trụ Cấp 2 ⭐",  "hp": 800,  "atk": 150, "def": 65, "xp": 450, "drop": "Tinh Thể Honkai 💠", "drop_rate": 0.5},
+            {"name": "Tinh Linh Vũ Trụ 🌌",      "hp": 1_000,"atk": 160, "def": 70, "xp": 500, "drop": "Bụi Sao Trời 🌟",   "drop_rate": 0.5},
+        ],
+        "boss": {
+            "name": "Ý Chí Vũ Trụ — Primordial 🌠💀",
+            "hp": 4_000, "atk": 200, "def": 80, "xp": 3_000, "money": 800_000,
+            "drop_item": "Bụi Sao Trời 🌟", "drop_count": 4,
+            "title_reward": "Kẻ Chinh Phục Vũ Trụ 🌠",
+            "skills": ["Sóng Hủy Diệt Ngân Hà 🌌 (x5.5)", "Hấp Thụ Năng Lượng ♾️ (hồi 400 HP, 2 lần)", "Vụ Nổ Supernova ☄️ (80 ST cố định)"],
+            "lore": "Primordial — ý chí đầu tiên của vũ trụ, từ trước khi Honkai tồn tại.",
+        },
+        "waves": 6, "ticket_cost": 5, "reward_money": 700_000,
+    },
+    {
+        "id": 8, "title": "Chapter 8: Vương Quốc Bóng Tối 🌑",
+        "story_intro": (
+            "🌑 **Chiều Không Gian Khác — Elysian Realm**\n\n"
+            "Một chiều không gian song song bị Honkai xâm chiếm. "
+            "Vill-V và Pardofelis được giao nhiệm vụ thám hiểm.\n\n"
+            "Nhưng ngay khi bước vào, hai người phát hiện... "
+            "những phiên bản tối tăm của chính mình đang chờ đợi."
+        ),
+        "story_mid": (
+            "🎭 **Màn trình diễn nghiêm túc...**\n\n"
+            "'Dark Vill-V' cười: *\"Chúng ta giống nhau, Vill. Tại sao không từ bỏ?\"*\n\n"
+            "Vill-V cởi mặt nạ lần đầu tiên, đôi mắt thật:\n"
+            "*\"Vì tôi đã hứa sẽ bảo vệ họ. Và tôi không phá vỡ lời hứa.\"*"
+        ),
+        "story_end": (
+            "🌸 **Chiến thắng trong bóng tối...**\n\n"
+            "Vill-V và Pardofelis đánh bại phiên bản bóng tối của mình. "
+            "Chiều không gian được giải phóng.\n\n"
+            "*\"Bây giờ...\"* Pardofelis vươn vai, *\"...ta đói rồi.\"*\n"
+            "Vill-V cười to lần đầu tiên — tiếng cười thật sự."
+        ),
+        "enemies": [
+            {"name": "Bóng Tối Chiều Khác 🌑",   "hp": 700,  "atk": 140, "def": 65, "xp": 400, "drop": "Mảnh Ký Ức Seele 👻", "drop_rate": 0.5},
+            {"name": "Phiên Bản Đen 👁️",          "hp": 900,  "atk": 160, "def": 70, "xp": 500, "drop": "Bụi Sao Trời 🌟",    "drop_rate": 0.4},
+            {"name": "Kẻ Chiều Không Gian ⛓️",    "hp": 1100, "atk": 170, "def": 75, "xp": 600, "drop": "Giọt Máu Herrscher 🩸","drop_rate": 0.3},
+        ],
+        "boss": {
+            "name": "Lord of Darkness — Chúa Tể Bóng Tối 🌑👑",
+            "hp": 5_000, "atk": 220, "def": 90, "xp": 4_000, "money": 1_000_000,
+            "drop_item": "Mảnh Ký Ức Seele 👻", "drop_count": 5,
+            "title_reward": "Chúa Tể Bóng Tối 🌑",
+            "skills": ["Bóng Tối Tuyệt Đối ☠️ (x6.0)", "Xâm Chiếm Tâm Trí 🌑 (vô hiệu ULT 2 lượt)", "Phục Hồi Bóng Tối ♾️ (hồi 600 HP, 2 lần)", "Cổng Chiều Khác 🌀 (gây 100 ST cố định)"],
+            "lore": "Lord of Darkness — thực thể cai trị chiều không gian tối tăm. Mỗi ánh sáng đều trở thành bóng tối trong vương quốc của hắn.",
+        },
+        "waves": 7, "ticket_cost": 6, "reward_money": 900_000,
+    },
+    {
+        "id": 9, "title": "Chapter 9: Khởi Nguyên 🌅 [FINALE]",
+        "story_intro": (
+            "🌅 **Khởi Nguyên — Nơi Bắt Đầu Mọi Thứ**\n\n"
+            "Tất cả mọi người tập hợp lần cuối. "
+            "Một cổng thời gian mở ra, dẫn đến điểm khởi nguyên của Honkai.\n\n"
+            "Nếu họ tiêu diệt Honkai tại đây — mọi thứ sẽ thay đổi mãi mãi.\n\n"
+            "Kevin nhìn mọi người: *\"Đây là trận cuối. Không có đường trở về.\"*\n"
+            "Tất cả đều gật đầu."
+        ),
+        "story_mid": (
+            "⚡ **Tại điểm khởi nguyên...**\n\n"
+            "Honkai Nguyên Thủy xuất hiện — không có hình dạng, không có ý chí.\n"
+            "Chỉ là năng lượng thuần túy muốn hủy diệt.\n\n"
+            "Elysia chạm vào nó: *\"Ngươi... cũng cô đơn phải không?\"*\n\n"
+            "Lần đầu tiên, Honkai dừng lại."
+        ),
+        "story_end": (
+            "🌟 **Kết Thúc Và Khởi Đầu...**\n\n"
+            "Elysia dùng tình yêu của mình để... không tiêu diệt Honkai, "
+            "mà **chữa lành** nó.\n\n"
+            "Honkai tan biến không phải vì bị đánh bại — "
+            "mà vì cuối cùng nó được **yêu thương**.\n\n"
+            "**Thế giới hồi sinh. Không phải vì chiến thắng — vì lòng nhân ái.**\n\n"
+            "🌸 *\"Đây là câu chuyện của chúng ta. Và nó sẽ không bao giờ kết thúc.\"*"
+        ),
+        "enemies": [
+            {"name": "Honkai Nguyên Thủy Cấp 1 🌀","hp": 900,   "atk": 160, "def": 75, "xp": 500, "drop": "Vảy Rồng Vua 🐉",  "drop_rate": 0.5},
+            {"name": "Honkai Nguyên Thủy Cấp 2 ⚡",  "hp": 1200,  "atk": 180, "def": 80, "xp": 700, "drop": "Bụi Sao Trời 🌟",  "drop_rate": 0.5},
+            {"name": "Kẻ Canh Cổng Thời Gian ⏳",     "hp": 1500,  "atk": 200, "def": 85, "xp": 900, "drop": "Vảy Rồng Vua 🐉", "drop_rate": 0.4},
+        ],
+        "boss": {
+            "name": "Honkai Nguyên Thủy — Khởi Nguyên 🌅🔱",
+            "hp": 8_000, "atk": 250, "def": 100, "xp": 8_000, "money": 2_000_000,
+            "drop_item": "Vảy Rồng Vua 🐉", "drop_count": 6,
+            "title_reward": "Thần Chiến Honkai 🔱",
+            "skills": [
+                "Cơn Thịnh Nộ Khởi Nguyên 🌀 (x7.0)",
+                "Xóa Bỏ Lịch Sử ⏳ (reset HP player về 50%)",
+                "Phục Hồi Vĩnh Cửu ♾️ (hồi 1000 HP, 3 lần)",
+                "Bùng Nổ Honkai ☄️ (120 ST cố định)",
+                "Tái Tạo Bản Thân 🔄 (hồi 50% HP khi xuống dưới 30%)",
+            ],
+            "lore": "Honkai Nguyên Thủy — nguồn gốc của tất cả. Không có ác tâm, chỉ có bản năng hủy diệt. Đây là kẻ thù cuối cùng và cũng là bài học cuối cùng.",
+        },
+        "waves": 8, "ticket_cost": 8, "reward_money": 2_000_000,
+        "finale": True,
     },
 ]
-# =====================================================================
-# KALLEN FANTASY — SYSTEM FILE
-# Dán vào bot.py TRƯỚC keep_alive()
-# Yêu cầu: đã import kallen_data.py (copy nội dung kallen_data.py
-#          dán TRƯỚC đoạn này)
-# =====================================================================
+
+# ── PHÓ BẢN CHUNG KẾT (RAID) ──────────────────────────────────────────
+KF_RAIDS = {
+    "raid_dragon": {
+        "id": "raid_dragon",
+        "name": "⚔️ Thảo Nguyên Rồng Vua 🐉",
+        "desc": "Rồng Vua cổ đại trỗi dậy. Cần tối thiểu 2 người, tối đa 4 người.",
+        "min_players": 2, "max_players": 4,
+        "ticket_cost": 3,
+        "boss_hp": 15_000, "boss_atk": 300, "boss_def": 120,
+        "boss_skills": [
+            "Thở Lửa 🔥 (x4.0 toàn đội)",
+            "Vảy Rồng Thiết Giáp 🐉 (giảm 50% sát thương 2 lượt)",
+            "Cơn Thịnh Nộ 💢 (x6.0 một người ngẫu nhiên)",
+            "Hồi Máu Rồng ♾️ (hồi 800 HP)",
+        ],
+        "reward_money": 300_000,
+        "drop_item": "Vảy Rồng Vua 🐉",
+        "drop_count": 3,
+        "title_reward": "Truyền Nhân Bất Tử 💎",
+        "waves": 3,
+    },
+    "raid_void": {
+        "id": "raid_void",
+        "name": "🌌 Hư Không Sâu Thẳm",
+        "desc": "Herrscher kép xuất hiện. Cần tối thiểu 3 người, tối đa 4 người.",
+        "min_players": 3, "max_players": 4,
+        "ticket_cost": 5,
+        "boss_hp": 25_000, "boss_atk": 400, "boss_def": 150,
+        "boss_skills": [
+            "Hư Không Kép 🌌 (x5.0 toàn đội)",
+            "Hấp Thụ Năng Lượng 💠 (hồi 2000 HP)",
+            "Xóa Bỏ Hiện Thực 👁️ (vô hiệu skill 2 lượt toàn đội)",
+            "Sóng Hủy Diệt ☄️ (150 ST cố định toàn đội)",
+        ],
+        "reward_money": 600_000,
+        "drop_item": "Bụi Sao Trời 🌟",
+        "drop_count": 5,
+        "title_reward": "Truyền Nhân Bất Tử 💎",
+        "waves": 5,
+    },
+}
+
+# ── CỬA HÀNG KF ────────────────────────────────────────────────────────
+KF_SHOP_ITEMS = {
+    "kf_potion_small": {
+        "name": "🧪 Linh Dược Nhỏ",
+        "desc": "Hồi 100 HP trong chiến đấu",
+        "price": 8_000, "sell": 3_000,
+        "type": "consumable", "effect": {"heal": 100},
+    },
+    "kf_potion_medium": {
+        "name": "⚗️ Linh Dược Vừa",
+        "desc": "Hồi 200 HP trong chiến đấu",
+        "price": 18_000, "sell": 7_000,
+        "type": "consumable", "effect": {"heal": 200},
+    },
+    "kf_potion_large": {
+        "name": "🔮 Linh Dược Lớn",
+        "desc": "Hồi 400 HP trong chiến đấu",
+        "price": 40_000, "sell": 15_000,
+        "type": "consumable", "effect": {"heal": 400},
+    },
+    "kf_mp_drink": {
+        "name": "💙 Nước Hồi MP",
+        "desc": "Hồi 50 MP trong chiến đấu",
+        "price": 12_000, "sell": 5_000,
+        "type": "consumable", "effect": {"mp": 50},
+    },
+    "kf_elixir": {
+        "name": "✨ Tiên Dược Honkai",
+        "desc": "Hồi 500 HP + 50 MP trong chiến đấu",
+        "price": 80_000, "sell": 30_000,
+        "type": "consumable", "effect": {"heal": 500, "mp": 50},
+    },
+    "kf_ticket_bundle": {
+        "name": "🎟️ Bộ 5 Vé",
+        "desc": "Mua 5 vé cùng lúc tiết kiệm hơn",
+        "price": 140_000, "sell": 0,
+        "type": "ticket", "effect": {"tickets": 5},
+    },
+    "vu_khi_thuong": {
+        "name": "🗡️ Kiếm Sắt Thường",
+        "desc": "Vũ khí phổ thông. ATK +10",
+        "price": 5_000, "sell": 2_000,
+        "type": "equipment", "equip_id": "vu_khi_thuong",
+    },
+    "giap_thuong": {
+        "name": "🪖 Giáp Sắt Thường",
+        "desc": "Giáp phổ thông. DEF +10, HP +20",
+        "price": 5_000, "sell": 2_000,
+        "type": "equipment", "equip_id": "giap_thuong",
+    },
+    "phu_kien_thuong": {
+        "name": "🔮 Đá Ma Lực Nhỏ",
+        "desc": "Phụ kiện thường. ATK +3, DEF +3, HP +10",
+        "price": 3_000, "sell": 1_000,
+        "type": "equipment", "equip_id": "phu_kien_thuong",
+    },
+    "vong_co": {
+        "name": "💍 Vòng Cổ Honkai",
+        "desc": "Phụ kiện Hiếm. ATK +5, DEF +5, HP +30, CRIT +5%",
+        "price": 15_000, "sell": 8_000,
+        "type": "equipment", "equip_id": "vong_co",
+    },
+}
 
 # ── COOLDOWN & TRẠNG THÁI ────────────────────────────────────────────
-kf_active_games = {}   # {user_id: KFGameState}
+kf_active_games  = {}   # {user_id: KFGameState}
+kf_active_raids  = {}   # {raid_id_str: KFRaidState}
 
-# ════════════════════════════════════════════════════════════════════
-# DATA CLASS: Trạng thái 1 ván game
-# ════════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 2: HELPER FUNCTIONS
+# ══════════════════════════════════════════════════════════════════════
+
+def kf_bar(cur, max_, length=10, fill=None, empty="⬛"):
+    if max_ == 0:
+        return empty * length
+    ratio  = max(0, min(cur, max_)) / max_
+    filled = int(ratio * length)
+    if fill is None:
+        fill = "🟩" if ratio > 0.5 else "🟨" if ratio > 0.25 else "🟥"
+    return fill * filled + empty * (length - filled)
+
+
+def _drop_summary(drops: dict) -> str:
+    if not drops:
+        return "Không có"
+    return " | ".join(f"**{item}** x{cnt}" for item, cnt in drops.items())
+
+
+def get_kf_user(user_id):
+    """Lấy/khởi tạo dữ liệu KF của user."""
+    ud = load_user(user_id)
+    if "kf" not in ud:
+        ud["kf"] = {
+            "chars":       ["kallen", "fuhua", "sakura"],
+            "progress":    0,
+            "char_levels": {c: 1 for c in KF_CHARACTERS},
+            "char_exp":    {c: 0 for c in KF_CHARACTERS},
+            "equipment":   {c: {"weapon": None, "armor": None, "accessory": None} for c in KF_CHARACTERS},
+            "inventory":   {},
+            "consumables": {},
+            "raid_clears": [],
+            "avatar_url":  "",
+            "banner_url":  "",
+            "bio":         "",
+            "total_kills": 0,
+            "total_boss_kills": 0,
+        }
+        save_user(user_id)
+    # Patch thiếu key
+    kf = ud["kf"]
+    for c in KF_CHARACTERS:
+        kf.setdefault("char_levels", {})[c] = kf["char_levels"].get(c, 1)
+        kf.setdefault("char_exp",    {})[c] = kf["char_exp"].get(c, 0)
+        kf.setdefault("equipment",   {})[c] = kf["equipment"].get(c, {"weapon": None, "armor": None, "accessory": None})
+    return ud, kf
+
+
+def save_kf_user(user_id, ud):
+    save_user(user_id)
+
+
+def get_char_stats(char_id, kf_data):
+    """Tính chỉ số nhân vật bao gồm level và trang bị."""
+    base = KF_CHARACTERS[char_id]
+    lv   = kf_data["char_levels"].get(char_id, 1)
+    lv_bonus = (lv - 1) * 0.05  # +5% mỗi level
+
+    atk  = int(base["atk"]  * (1 + lv_bonus))
+    def_ = int(base["def"]  * (1 + lv_bonus))
+    hp   = int(base["hp"]   * (1 + lv_bonus))
+    crit = base.get("crit", 10)
+
+    # Trang bị
+    equip = kf_data["equipment"].get(char_id, {})
+    for slot, eid in equip.items():
+        if eid and eid in KF_EQUIPMENT:
+            eq = KF_EQUIPMENT[eid]
+            atk  += eq.get("atk",  0)
+            def_ += eq.get("def",  0)
+            hp   += eq.get("hp",   0)
+            crit += eq.get("crit", 0)
+
+    return {"atk": atk, "def": def_, "hp": hp, "crit": min(crit, 60), "lv": lv}
+
+
+def exp_to_level_up(lv):
+    return int(100 * (lv ** 1.5))
+
+
+def get_char_equip_bonus_desc(char_id, kf_data):
+    equip = kf_data["equipment"].get(char_id, {})
+    lines = []
+    for slot, eid in equip.items():
+        if eid and eid in KF_EQUIPMENT:
+            eq = KF_EQUIPMENT[eid]
+            bonus = eq.get("char_bonus", {}).get(char_id, "")
+            lines.append(f"  {eq['name']}" + (f" — *{bonus}*" if bonus else ""))
+    return "\n".join(lines) if lines else "  Không có trang bị"
+
+
+def rarity_emoji(r):
+    return RARITY_COLOR.get(r, "⚪")
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 3: GAME STATE CLASSES
+# ══════════════════════════════════════════════════════════════════════
+
 class KFGameState:
-    def __init__(self, user_id, char_id, chapter_idx):
+    def __init__(self, user_id, char_id, chapter_idx, kf_data):
         self.user_id     = str(user_id)
         self.char_id     = char_id
-        self.chapter_idx = chapter_idx           # index trong KF_CHAPTERS
+        self.chapter_idx = chapter_idx
         self.chapter     = KF_CHAPTERS[chapter_idx]
-        self.char        = dict(KF_CHARACTERS[char_id])  # copy
+        kf_data          = kf_data
 
-        # Chỉ số nhân vật
-        char_data        = KF_CHARACTERS[char_id]
-        self.hp          = char_data["hp"]
-        self.max_hp      = char_data["hp"]
+        stats            = get_char_stats(char_id, kf_data)
+        self.hp          = stats["hp"]
+        self.max_hp      = stats["hp"]
+        self.atk         = stats["atk"]
+        self.def_        = stats["def"]
+        self.crit_rate   = stats["crit"] / 100
+        self.lv          = stats["lv"]
+
         self.mp          = 0
         self.max_mp      = 100
-        self.atk         = char_data["atk"]
-        self.def_        = char_data["def"]
 
-        # Kevin passive: ATK tích lũy
-        self.kevin_stacks = 0
+        # Kevin stack
+        self.kevin_stacks  = 0
+        self.kevin_charges = 0  # giáp Kevin
 
-        # Trạng thái chiến đấu
-        self.phase        = "story_intro"  # story_intro / wave / boss / story_end / done
-        self.wave         = 0
-        self.enemy        = None
-        self.enemy_hp     = 0
-        self.enemy_max_hp = 0
-        self.turn         = 0
+        # Trạng thái
+        self.phase         = "wave"
+        self.wave          = 0
+        self.enemy         = None
+        self.enemy_hp      = 0
+        self.enemy_max_hp  = 0
+        self.turn          = 0
 
-        # Buff/debuff tạm thời
-        self.shield       = False      # Fu Hua né đòn
-        self.def_boost    = 0          # % giảm sát thương thêm
-        self.burn_dmg     = 0          # sát thương đốt mỗi lượt
-        self.burn_turns   = 0
-        self.stunned      = False      # bị choáng
+        self.shield        = False
+        self.def_boost     = 0
+        self.burn_dmg      = 0
+        self.burn_turns    = 0
+        self.stunned       = False
+        self.invincible    = False
+        self.ult_blocked   = False
+        self.ult_block_turns = 0
 
-        # Phần thưởng tích lũy
-        self.total_xp     = 0
-        self.total_money  = 0
-        self.drops        = {}         # {item: count}
+        # Phần thưởng
+        self.total_xp    = 0
+        self.total_money = 0
+        self.drops       = {}
+
+        # Trang bị bonus
+        self.equip       = kf_data.get("equipment", {}).get(char_id, {})
+        self.kallen_last_stand = False  # giáp Kallen
+
+        # Consumables còn lại trong ván
+        self.consumables = dict(kf_data.get("consumables", {}))
+
+        # Auto dùng vật phẩm gắn nhân vật
+        self._apply_char_equip_passives()
+
+    def _apply_char_equip_passives(self):
+        """Áp dụng passive trang bị lúc vào trận."""
+        for slot, eid in self.equip.items():
+            if not eid or eid not in KF_EQUIPMENT:
+                continue
+            eq = KF_EQUIPMENT[eid]
+            bonus = eq.get("char_bonus", {}).get(self.char_id, "")
+            if "không chết" in bonus.lower():
+                self.kallen_last_stand = True
 
     def heal(self, amount):
         self.hp = min(self.max_hp, self.hp + amount)
@@ -5024,137 +5581,137 @@ class KFGameState:
         self.mp = min(self.max_mp, self.mp + amount)
 
     def take_damage(self, raw_dmg):
-        """Tính sát thương thực nhận, trả về số thực tế."""
+        if self.invincible:
+            return 0
         if self.shield:
             self.shield = False
             return 0
-        reduction = self.def_ / (self.def_ + 100)  # công thức giảm sát thương
+        reduction = self.def_ / (self.def_ + 100)
         reduction += self.def_boost / 100
-        reduction = min(0.85, reduction)
-        actual = max(1, int(raw_dmg * (1 - reduction)))
-        self.hp -= actual
+        reduction  = min(0.85, reduction)
+        actual     = max(1, int(raw_dmg * (1 - reduction)))
+        self.hp   -= actual
+        if self.hp <= 0 and self.kallen_last_stand:
+            self.hp = 1
+            self.kallen_last_stand = False
         return actual
 
     def is_dead(self):
         return self.hp <= 0
 
     def next_wave_enemy(self):
-        """Lấy kẻ thù ngẫu nhiên của wave hiện tại."""
-        self.wave += 1
-        self.turn = 0
-        enemy_pool = self.chapter["enemies"]
-        # Wave cuối trước boss: kẻ thù mạnh nhất
-        if self.wave == self.chapter["waves"]:
-            enemy_tmpl = enemy_pool[-1]
-        else:
-            enemy_tmpl = random.choice(enemy_pool)
-        self.enemy        = dict(enemy_tmpl)
-        self.enemy_hp     = enemy_tmpl["hp"]
-        self.enemy_max_hp = enemy_tmpl["hp"]
-        self.stunned      = False
-        self.burn_dmg     = 0
-        self.burn_turns   = 0
+        self.wave  += 1
+        self.turn   = 0
+        self.stunned = False
+        self.burn_dmg = 0
+        self.burn_turns = 0
+        pool = self.chapter["enemies"]
+        tmpl = pool[-1] if self.wave == self.chapter["waves"] else random.choice(pool)
+        self.enemy      = dict(tmpl)
+        self.enemy_hp   = tmpl["hp"]
+        self.enemy_max_hp = tmpl["hp"]
 
     def load_boss(self):
         boss = self.chapter["boss"]
-        self.enemy        = dict(boss)
-        self.enemy_hp     = boss["hp"]
+        self.enemy      = dict(boss)
+        self.enemy_hp   = boss["hp"]
         self.enemy_max_hp = boss["hp"]
-        self.wave         = 99  # đánh dấu boss
-        self.turn         = 0
-        self.stunned      = False
-        self.burn_dmg     = 0
-        self.burn_turns   = 0
+        self.wave       = 99
+        self.turn       = 0
+        self.stunned    = False
+        self.burn_dmg   = 0
+        self.burn_turns = 0
+        self.ult_blocked = False
+        self.ult_block_turns = 0
 
 
-# ════════════════════════════════════════════════════════════════════
-# HELPER: Tạo embed chiến đấu
-# ════════════════════════════════════════════════════════════════════
 def kf_battle_embed(state: KFGameState, msg: str = "", color=None):
-    char   = KF_CHARACTERS[state.char_id]
+    char    = KF_CHARACTERS[state.char_id]
     is_boss = state.wave == 99
-    enemy_name = state.enemy["name"] if state.enemy else "???"
-
     if color is None:
-        color = discord.Color.purple() if not is_boss else discord.Color.dark_red()
+        color = discord.Color.dark_red() if is_boss else discord.Color.purple()
 
     hp_bar  = kf_bar(state.hp,       state.max_hp)
-    ehp_bar = kf_bar(state.enemy_hp, state.enemy_max_hp)
-    mp_bar  = kf_bar(state.mp,       state.max_mp,  fill="🟦", empty="⬜")
+    ehp_bar = kf_bar(state.enemy_hp, state.enemy_max_hp) if state.enemy else ""
+    mp_bar  = kf_bar(state.mp, state.max_mp, fill="🟦", empty="⬜")
 
-    title = f"{'⚔️' if not is_boss else '👿'} {'Wave ' + str(state.wave) if not is_boss else 'BOSS'} | {state.chapter['title']}"
+    title = f"{'👿BOSS ' if is_boss else '⚔️'} {state.chapter['title']} — Wave {state.wave if state.wave != 99 else 'BOSS'}/{state.chapter['waves']}"
+
+    status = ""
+    if state.invincible:   status += " 🔰BẤT TỬ"
+    if state.shield:       status += " ✨NÉ"
+    if state.def_boost>0:  status += f" 🛡️+{int(state.def_boost)}%"
+    if state.burn_turns>0: status += f" 🔥{state.burn_dmg}x{state.burn_turns}"
+    if state.ult_blocked:  status += " 🚫ULT"
+    if state.kevin_stacks: status += f" ⚡x{state.kevin_stacks}"
 
     embed = discord.Embed(title=title, color=color)
-
-    # Nhân vật
-    status_str = ""
-    if state.def_boost > 0:  status_str += f" 🛡️+{int(state.def_boost)}%"
-    if state.shield:          status_str += " ✨NÉ"
-    if state.burn_turns > 0:  status_str += f" 🔥{state.burn_dmg}x{state.burn_turns}"
-
     embed.add_field(
-        name=f"{char['name']} — {char['title']}",
-        value=(
-            f"❤️ {hp_bar} **{state.hp}/{state.max_hp}**\n"
+        name  = f"{char['name']} Lv{state.lv}",
+        value = (
+            f"❤️ {hp_bar} **{max(0,state.hp)}/{state.max_hp}**\n"
             f"💙 {mp_bar} **{state.mp}/{state.max_mp} MP**"
-            f"{status_str}"
+            f"{status}"
         ),
         inline=False
     )
 
-    # Kẻ thù
-    stun_str = " 😵CHOÁNG" if state.stunned else ""
-    embed.add_field(
-        name=f"{'👿 BOSS: ' if is_boss else '👾 '}{enemy_name}{stun_str}",
-        value=f"❤️ {ehp_bar} **{max(0,state.enemy_hp)}/{state.enemy_max_hp}**",
-        inline=False
-    )
+    if state.enemy:
+        stun = " 😵CHOÁNG" if state.stunned else ""
+        embed.add_field(
+            name  = f"{'👿 BOSS: ' if is_boss else '👾 '}{state.enemy['name']}{stun}",
+            value = f"❤️ {ehp_bar} **{max(0,state.enemy_hp)}/{state.enemy_max_hp}**",
+            inline=False
+        )
 
-    # Kỹ năng
-    skills  = char["skills"]
-    sk_atk  = skills["atk"]
-    sk_def  = skills["def"]
-    sk_ult  = skills["ult"]
+    skills = char["skills"]
     ult_ready = "✅" if state.mp >= state.max_mp else f"({state.mp}/{state.max_mp}MP)"
-
     embed.add_field(
-        name="🎮 Kỹ Năng",
-        value=(
-            f"1️⃣ **{sk_atk['name']}** — {sk_atk['desc']}\n"
-            f"2️⃣ **{sk_def['name']}** (MP:{sk_def['mp']}) — {sk_def['desc']}\n"
-            f"3️⃣ **{sk_ult['name']}** {ult_ready} — {sk_ult['desc']}"
+        name  = "🎮 Kỹ Năng",
+        value = (
+            f"1️⃣ **{skills['atk']['name']}** — {skills['atk']['desc']}\n"
+            f"2️⃣ **{skills['def']['name']}** (MP:{skills['def']['mp']}) — {skills['def']['desc']}\n"
+            f"3️⃣ **{skills['ult']['name']}** {ult_ready} — {skills['ult']['desc']}\n"
+            f"💊 Tiên Dược: `4️⃣` | Nước MP: `5️⃣`"
         ),
         inline=False
     )
 
     if msg:
-        embed.add_field(name="📣 Diễn Biến", value=msg, inline=False)
+        embed.add_field(name="📣 Diễn Biến", value=msg[-900:], inline=False)
 
     embed.set_footer(
-        text=f"Wave {state.wave}/{state.chapter['waves']} | "
-             f"XP: {state.total_xp} | 💰 {state.total_money:,} | Lượt {state.turn}"
+        text=f"XP: +{state.total_xp} | 💰 +{state.total_money:,} | Lượt {state.turn}"
     )
     return embed
 
 
-def kf_bar(cur, max_, length=10, fill="🟥", empty="⬛"):
-    if max_ == 0:
-        return empty * length
-    filled = int(max(0, min(cur, max_)) / max_ * length)
-    if fill == "🟥":
-        ratio = cur / max_
-        fill  = "🟩" if ratio > 0.5 else "🟨" if ratio > 0.25 else "🟥"
-    return fill * filled + empty * (length - filled)
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 4: BATTLE VIEW
+# ══════════════════════════════════════════════════════════════════════
 
-
-# ════════════════════════════════════════════════════════════════════
-# VIEW: Chiến đấu (nút kỹ năng)
-# ════════════════════════════════════════════════════════════════════
 class KFBattleView(discord.ui.View):
     def __init__(self, user_id, state: KFGameState):
-        super().__init__(timeout=120)
+        super().__init__(timeout=180)
         self.user_id = str(user_id)
         self.state   = state
+        self.update_buttons()
+
+    def update_buttons(self):
+        state = self.state
+        for item in self.children:
+            if hasattr(item, "label"):
+                if "ULT" in str(item.label):
+                    item.disabled = (state.mp < state.max_mp) or state.ult_blocked
+                    item.label = f"3️⃣ ULT {'✅' if state.mp >= state.max_mp and not state.ult_blocked else f'({state.mp}MP)'}"
+                elif "💊" in str(item.label):
+                    cnt = sum(v for k, v in state.consumables.items() if "Dược" in k or "Tiên" in k)
+                    item.label = f"4️⃣ 💊({cnt})"
+                    item.disabled = cnt <= 0
+                elif "💙" in str(item.label):
+                    cnt = state.consumables.get("💙 Nước Hồi MP", 0)
+                    item.label = f"5️⃣ 💙({cnt})"
+                    item.disabled = cnt <= 0
 
     async def interaction_check(self, interaction: discord.Interaction):
         if str(interaction.user.id) != self.user_id:
@@ -5165,24 +5722,59 @@ class KFBattleView(discord.ui.View):
     async def on_timeout(self):
         kf_active_games.pop(self.user_id, None)
 
-    # ── Nút 1: ATK ──────────────────────────────────────────────────
     @discord.ui.button(label="1️⃣ ATK", style=discord.ButtonStyle.danger)
-    async def btn_atk(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def btn_atk(self, interaction, button):
         await self.do_skill(interaction, "atk")
 
-    # ── Nút 2: DEF ──────────────────────────────────────────────────
     @discord.ui.button(label="2️⃣ DEF", style=discord.ButtonStyle.primary)
-    async def btn_def(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def btn_def(self, interaction, button):
         await self.do_skill(interaction, "def")
 
-    # ── Nút 3: ULT ──────────────────────────────────────────────────
     @discord.ui.button(label="3️⃣ ULT ✨", style=discord.ButtonStyle.success)
-    async def btn_ult(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def btn_ult(self, interaction, button):
         await self.do_skill(interaction, "ult")
 
-    # ── Nút Bỏ Chạy ─────────────────────────────────────────────────
-    @discord.ui.button(label="🏃 Rút Lui", style=discord.ButtonStyle.secondary)
-    async def btn_flee(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="4️⃣ 💊(0)", style=discord.ButtonStyle.secondary, disabled=True)
+    async def btn_potion(self, interaction, button):
+        state = self.state
+        # Tìm potion mạnh nhất
+        priority = ["✨ Tiên Dược Honkai", "🔮 Linh Dược Lớn", "⚗️ Linh Dược Vừa", "🧪 Linh Dược Nhỏ"]
+        used = None
+        for p in priority:
+            if state.consumables.get(p, 0) > 0:
+                used = p
+                break
+        if not used:
+            return await interaction.response.send_message("Không còn thuốc!", ephemeral=True)
+
+        state.consumables[used] -= 1
+        for k, v in KF_SHOP_ITEMS.items():
+            if v["name"] == used and "heal" in v.get("effect", {}):
+                heal_amt = v["effect"]["heal"]
+                state.heal(heal_amt)
+                mp_amt = v["effect"].get("mp", 0)
+                if mp_amt:
+                    state.gain_mp(mp_amt)
+                break
+
+        self.update_buttons()
+        embed = kf_battle_embed(state, f"💊 Dùng **{used}** — Hồi **{heal_amt} HP**! HP: {state.hp}/{state.max_hp}")
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="5️⃣ 💙(0)", style=discord.ButtonStyle.secondary, disabled=True)
+    async def btn_mp(self, interaction, button):
+        state = self.state
+        cnt = state.consumables.get("💙 Nước Hồi MP", 0)
+        if cnt <= 0:
+            return await interaction.response.send_message("Không còn nước MP!", ephemeral=True)
+        state.consumables["💙 Nước Hồi MP"] -= 1
+        state.gain_mp(50)
+        self.update_buttons()
+        embed = kf_battle_embed(state, f"💙 Dùng **Nước Hồi MP** — +50 MP! MP: {state.mp}/{state.max_mp}")
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="🏃 Rút Lui", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_flee(self, interaction, button):
         state = self.state
         kf_active_games.pop(self.user_id, None)
         self.stop()
@@ -5190,217 +5782,292 @@ class KFBattleView(discord.ui.View):
         await interaction.response.edit_message(
             embed=discord.Embed(
                 title="🏃 Rút Lui",
-                description=f"Bạn đã rút lui khỏi **{state.chapter['title']}**.\nXP đã tích: **{state.total_xp}** | Tiền: **{state.total_money:,} 💰**",
+                description=f"Thoát khỏi **{state.chapter['title']}**.\nXP: **+{state.total_xp}** | 💰 +**{state.total_money:,}**",
                 color=discord.Color.dark_grey()
             ),
             view=self
         )
 
-    # ── Xử lý kỹ năng ───────────────────────────────────────────────
-    async def do_skill(self, interaction: discord.Interaction, skill_key: str):
+    async def do_skill(self, interaction, skill_key: str):
         state  = self.state
         char   = KF_CHARACTERS[state.char_id]
         skill  = char["skills"][skill_key]
         log    = []
 
-        # Kiểm tra MP
         if skill["mp"] > 0 and state.mp < skill["mp"]:
-            return await interaction.response.send_message(
-                f"⚠️ Thiếu MP! Cần **{skill['mp']} MP**, có **{state.mp} MP**.", ephemeral=True
-            )
+            return await interaction.response.send_message(f"⚠️ Thiếu MP! Cần {skill['mp']} MP.", ephemeral=True)
+
+        if skill_key == "ult" and state.ult_blocked:
+            return await interaction.response.send_message("🚫 ULT bị phong ấn!", ephemeral=True)
 
         state.turn += 1
 
-        # ── Xử lý đốt đầu lượt ──────────────────────────────────────
+        # Giảm ult block
+        if state.ult_block_turns > 0:
+            state.ult_block_turns -= 1
+            if state.ult_block_turns == 0:
+                state.ult_blocked = False
+
+        # Đốt đầu lượt
         if state.burn_turns > 0:
-            state.hp -= state.burn_dmg
+            state.hp = max(1, state.hp - state.burn_dmg)
             state.burn_turns -= 1
-            log.append(f"🔥 Cháy! -{state.burn_dmg} HP")
+            log.append(f"🔥 Đốt! -{state.burn_dmg} HP")
 
-        # ── PLAYER SKILL ─────────────────────────────────────────────
-        crit   = random.random() < (0.15 + (0.15 if state.char_id == "kallen" else 0))
-        kevin_bonus = 1 + state.kevin_stacks * 0.05 if state.char_id == "kevin" else 1.0
+        # Hồi HP đầu lượt Elysia
+        if state.char_id == "elysia":
+            state.heal(15)
 
+        # Kevin passive stack
+        kevin_mult = 1.0
+        if state.char_id == "kevin":
+            kevin_mult = 1 + state.kevin_stacks * 0.05
+
+        # Tính CRIT
+        crit      = random.random() < state.crit_rate
+        crit_mult = 1.8 if crit else 1.0
+        # Seele CRIT bonus
+        seele_double = False
+        if state.char_id == "seele" and crit:
+            crit_mult = 2.5
+            seele_double = True
+
+        # === PLAYER SKILL ===
         if skill_key == "atk":
-            dmg = int(state.atk * skill["mult"] * kevin_bonus * (1.8 if crit else 1.0)
-                      * random.uniform(0.9, 1.1))
-            # Boss sát thương bonus Kallen
+            state.mp -= skill["mp"]
+            mult = skill["mult"] * kevin_mult
+            # Boss bonus Kallen
             if state.wave == 99 and state.char_id == "kallen":
-                dmg = int(dmg * 1.2)
+                mult *= 1.2
+            # Sakura skill bonus
+            if state.char_id == "sakura":
+                mult *= 1.25
+            dmg = int(state.atk * mult * crit_mult * random.uniform(0.9, 1.1))
             state.enemy_hp -= dmg
             state.gain_mp(20)
             if state.char_id == "kevin":
-                state.kevin_stacks += 1
-            crit_str = " 💥**CHÍ MẠNG!**" if crit else ""
-            log.append(f"⚔️ **{skill['name']}**{crit_str} → **{dmg} sát thương**")
+                state.kevin_stacks = min(state.kevin_stacks + 1, 10)
+            crit_str = " 💥CRIT!" if crit else ""
+            double_str = " 🦋+HIT!" if seele_double else ""
+            log.append(f"⚔️ **{skill['name']}**{crit_str}{double_str} → **{dmg} ST**")
+            # Seele: CRIT = đánh thêm
+            if seele_double and state.enemy_hp > 0:
+                dmg2 = int(state.atk * skill["mult"] * random.uniform(0.7, 0.9))
+                state.enemy_hp -= dmg2
+                log.append(f"🦋 Bướm Đêm đánh thêm → **{dmg2} ST**!")
+
+            # Aponia choáng
+            if state.char_id == "aponia" and random.random() < 0.25:
+                state.stunned = True
+                log.append("⛓️ Choáng kẻ thù lượt tiếp!")
 
         elif skill_key == "def":
             state.mp -= skill["mp"]
             if state.char_id == "fuhua":
                 state.shield = True
-                log.append(f"🛡️ **{skill['name']}** → Sẽ né hoàn toàn đòn tiếp theo!")
-            elif state.char_id == "sakura":
-                # Hút sát thương thành HP
-                state.def_boost = 25
-                log.append(f"📿 **{skill['name']}** → Hút 25% sát thương thành HP lượt này!")
+                log.append(f"🛡️ **{skill['name']}** → Sẽ né đòn tiếp theo!")
+                # Passive Fu Hua giáp
+                if any(KF_EQUIPMENT.get(e, {}).get("char_bonus", {}).get("fuhua", "") for e in state.equip.values() if e):
+                    state.shield = True  # luôn active
             elif state.char_id == "kallen":
                 state.def_boost = 40
-                log.append(f"🛡️ **{skill['name']}** → Giảm 40% sát thương lượt này!")
+                log.append(f"🛡️ **{skill['name']}** → -40% sát thương lượt này!")
+            elif state.char_id == "sakura":
+                state.def_boost = 25
+                log.append(f"📿 **{skill['name']}** → Hút 25% sát thương!")
             elif state.char_id == "otto":
                 state.def_boost = 50
-                # Phản đòn
-                log.append(f"⚡ **{skill['name']}** → Giảm 50% + phản 20% sát thương!")
+                log.append(f"⚡ **{skill['name']}** → -50% ST + phản 20%!")
             elif state.char_id == "kevin":
-                state.shield = True
+                state.invincible = True
                 state.heal(50)
-                log.append(f"💀 **{skill['name']}** → Bất tử lượt này + hồi **50 HP**!")
+                log.append(f"💀 **{skill['name']}** → Bất tử + hồi 50 HP!")
             elif state.char_id == "elysia":
-                heal = 60
-                state.heal(heal)
+                state.heal(60)
                 state.def_boost = 30
-                log.append(f"🤗 **{skill['name']}** → Hồi **{heal} HP** + DEF +30%!")
+                log.append(f"🤗 **{skill['name']}** → Hồi 60 HP + -30% ST!")
             elif state.char_id == "aponia":
                 state.def_boost = 45
-                log.append(f"🙏 **{skill['name']}** → Giảm 45% sát thương!")
+                log.append(f"🙏 **{skill['name']}** → -45% ST + phản 15%!")
+            elif state.char_id == "seele":
+                state.shield = True
+                # phản 0.5x
+                log.append(f"👻 **{skill['name']}** → Né 1 đòn + phản 0.5x!")
+            elif state.char_id == "vill_v":
+                state.def_boost = 25
+                log.append(f"🎩 **{skill['name']}** → -25% ST + phản 25%!")
+            elif state.char_id == "pardofelis":
+                state.def_boost = 50
+                state.heal(20)
+                log.append(f"🐱 **{skill['name']}** → -50% ST + hồi 20 HP!")
             else:
                 state.def_boost = 30
                 log.append(f"🛡️ **{skill['name']}** → Phòng thủ!")
 
         elif skill_key == "ult":
             state.mp = 0
-            dmg = int(state.atk * skill["mult"] * kevin_bonus * (1.8 if crit else 1.0)
-                      * random.uniform(0.9, 1.1))
+            mult = skill["mult"] * kevin_mult
             if state.wave == 99 and state.char_id == "kallen":
-                dmg = int(dmg * 1.2)
+                mult *= 1.2
+            if state.char_id == "sakura":
+                mult *= 1.25
+            dmg = int(state.atk * mult * crit_mult * random.uniform(0.9, 1.1))
             state.enemy_hp -= dmg
-            # Passive heal Elysia ULT
             if state.char_id == "elysia":
                 state.heal(50)
-                log.append(f"🌸 **{skill['name']}** → **{dmg} sát thương** + hồi **50 HP**!")
+                log.append(f"🌸 **{skill['name']}** {'💥CRIT!' if crit else ''} → **{dmg} ST** + hồi 50 HP!")
+            elif state.char_id == "seele":
+                log.append(f"🦋 **{skill['name']}** {'💥CRIT!' if crit else ''} → **{dmg} ST**! CRIT rate tạm tăng!")
+            elif state.char_id == "pardofelis":
+                state.stunned = True  # choáng boss 2 lượt
+                log.append(f"🌋 **{skill['name']}** {'💥CRIT!' if crit else ''} → **{dmg} ST** + choáng kẻ thù 2 lượt!")
             else:
-                crit_str = " 💥**CHÍ MẠNG!**" if crit else ""
-                log.append(f"✨ **{skill['name']}**{crit_str} → **{dmg} sát thương!**")
+                log.append(f"✨ **{skill['name']}** {'💥CRIT!' if crit else ''} → **{dmg} ST**!")
             if state.char_id == "kevin":
                 state.kevin_stacks = 0
 
-        # ── Passive hồi HP mỗi lượt (Fu Hua giết thù, Elysia đầu lượt) ─
-        if state.char_id == "elysia":
-            state.heal(15)
+        # Fu Hua passive: hồi HP khi giết thường
+        if state.char_id == "fuhua" and state.enemy_hp <= 0 and state.wave != 99:
+            state.heal(30)
 
-        # ── Kiểm tra kẻ thù chết ─────────────────────────────────────
+        # Pardofelis passive: +10 MP khi bị đánh (xử lý ở enemy turn)
+
+        # Kiểm tra kẻ thù chết
         if state.enemy_hp <= 0:
             await self.on_enemy_die(interaction, log)
             return
 
-        # ── ENEMY TURN ───────────────────────────────────────────────
-        if not state.stunned:
-            enemy    = state.enemy
-            is_boss  = state.wave == 99
+        # === ENEMY TURN ===
+        state.invincible = False  # reset invincible sau lượt
 
-            # Boss dùng skill ngẫu nhiên
-            if is_boss and state.turn % 3 == 0 and len(enemy.get("skills", [])) > 0:
-                boss_skill_str = random.choice(enemy["skills"])
-                # Parse damage từ tên skill
-                if "x" in boss_skill_str:
+        if not state.stunned:
+            enemy   = state.enemy
+            is_boss = state.wave == 99
+            raw_dmg = 0
+
+            if is_boss and state.turn % 3 == 0 and enemy.get("skills"):
+                skill_str = random.choice(enemy["skills"])
+                # Parse
+                if "x" in skill_str and "%" not in skill_str:
                     try:
-                        mult_part = boss_skill_str.split("x")[1].split(" ")[0]
-                        mult      = float(mult_part.rstrip(")"))
-                        raw_dmg   = int(enemy["atk"] * mult * random.uniform(0.9, 1.1))
-                    except Exception:
+                        parts = skill_str.split("x")
+                        mult_s = parts[-1].strip().split(" ")[0].rstrip(")")
+                        raw_dmg = int(enemy["atk"] * float(mult_s) * random.uniform(0.9, 1.1))
+                    except:
                         raw_dmg = enemy["atk"]
-                elif "HP" in boss_skill_str:
-                    try:
-                        hp_part = [w for w in boss_skill_str.split() if w.isdigit()]
-                        fixed   = int(hp_part[0]) if hp_part else 30
-                        raw_dmg = fixed
-                    except Exception:
-                        raw_dmg = 30
-                    # Hồi máu boss
-                    if "hồi" in boss_skill_str.lower():
-                        try:
-                            heal_nums = [int(w) for w in boss_skill_str.split() if w.isdigit()]
-                            heal_amt  = heal_nums[0] if heal_nums else 100
-                            state.enemy_hp = min(state.enemy_max_hp, state.enemy_hp + heal_amt)
-                            log.append(f"👿 **{boss_skill_str}** — Boss hồi **{heal_amt} HP**!")
-                            raw_dmg = 0
-                        except Exception:
-                            raw_dmg = 0
+                elif "ST" in skill_str:
+                    nums = [int(w) for w in skill_str.split() if w.isdigit()]
+                    raw_dmg = nums[0] if nums else 80
+                elif "hồi" in skill_str.lower():
+                    nums = [int(w) for w in skill_str.split() if w.isdigit()]
+                    heal_a = nums[0] if nums else 200
+                    state.enemy_hp = min(state.enemy_max_hp, state.enemy_hp + heal_a)
+                    log.append(f"👿 Boss dùng **{skill_str.split('(')[0].strip()}** → Hồi **{heal_a} HP**!")
+                    raw_dmg = 0
+                elif "reset" in skill_str.lower():
+                    old_hp = state.hp
+                    state.hp = max(1, state.hp // 2)
+                    log.append(f"👿 Boss **Xóa Bỏ Lịch Sử** → HP bạn còn {state.hp}!")
+                    raw_dmg = 0
+                elif "vô hiệu" in skill_str.lower() or "phong ấn" in skill_str.lower():
+                    state.ult_blocked = True
+                    state.ult_block_turns = 2
+                    raw_dmg = int(enemy["atk"] * 0.5)
+                    log.append(f"👿 Boss **{skill_str.split('(')[0].strip()}** → ULT bị phong ấn 2 lượt! Gây {raw_dmg} ST")
                 else:
                     raw_dmg = enemy["atk"]
 
                 if raw_dmg > 0:
                     actual = state.take_damage(raw_dmg)
-                    # Otto phản đòn
-                    if state.char_id == "otto" and state.def_boost >= 50:
+                    # Seele phản
+                    if state.char_id == "seele" and state.shield:
+                        reflect = int(actual * 0.5)
+                        state.enemy_hp -= reflect
+                        log.append(f"👿 Boss → gây **{actual} ST** | 👻 Seele phản **{reflect} ST**!")
+                    # Otto phản
+                    elif state.char_id == "otto" and state.def_boost >= 50:
                         reflect = int(actual * 0.2)
                         state.enemy_hp -= reflect
-                        log.append(f"👿 Boss dùng **{boss_skill_str}** → Gây **{actual} ST** (phản **{reflect} ST**!)")
+                        log.append(f"👿 Boss → gây **{actual} ST** | ⚡ Phản **{reflect} ST**!")
+                    # Vill-V phản
+                    elif state.char_id == "vill_v" and state.def_boost >= 25:
+                        reflect = int(actual * 0.25)
+                        state.enemy_hp -= reflect
+                        log.append(f"👿 Boss → gây **{actual} ST** | 🎭 Vill-V phản **{reflect} ST**!")
                     else:
-                        log.append(f"👿 Boss dùng **{boss_skill_str}** → Gây **{actual} ST**!")
+                        log.append(f"👿 Boss dùng **{skill_str.split('(')[0].strip()}** → **{actual} ST**!")
+                    # Pardofelis +MP khi bị đánh
+                    if state.char_id == "pardofelis":
+                        state.gain_mp(10)
             else:
                 raw_dmg = int(enemy["atk"] * random.uniform(0.85, 1.15))
                 actual  = state.take_damage(raw_dmg)
-
-                # Otto phản đòn
                 if state.char_id == "otto" and state.def_boost >= 50:
                     reflect = int(actual * 0.2)
                     state.enemy_hp -= reflect
-                    log.append(f"👾 **{enemy['name']}** tấn công → **{actual} ST** (phản **{reflect} ST**!)")
-                else:
-                    log.append(f"👾 **{enemy['name']}** tấn công → **{actual} ST**!")
-
-                # Sakura def: hút sát thương thành HP
-                if state.char_id == "sakura" and state.def_boost > 0:
+                    log.append(f"👾 **{enemy['name']}** → **{actual} ST** | Phản **{reflect} ST**!")
+                elif state.char_id == "vill_v" and state.def_boost >= 25:
+                    reflect = int(actual * 0.25)
+                    state.enemy_hp -= reflect
+                    log.append(f"👾 **{enemy['name']}** → **{actual} ST** | Phản **{reflect} ST**!")
+                elif state.char_id == "sakura" and state.def_boost > 0:
                     absorb = int(actual * 0.25)
                     state.heal(absorb)
-                    log.append(f"🦊 Hút **{absorb} HP** từ đòn tấn công!")
+                    log.append(f"👾 **{enemy['name']}** → **{actual} ST** | Hút **{absorb} HP**!")
+                elif state.char_id == "seele" and state.shield:
+                    state.shield = False
+                    reflect = int(raw_dmg * 0.5)
+                    state.enemy_hp -= reflect
+                    log.append(f"👾 **{enemy['name']}** → NÉ! Phản **{reflect} ST**!")
+                else:
+                    log.append(f"👾 **{enemy['name']}** → **{actual} ST**!")
+                if state.char_id == "pardofelis":
+                    state.gain_mp(10)
+
+            # Boss Burn — rare
+            if is_boss and random.random() < 0.1:
+                state.burn_dmg   = 20
+                state.burn_turns = 2
+                log.append("🔥 Boss gây **đốt**! -20 HP/lượt trong 2 lượt!")
+
         else:
             log.append(f"😵 **{state.enemy['name']}** bị choáng, bỏ lượt!")
             state.stunned = False
 
-        # Aponia passive: choáng 25%
-        if state.char_id == "aponia" and skill_key == "atk":
-            if random.random() < 0.25:
-                state.stunned = True
-                log.append("⛓️ **Roi Trừng Phạt** gây choáng kẻ thù lượt tiếp!")
-
-        # Reset def boost sau lượt
+        # Reset def boost
         state.def_boost = 0
-
-        # Gain MP thêm mỗi lượt
         state.gain_mp(10)
 
-        # Kiểm tra chết
+        # Kevin giáp: 5 charge → né
+        if state.char_id == "kevin":
+            state.kevin_charges += 1
+            if state.kevin_charges >= 5:
+                state.shield = True
+                state.kevin_charges = 0
+                log.append("❄️ Kevin Giáp: Tích đủ 5 charge → Tự né đòn tiếp theo!")
+
         if state.is_dead():
             await self.on_player_die(interaction, log)
             return
 
-        # Cập nhật UI
+        self.update_buttons()
         embed = kf_battle_embed(state, "\n".join(log))
-        self.update_ult_button()
         await interaction.response.edit_message(embed=embed, view=self)
 
-    def update_ult_button(self):
-        for item in self.children:
-            if hasattr(item, "label") and "ULT" in str(item.label):
-                item.disabled = self.state.mp < self.state.max_mp
-                item.label    = f"3️⃣ ULT {'✅' if self.state.mp >= self.state.max_mp else f'({self.state.mp}MP)'}"
-
     async def on_enemy_die(self, interaction, log):
-        state    = self.state
-        enemy    = state.enemy
-        is_boss  = state.wave == 99
+        state   = self.state
+        enemy   = state.enemy
+        is_boss = state.wave == 99
 
-        xp_gain  = enemy.get("xp", 50)
+        xp_gain = enemy.get("xp", 50)
         state.total_xp += xp_gain
-        log.append(f"💀 **{enemy['name']}** đã bị tiêu diệt! +**{xp_gain} XP**")
+        log.append(f"💀 **{enemy['name']}** tiêu diệt! +**{xp_gain} XP**")
 
-        # Fu Hua passive: hồi HP khi giết
         if state.char_id == "fuhua" and not is_boss:
             state.heal(30)
             log.append("🦅 Fu Hua passive: hồi **30 HP**!")
 
-        # Drop vật phẩm
+        # Drop
         if not is_boss and random.random() < enemy.get("drop_rate", 0.3):
             drop = enemy.get("drop", "Tinh Thể Honkai 💠")
             state.drops[drop] = state.drops.get(drop, 0) + 1
@@ -5409,392 +6076,964 @@ class KFBattleView(discord.ui.View):
         embed = kf_battle_embed(state, "\n".join(log), color=discord.Color.green())
 
         if is_boss:
-            # Đánh bại boss → kết thúc chapter
-            await self.finish_chapter(interaction, embed, log)
+            await self.finish_chapter(interaction, embed)
         else:
-            # Kiểm tra còn wave không
             if state.wave >= state.chapter["waves"]:
-                # Xong wave thường → boss
                 state.load_boss()
-                log.append(f"\n👿 **BOSS XUẤT HIỆN: {state.enemy['name']}**!")
-                log.append(f"📖 *{state.enemy.get('lore', '')}*")
+                boss_log = f"\n👿 **BOSS: {state.enemy['name']}** xuất hiện!\n"
+                boss_log += f"*{state.enemy.get('lore', '')}*\n"
                 for bs in state.enemy.get("skills", []):
-                    log.append(f"  💀 {bs}")
-                embed = kf_battle_embed(state, "\n".join(log), color=discord.Color.dark_red())
-                self.update_ult_button()
-                await interaction.response.edit_message(embed=embed, view=self)
+                    boss_log += f"  ⚠️ {bs}\n"
+                self.update_buttons()
+                await interaction.response.edit_message(
+                    embed=kf_battle_embed(state, "\n".join(log) + boss_log, color=discord.Color.dark_red()),
+                    view=self
+                )
             else:
-                # Wave tiếp theo
                 state.next_wave_enemy()
-                log.append(f"\n👾 Wave **{state.wave}/{state.chapter['waves']}**: **{state.enemy['name']}** xuất hiện!")
-                embed = kf_battle_embed(state, "\n".join(log))
-                self.update_ult_button()
-                await interaction.response.edit_message(embed=embed, view=self)
+                log.append(f"\n👾 Wave **{state.wave}/{state.chapter['waves']}**: **{state.enemy['name']}**!")
+                self.update_buttons()
+                await interaction.response.edit_message(embed=kf_battle_embed(state, "\n".join(log)), view=self)
 
     async def on_player_die(self, interaction, log):
         state = self.state
         kf_active_games.pop(self.user_id, None)
         self.stop()
         self.clear_items()
-        log.append(f"\n💀 **{KF_CHARACTERS[state.char_id]['name']} đã ngã xuống...**")
+        log.append(f"\n💀 **{KF_CHARACTERS[state.char_id]['name']}** đã ngã xuống...")
 
-        # Vẫn nhận XP và drops đã có
-        ud = load_user(self.user_id)
-        ud["xp"] = ud.get("xp", 0) + state.total_xp
+        ud, kf = get_kf_user(self.user_id)
+        # Vẫn nhận XP
+        char_id = state.char_id
+        kf["char_exp"][char_id] = kf["char_exp"].get(char_id, 0) + state.total_xp
+        while kf["char_exp"][char_id] >= exp_to_level_up(kf["char_levels"].get(char_id, 1)):
+            kf["char_exp"][char_id] -= exp_to_level_up(kf["char_levels"][char_id])
+            kf["char_levels"][char_id] = kf["char_levels"].get(char_id, 1) + 1
+        # Drops
         for item, cnt in state.drops.items():
-            ud["inventory"] = ud.get("inventory", {})
-            ud["inventory"][item] = ud["inventory"].get(item, 0) + cnt
-        save_user(self.user_id)
+            kf["inventory"][item] = kf["inventory"].get(item, 0) + cnt
+        # Tiêu hao consumable đã dùng
+        kf["consumables"] = {k: v for k, v in state.consumables.items() if v > 0}
+        save_kf_user(self.user_id, ud)
 
-        embed = discord.Embed(
-            title="💀 THẤT BẠI",
-            description=(
-                "\n".join(log[-5:]) +
-                f"\n\n📦 **Nhận được:**\n"
-                f"XP: **+{state.total_xp}** | Vật phẩm: {_drop_summary(state.drops)}"
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                title="💀 THẤT BẠI",
+                description="\n".join(log[-6:]) + f"\n\n📦 XP: +**{state.total_xp}** | {_drop_summary(state.drops)}",
+                color=discord.Color.dark_red()
             ),
-            color=discord.Color.dark_red()
+            view=self
         )
-        await interaction.response.edit_message(embed=embed, view=self)
 
-    async def finish_chapter(self, interaction, embed, log):
-        state    = self.state
-        chapter  = state.chapter
-        boss     = chapter["boss"]
-        user_id  = self.user_id
+    async def finish_chapter(self, interaction, base_embed):
+        state   = self.state
+        chapter = state.chapter
+        boss    = chapter["boss"]
+        user_id = self.user_id
 
         kf_active_games.pop(user_id, None)
         self.stop()
         self.clear_items()
 
-        # Tiền thưởng boss
-        money_reward = chapter["reward_money"]
-        state.total_money += money_reward
+        money_r = chapter["reward_money"]
+        state.total_money += money_r
+        di = boss.get("drop_item")
+        dc = boss.get("drop_count", 1)
+        if di:
+            state.drops[di] = state.drops.get(di, 0) + dc
 
-        # Drop boss
-        drop_item  = boss.get("drop_item", "Tinh Thể Honkai 💠")
-        drop_count = boss.get("drop_count", 1)
-        state.drops[drop_item] = state.drops.get(drop_item, 0) + drop_count
+        ud, kf = get_kf_user(user_id)
 
-        # Danh hiệu chapter
-        title_reward = boss.get("title_reward", "")
+        # XP và level nhân vật
+        char_id = state.char_id
+        kf["char_exp"][char_id] = kf["char_exp"].get(char_id, 0) + state.total_xp
+        lv_up_msgs = []
+        while kf["char_exp"][char_id] >= exp_to_level_up(kf["char_levels"].get(char_id, 1)):
+            kf["char_exp"][char_id] -= exp_to_level_up(kf["char_levels"][char_id])
+            kf["char_levels"][char_id] = kf["char_levels"].get(char_id, 1) + 1
+            lv_up_msgs.append(f"⬆️ **{KF_CHARACTERS[char_id]['name']}** lên Lv{kf['char_levels'][char_id]}!")
 
-        # Cập nhật user data
-        ud       = load_user(user_id)
-        ud["xp"] = ud.get("xp", 0) + state.total_xp
+        # Drops vào inventory
+        for item, cnt in state.drops.items():
+            kf["inventory"][item] = kf["inventory"].get(item, 0) + cnt
+
+        # Consumables
+        kf["consumables"] = {k: v for k, v in state.consumables.items() if v > 0}
+
+        # Tiền
         ud["money"] = ud.get("money", 0) + state.total_money
 
-        # Lưu vật phẩm vào inventory
-        ud["inventory"] = ud.get("inventory", {})
-        for item, cnt in state.drops.items():
-            ud["inventory"][item] = ud["inventory"].get(item, 0) + cnt
+        # Tiến độ chapter
+        chid = chapter["id"]
+        if chid > kf.get("progress", 0):
+            kf["progress"] = chid
 
         # Danh hiệu
-        if title_reward and title_reward not in ud.get("assets", []):
-            ud.setdefault("assets", []).append(title_reward)
-            title_line = f"\n🏷️ **Mở khóa danh hiệu: {title_reward}**"
-        else:
-            title_line = ""
+        title_r = boss.get("title_reward", "")
+        title_line = ""
+        if title_r and title_r not in ud.get("assets", []):
+            ud.setdefault("assets", []).append(title_r)
+            title_line = f"\n🏷️ **Mở khóa danh hiệu: {title_r}**"
 
-        # Lưu tiến độ chapter
-        kf_progress = ud.get("kf_progress", 0)
-        chapter_id  = chapter["id"]
-        if chapter_id > kf_progress:
-            ud["kf_progress"] = chapter_id
+        # Thống kê
+        kf["total_boss_kills"] = kf.get("total_boss_kills", 0) + 1
 
-        # Mở chapter secret
-        unlock_secret = ""
-        if chapter_id == 5 and ud.get("kf_progress", 0) >= 5:
-            unlock_secret = "\n🌟 **Chapter 6 đã mở khóa!** (SECRET)"
+        save_kf_user(user_id, ud)
+        add_history(user_id, f"KF C{chid} thắng (+{state.total_money:,} 💰)")
 
-        save_user(user_id)
-        add_history(user_id, f"Kallen Fantasy C{chapter_id} thắng (+{state.total_money:,} 💰)")
+        unlock_next = ""
+        if chid == 5:
+            unlock_next = "\n🌟 **Chapter 6 mở khóa!** (SECRET)"
+        if chid == 6:
+            unlock_next = "\n🌟 **Chapter 7 mở khóa!**"
 
-        result_embed = discord.Embed(
+        desc = (
+            chapter["story_end"] +
+            f"\n\n{'═'*28}\n"
+            f"💰 **+{state.total_money:,} 💰** | ⭐ XP: +{state.total_xp}\n"
+            f"📦 {_drop_summary(state.drops)}"
+            f"{title_line}{unlock_next}"
+        )
+        if lv_up_msgs:
+            desc += "\n" + "\n".join(lv_up_msgs)
+
+        result = discord.Embed(
             title=f"🎉 CHIẾN THẮNG — {chapter['title']}",
-            description=(
-                chapter["story_end"] +
-                f"\n\n{'='*30}\n"
-                f"💰 Tiền: **+{state.total_money:,} 💰**\n"
-                f"⭐ XP: **+{state.total_xp}**\n"
-                f"📦 Vật phẩm: {_drop_summary(state.drops)}"
-                f"{title_line}{unlock_secret}"
-            ),
+            description=desc,
             color=discord.Color.gold()
         )
-        result_embed.set_footer(text=f"k kallen → tiếp tục phiêu lưu")
-        await interaction.response.edit_message(embed=result_embed, view=self)
+        result.set_footer(text="k kallen → tiếp tục | k kallen char → nâng cấp nhân vật")
+        await interaction.response.edit_message(embed=result, view=self)
 
 
-def _drop_summary(drops: dict) -> str:
-    if not drops:
-        return "Không có"
-    return " | ".join(f"**{item}** x{cnt}" for item, cnt in drops.items())
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 5: CHARACTER SELECT VIEWS
+# ══════════════════════════════════════════════════════════════════════
 
-
-# ════════════════════════════════════════════════════════════════════
-# VIEW: Chọn chapter
-# ════════════════════════════════════════════════════════════════════
-class KFChapterSelectView(discord.ui.View):
-    def __init__(self, author, char_id: str, user_data: dict):
+class KFCharSelectView(discord.ui.View):
+    def __init__(self, author, ud, kf):
         super().__init__(timeout=60)
-        self.author    = author
-        self.char_id   = char_id
-        self.user_data = user_data
-        progress       = user_data.get("kf_progress", 0)
+        self.author = author
+        self.ud     = ud
+        self.kf     = kf
+        unlocked    = kf.get("chars", ["kallen", "fuhua", "sakura"])
+
+        for cid, char in KF_CHARACTERS.items():
+            is_unlocked = cid in unlocked
+            stats = get_char_stats(cid, kf)
+            label = f"{char['name'].split()[0]} Lv{stats['lv']}"
+            btn   = discord.ui.Button(
+                label    = label[:25],
+                style    = discord.ButtonStyle.primary if is_unlocked else discord.ButtonStyle.secondary,
+                disabled = not is_unlocked,
+                emoji    = "🔒" if not is_unlocked else None,
+            )
+            btn.callback = self._make_cb(cid, is_unlocked, char)
+            self.add_item(btn)
+
+    def _make_cb(self, cid, unlocked, char):
+        async def cb(interaction):
+            if interaction.user.id != self.author.id:
+                return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            if not unlocked:
+                ch = KF_CHARACTERS[cid]
+                return await interaction.response.send_message(
+                    f"🔒 Cần **{ch.get('unlock_count',1)}x {ch.get('unlock_item','???')}**\n`k kallen mokuyen {cid}`",
+                    ephemeral=True
+                )
+            self.stop()
+            embed = discord.Embed(
+                title=f"📖 CHỌN CHAPTER — {char['name']}",
+                description=(
+                    f"**{char['passive']}**\n"
+                    f"⚔️ ATK | 🛡️ DEF | ❤️ HP | ✨ CRIT\n"
+                    f"Tiến độ: Chapter **{self.kf.get('progress',0)}/9**"
+                ),
+                color=discord.Color.purple()
+            )
+            await interaction.response.edit_message(embed=embed, view=KFChapterSelectView(self.author, cid, self.ud, self.kf))
+        return cb
+
+    async def interaction_check(self, i):
+        return i.user.id == self.author.id
+
+
+class KFChapterSelectView(discord.ui.View):
+    def __init__(self, author, char_id, ud, kf):
+        super().__init__(timeout=60)
+        self.author  = author
+        self.char_id = char_id
+        self.ud      = ud
+        self.kf      = kf
+        progress     = kf.get("progress", 0)
 
         for i, ch in enumerate(KF_CHAPTERS):
             is_secret  = ch.get("secret", False)
+            is_finale  = ch.get("finale", False)
             unlocked   = (i == 0) or (progress >= ch["id"] - 1)
             if is_secret:
                 unlocked = progress >= 5
+            if is_finale:
+                unlocked = progress >= 8
 
-            label  = f"C{ch['id']}: {ch['title'].split(':')[1].strip()[:25]}"
-            cost   = ch["ticket_cost"]
-            btn    = discord.ui.Button(
-                label    = f"{label} [{cost}🎟️]",
+            cost  = ch["ticket_cost"]
+            label = f"C{ch['id']} [{cost}🎟️]"
+            emoji = "🌟" if is_secret else ("🔱" if is_finale else None)
+
+            btn = discord.ui.Button(
+                label    = label,
                 style    = discord.ButtonStyle.primary if unlocked else discord.ButtonStyle.secondary,
                 disabled = not unlocked,
-                custom_id= f"ch_{i}",
-                emoji    = "🌟" if is_secret else None,
+                emoji    = emoji,
+                row      = i // 5
             )
-            btn.callback = self._make_cb(i, ch, cost)
+            btn.callback = self._make_cb(i, ch, cost, unlocked)
             self.add_item(btn)
 
-    def _make_cb(self, idx, chapter, ticket_cost):
-        async def callback(interaction: discord.Interaction):
+    def _make_cb(self, idx, chapter, ticket_cost, unlocked):
+        async def cb(interaction):
             if interaction.user.id != self.author.id:
                 return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            if not unlocked:
+                return await interaction.response.send_message("🔒 Chưa mở khóa!", ephemeral=True)
 
-            ud = load_user(str(self.author.id))
-            inv = ud.get("inventory", {})
-            tickets = inv.get(KF_TICKET_ITEM, 0)
-
+            ud, kf = get_kf_user(str(self.author.id))
+            tickets = kf["inventory"].get(KF_TICKET_ITEM, 0)
             if tickets < ticket_cost:
                 return await interaction.response.send_message(
-                    f"⚠️ Cần **{ticket_cost} {KF_TICKET_ITEM}**, bạn chỉ có **{tickets}**!\n"
-                    f"Mua vé: `k kallen muave`",
+                    f"⚠️ Cần **{ticket_cost} {KF_TICKET_ITEM}**, có **{tickets}**!\n`k kallen muave`",
                     ephemeral=True
                 )
 
-            # Trừ vé
-            inv[KF_TICKET_ITEM] = tickets - ticket_cost
-            ud["inventory"] = inv
-            save_user(str(self.author.id))
+            kf["inventory"][KF_TICKET_ITEM] = tickets - ticket_cost
+            save_kf_user(str(self.author.id), ud)
 
-            # Tạo game state
-            state = KFGameState(self.author.id, self.char_id, idx)
+            state = KFGameState(self.author.id, self.char_id, idx, kf)
             kf_active_games[str(self.author.id)] = state
-
-            # Hiện story intro
             self.stop()
-            self.clear_items()
 
-            intro_embed = discord.Embed(
-                title   = f"📖 {chapter['title']}",
-                description = chapter["story_intro"],
-                color   = discord.Color.purple()
+            intro = discord.Embed(
+                title=f"📖 {chapter['title']}",
+                description=chapter["story_intro"],
+                color=discord.Color.purple()
             )
             char = KF_CHARACTERS[self.char_id]
-            intro_embed.add_field(
-                name  = f"🗡️ Nhân Vật: {char['name']}",
-                value = f"*{char['lore']}*\n\n💡 **Passive:** {char['passive']}",
-                inline= False
+            stats = get_char_stats(self.char_id, kf)
+            intro.add_field(
+                name  = f"🗡️ {char['name']} Lv{stats['lv']}",
+                value = (
+                    f"⚔️ ATK: {stats['atk']} | 🛡️ DEF: {stats['def']} | ❤️ HP: {stats['hp']} | ✨ CRIT: {stats['crit']}%\n"
+                    f"🌟 Passive: {char['passive']}"
+                ),
+                inline=False
             )
-            intro_embed.set_footer(text=f"Vé còn lại: {inv.get(KF_TICKET_ITEM, 0)} 🎟️ | Bấm để bắt đầu chiến đấu")
+            intro.set_footer(text=f"Vé còn: {kf['inventory'].get(KF_TICKET_ITEM,0)} 🎟️")
+            await interaction.response.edit_message(embed=intro, view=KFStoryView(self.author, state))
+        return cb
 
-            # Bắt đầu wave 1
-            state.next_wave_enemy()
-            battle_view = KFBattleView(self.author.id, state)
-            battle_view.update_ult_button()
-
-            story_view = KFStoryView(self.author, state, chapter["story_intro"])
-            await interaction.response.edit_message(embed=intro_embed, view=story_view)
-
-        return callback
-
-    async def interaction_check(self, interaction):
-        return interaction.user.id == self.author.id
+    async def interaction_check(self, i):
+        return i.user.id == self.author.id
 
 
 class KFStoryView(discord.ui.View):
-    """Nút xác nhận bắt đầu chiến đấu sau khi đọc story."""
-    def __init__(self, author, state: KFGameState, story_text: str):
+    def __init__(self, author, state):
         super().__init__(timeout=120)
-        self.author     = author
-        self.state      = state
+        self.author = author
+        self.state  = state
 
     @discord.ui.button(label="⚔️ Bắt Đầu Chiến Đấu!", style=discord.ButtonStyle.danger)
-    async def btn_start(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def start(self, interaction, button):
         if interaction.user.id != self.author.id:
             return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
         self.stop()
         state = self.state
-        embed = kf_battle_embed(state, f"👾 Wave **1/{state.chapter['waves']}**: **{state.enemy['name']}** xuất hiện!")
+        state.next_wave_enemy()
         view  = KFBattleView(self.author.id, state)
-        view.update_ult_button()
+        view.update_buttons()
+        embed = kf_battle_embed(state, f"👾 Wave **1/{state.chapter['waves']}**: **{state.enemy['name']}** xuất hiện!")
         await interaction.response.edit_message(embed=embed, view=view)
 
-    async def interaction_check(self, interaction):
-        return interaction.user.id == self.author.id
+    async def interaction_check(self, i):
+        return i.user.id == self.author.id
 
 
-# ════════════════════════════════════════════════════════════════════
-# VIEW: Chọn nhân vật
-# ════════════════════════════════════════════════════════════════════
-class KFCharSelectView(discord.ui.View):
-    def __init__(self, author, user_data: dict):
-        super().__init__(timeout=60)
-        self.author    = author
-        self.user_data = user_data
-        kf_unlocked   = user_data.get("kf_chars", ["kallen", "fuhua", "sakura"])
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 6: RAID SYSTEM
+# ══════════════════════════════════════════════════════════════════════
 
-        for char_id, char in KF_CHARACTERS.items():
-            unlocked = char_id in kf_unlocked
-            label    = f"{char['name'].split()[0]} ({char['element']})"
+kf_raid_lobbies = {}  # {msg_id: {"raid_id": ..., "players": [...], "owner": ...}}
 
-            btn = discord.ui.Button(
-                label    = label[:25],
-                style    = discord.ButtonStyle.primary if unlocked else discord.ButtonStyle.secondary,
-                disabled = not unlocked,
-                emoji    = "🔒" if not unlocked else None,
+
+class KFRaidLobbyView(discord.ui.View):
+    def __init__(self, owner, raid_id, lobby_key):
+        super().__init__(timeout=300)
+        self.owner     = owner
+        self.raid_id   = raid_id
+        self.lobby_key = lobby_key
+        self.players   = [str(owner.id)]
+
+    @discord.ui.button(label="🤝 Tham Gia", style=discord.ButtonStyle.success)
+    async def join(self, interaction, button):
+        uid = str(interaction.user.id)
+        raid = KF_RAIDS[self.raid_id]
+        if uid in self.players:
+            return await interaction.response.send_message("Bạn đã trong lobby rồi!", ephemeral=True)
+        if len(self.players) >= raid["max_players"]:
+            return await interaction.response.send_message("Lobby đầy!", ephemeral=True)
+        self.players.append(uid)
+        await self._update_embed(interaction)
+
+    @discord.ui.button(label="🚀 Bắt Đầu Raid", style=discord.ButtonStyle.danger)
+    async def start_raid(self, interaction, button):
+        if str(interaction.user.id) != str(self.owner.id):
+            return await interaction.response.send_message("Chỉ chủ lobby mới bắt đầu được!", ephemeral=True)
+        raid = KF_RAIDS[self.raid_id]
+        if len(self.players) < raid["min_players"]:
+            return await interaction.response.send_message(f"Cần ít nhất {raid['min_players']} người!", ephemeral=True)
+        self.stop()
+        self.clear_items()
+        await self._run_raid(interaction)
+
+    async def _update_embed(self, interaction):
+        raid = KF_RAIDS[self.raid_id]
+        names = []
+        for uid in self.players:
+            user = interaction.guild.get_member(int(uid))
+            names.append(user.name if user else f"#{uid[-4:]}")
+        embed = discord.Embed(
+            title=f"⚔️ LOBBY RAID — {raid['name']}",
+            description=(
+                f"{raid['desc']}\n"
+                f"👥 Người chơi ({len(self.players)}/{raid['max_players']}): {', '.join(names)}\n"
+                f"💀 Boss HP: {raid['boss_hp']:,} | ATK: {raid['boss_atk']} | DEF: {raid['boss_def']}\n"
+                f"💰 Thưởng: {raid['reward_money']:,} 💰 + {raid['drop_count']}x {raid['drop_item']}"
+            ),
+            color=discord.Color.dark_red()
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def _run_raid(self, interaction):
+        raid      = KF_RAIDS[self.raid_id]
+        boss_hp   = raid["boss_hp"]
+        boss_atk  = raid["boss_atk"]
+        boss_def  = raid["boss_def"]
+        boss_skills = raid["boss_skills"]
+        players   = self.players[:]
+        channel   = interaction.channel
+
+        # Tải nhân vật mặc định (kallen) cho mỗi người
+        player_states = {}
+        for uid in players:
+            ud, kf = get_kf_user(uid)
+            unlocked = kf.get("chars", ["kallen"])
+            char_id  = unlocked[0]
+            stats    = get_char_stats(char_id, kf)
+            player_states[uid] = {
+                "char_id": char_id,
+                "hp": stats["hp"], "max_hp": stats["hp"],
+                "atk": stats["atk"], "def": stats["def"],
+                "name": KF_CHARACTERS[char_id]["name"],
+            }
+
+        embed = discord.Embed(
+            title=f"⚔️ RAID BẮT ĐẦU — {raid['name']}",
+            description="Trận chiến tập thể bắt đầu!",
+            color=discord.Color.dark_red()
+        )
+        msg = await channel.send(embed=embed)
+
+        for wave_num in range(1, raid["waves"] + 1):
+            await asyncio.sleep(3)
+            log = [f"🌊 **Wave {wave_num}/{raid['waves']}**"]
+
+            # Player lượt
+            total_dmg = 0
+            for uid, ps in player_states.items():
+                if ps["hp"] <= 0:
+                    continue
+                atk   = ps["atk"]
+                crit  = random.random() < 0.15
+                dmg   = int(atk * (1.8 if crit else 1.0) * random.uniform(0.9, 1.1))
+                reduction = boss_def / (boss_def + 100)
+                dmg = max(1, int(dmg * (1 - reduction)))
+                boss_hp -= dmg
+                total_dmg += dmg
+                user = interaction.guild.get_member(int(uid))
+                uname = user.name if user else f"#{uid[-4:]}"
+                log.append(f"  ⚔️ {uname}: **{dmg} ST**{'💥' if crit else ''}")
+
+            log.append(f"  💢 Tổng sát thương: **{total_dmg}** | Boss HP: **{max(0,boss_hp)}/{raid['boss_hp']}**")
+
+            if boss_hp <= 0:
+                log.append(f"💀 **BOSS ĐÃ BỊ TIÊU DIỆT!**")
+                boss_hp = 0
+                embed = discord.Embed(title=f"🏆 RAID THÀNH CÔNG — {raid['name']}", description="\n".join(log), color=discord.Color.gold())
+                await msg.edit(embed=embed)
+                await asyncio.sleep(2)
+                await self._finish_raid(interaction, players, True, raid)
+                return
+
+            # Boss lượt
+            if boss_skills and wave_num % 2 == 0:
+                bskill = random.choice(boss_skills)
+                if "x" in bskill:
+                    try:
+                        mult = float(bskill.split("x")[1].split(" ")[0].rstrip(")"))
+                    except:
+                        mult = 2.0
+                    for uid in players:
+                        if player_states[uid]["hp"] <= 0:
+                            continue
+                        raw = int(boss_atk * mult * random.uniform(0.9, 1.1))
+                        red = player_states[uid]["def"] / (player_states[uid]["def"] + 100)
+                        dmg = max(1, int(raw * (1 - red)))
+                        player_states[uid]["hp"] = max(0, player_states[uid]["hp"] - dmg)
+                    log.append(f"👿 Boss dùng **{bskill.split('(')[0].strip()}** → Tất cả nhận ST!")
+                elif "hồi" in bskill.lower():
+                    nums = [int(w) for w in bskill.split() if w.isdigit()]
+                    heal_a = nums[0] if nums else 500
+                    boss_hp = min(raid["boss_hp"], boss_hp + heal_a)
+                    log.append(f"👿 Boss hồi **{heal_a} HP**!")
+                else:
+                    # Single target
+                    target = random.choice([u for u in players if player_states[u]["hp"] > 0])
+                    raw  = int(boss_atk * 2.0 * random.uniform(0.9, 1.1))
+                    red  = player_states[target]["def"] / (player_states[target]["def"] + 100)
+                    dmg  = max(1, int(raw * (1 - red)))
+                    player_states[target]["hp"] = max(0, player_states[target]["hp"] - dmg)
+                    tname = interaction.guild.get_member(int(target))
+                    log.append(f"👿 Boss tập trung tấn công **{tname.name if tname else '???'}** → **{dmg} ST**!")
+            else:
+                for uid in players:
+                    if player_states[uid]["hp"] <= 0:
+                        continue
+                    raw = int(boss_atk * random.uniform(0.85, 1.15))
+                    red = player_states[uid]["def"] / (player_states[uid]["def"] + 100)
+                    dmg = max(1, int(raw * (1 - red)))
+                    player_states[uid]["hp"] = max(0, player_states[uid]["hp"] - dmg)
+                log.append(f"👿 Boss tấn công toàn đội!")
+
+            # Hiển thị HP players
+            hp_lines = []
+            for uid, ps in player_states.items():
+                user  = interaction.guild.get_member(int(uid))
+                uname = user.name if user else f"#{uid[-4:]}"
+                bar   = kf_bar(ps["hp"], ps["max_hp"], length=8)
+                hp_lines.append(f"  {bar} **{uname}**: {max(0,ps['hp'])}/{ps['max_hp']}")
+            log.append("**HP Đội:**\n" + "\n".join(hp_lines))
+
+            # Kiểm tra toàn đội chết
+            if all(p["hp"] <= 0 for p in player_states.values()):
+                log.append("💀 **TOÀN ĐỘI ĐÃ NG倒!**")
+                embed = discord.Embed(title=f"💀 RAID THẤT BẠI — {raid['name']}", description="\n".join(log), color=discord.Color.dark_red())
+                await msg.edit(embed=embed)
+                await self._finish_raid(interaction, players, False, raid)
+                return
+
+            embed = discord.Embed(
+                title=f"⚔️ Wave {wave_num}/{raid['waves']} — {raid['name']}",
+                description="\n".join(log),
+                color=discord.Color.orange()
             )
-            btn.callback = self._make_cb(char_id, unlocked, char)
+            await msg.edit(embed=embed)
+
+        # Qua hết wave mà boss chưa chết
+        await self._finish_raid(interaction, players, boss_hp <= 0, raid)
+
+    async def _finish_raid(self, interaction, players, win, raid):
+        channel = interaction.channel
+        if win:
+            total_money = raid["reward_money"]
+            each_money  = total_money // len(players)
+            for uid in players:
+                ud, kf = get_kf_user(uid)
+                ud["money"] = ud.get("money", 0) + each_money
+                # Drop items
+                drop_cnt = raid["drop_count"]
+                kf["inventory"][raid["drop_item"]] = kf["inventory"].get(raid["drop_item"], 0) + drop_cnt
+                # Title
+                tr = raid.get("title_reward", "")
+                if tr and tr not in ud.get("assets", []):
+                    ud.setdefault("assets", []).append(tr)
+                if raid["id"] not in kf.get("raid_clears", []):
+                    kf.setdefault("raid_clears", []).append(raid["id"])
+                save_kf_user(uid, ud)
+                add_history(uid, f"Raid {raid['name']} thắng (+{each_money:,} 💰)")
+
+            mentions = " ".join(f"<@{p}>" for p in players)
+            embed = discord.Embed(
+                title=f"🏆 RAID HOÀN THÀNH — {raid['name']}",
+                description=(
+                    f"{mentions}\n\n"
+                    f"💰 Mỗi người nhận: **{each_money:,} 💰**\n"
+                    f"📦 Drop: **{raid['drop_count']}x {raid['drop_item']}** mỗi người\n"
+                    f"🏷️ Danh hiệu: **{raid.get('title_reward','???')}**"
+                ),
+                color=discord.Color.gold()
+            )
+        else:
+            embed = discord.Embed(
+                title=f"💀 RAID THẤT BẠI — {raid['name']}",
+                description="Đội đã bị đánh bại. Thử lại lần sau!",
+                color=discord.Color.dark_red()
+            )
+        await channel.send(embed=embed)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 7: SHOP VIEW
+# ══════════════════════════════════════════════════════════════════════
+
+class KFShopView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.author = author
+
+        options = []
+        for key, item in KF_SHOP_ITEMS.items():
+            price_str = f"{item['price']:,} 💰" if item["price"] else "FREE"
+            options.append(discord.SelectOption(
+                label       = item["name"][:25],
+                description = f"{price_str} | {item['desc'][:40]}",
+                value       = key
+            ))
+        select = discord.ui.Select(placeholder="Chọn vật phẩm để mua...", options=options[:25])
+        select.callback = self._buy_callback
+        self.add_item(select)
+
+    async def _buy_callback(self, interaction):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        key  = interaction.data["values"][0]
+        item = KF_SHOP_ITEMS[key]
+        ud, kf = get_kf_user(str(self.author.id))
+
+        price = item["price"]
+        if price > 0 and ud.get("money", 0) < price:
+            return await interaction.response.send_message(f"⚠️ Thiếu tiền! Cần **{price:,} 💰**", ephemeral=True)
+
+        if price > 0:
+            ud["money"] -= price
+
+        itype = item["type"]
+        if itype == "consumable":
+            kf["consumables"][item["name"]] = kf["consumables"].get(item["name"], 0) + 1
+            result = f"✅ Mua **{item['name']}** (vào túi chiến đấu)"
+        elif itype == "ticket":
+            cnt = item["effect"]["tickets"]
+            kf["inventory"][KF_TICKET_ITEM] = kf["inventory"].get(KF_TICKET_ITEM, 0) + cnt
+            result = f"✅ Nhận **{cnt}x {KF_TICKET_ITEM}**"
+        elif itype == "equipment":
+            eid = item["equip_id"]
+            kf["inventory"][eid] = kf["inventory"].get(eid, 0) + 1
+            result = f"✅ Mua **{item['name']}** (vào kho trang bị)"
+        else:
+            result = "✅ Mua thành công!"
+
+        save_kf_user(str(self.author.id), ud)
+        add_history(str(self.author.id), f"KF Shop: mua {item['name']} (-{price:,} 💰)")
+        await interaction.response.send_message(
+            embed=discord.Embed(description=f"{result}\nSố dư: **{ud.get('money',0):,} 💰**", color=discord.Color.green()),
+            ephemeral=True
+        )
+
+    async def interaction_check(self, i):
+        return i.user.id == self.author.id
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 8: EQUIPMENT VIEW
+# ══════════════════════════════════════════════════════════════════════
+
+class KFEquipCharSelect(discord.ui.View):
+    """Chọn nhân vật để quản lý trang bị."""
+    def __init__(self, author, kf):
+        super().__init__(timeout=60)
+        self.author = author
+        self.kf     = kf
+        unlocked    = kf.get("chars", ["kallen", "fuhua", "sakura"])
+        for cid in unlocked:
+            char = KF_CHARACTERS[cid]
+            btn  = discord.ui.Button(label=char["name"].split()[0][:15], style=discord.ButtonStyle.primary)
+            btn.callback = self._make_cb(cid)
             self.add_item(btn)
 
-    def _make_cb(self, char_id, unlocked, char):
-        async def callback(interaction: discord.Interaction):
+    def _make_cb(self, cid):
+        async def cb(interaction):
             if interaction.user.id != self.author.id:
                 return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-            if not unlocked:
-                unlock_info = KF_CHARACTERS[char_id]
-                item_needed = unlock_info.get("unlock_item", "???")
-                count_need  = unlock_info.get("unlock_count", 1)
-                return await interaction.response.send_message(
-                    f"🔒 Cần **{count_need}x {item_needed}** để mở khóa!\n"
-                    f"Dùng: `k kallen mokuyen {char_id}`",
-                    ephemeral=True
-                )
             self.stop()
-            # Hiện chọn chapter
-            embed = discord.Embed(
-                title=f"📖 CHỌN CHAPTER — {char['name']}",
-                description=(
-                    f"**Passive:** {char['passive']}\n"
-                    f"⚔️ ATK: {char['atk']} | 🛡️ DEF: {char['def']} | ❤️ HP: {char['hp']}\n\n"
-                    f"Chọn chapter để bắt đầu:\n"
-                    f"*(Chapter đã clear: {self.user_data.get('kf_progress', 0)})*"
-                ),
-                color=discord.Color.purple()
-            )
-            view = KFChapterSelectView(self.author, char_id, self.user_data)
-            await interaction.response.edit_message(embed=embed, view=view)
+            await show_equip_for_char(interaction, self.author, cid, self.kf)
+        return cb
 
-        return callback
-
-    async def interaction_check(self, interaction):
-        return interaction.user.id == self.author.id
+    async def interaction_check(self, i):
+        return i.user.id == self.author.id
 
 
-# ════════════════════════════════════════════════════════════════════
-# LỆNH CHÍNH: k kallen
-# ════════════════════════════════════════════════════════════════════
-@bot.group(invoke_without_command=True, aliases=['kf', 'kallenfantasy'])
-async def kallen(ctx):
-    """Menu chính Kallen Fantasy."""
-    user_id  = str(ctx.author.id)
-    ud       = load_user(user_id)
-    progress = ud.get("kf_progress", 0)
-    tickets  = ud.get("inventory", {}).get(KF_TICKET_ITEM, 0)
-    chars    = ud.get("kf_chars", ["kallen", "fuhua", "sakura"])
-    kf_items = {k: v for k, v in ud.get("inventory", {}).items() if k in KF_EXCLUSIVE_ITEMS}
+async def show_equip_for_char(interaction, author, cid, kf):
+    char  = KF_CHARACTERS[cid]
+    equip = kf["equipment"].get(cid, {"weapon": None, "armor": None, "accessory": None})
+    stats = get_char_stats(cid, kf)
+
+    lines = []
+    for slot in ["weapon", "armor", "accessory"]:
+        eid = equip.get(slot)
+        if eid and eid in KF_EQUIPMENT:
+            eq = KF_EQUIPMENT[eid]
+            bonus = eq.get("char_bonus", {}).get(cid, "")
+            lines.append(f"**{slot.upper()}**: {eq['name']} [{rarity_emoji(eq['rarity'])}]{(' — '+bonus) if bonus else ''}")
+        else:
+            lines.append(f"**{slot.upper()}**: Trống")
 
     embed = discord.Embed(
-        title       = "🌸 KALLEN FANTASY",
-        description = (
-            "*\"Vì tình yêu với loài người, ta sẽ không bao giờ đứng nhìn.\"*\n"
-            "— Kallen Kaslana\n\n"
-            f"🎟️ Vé: **{tickets}** | 📖 Chapter đã clear: **{progress}/6**\n"
-            f"👥 Nhân vật mở khóa: **{len(chars)}/{len(KF_CHARACTERS)}**\n\n"
-            "**LỆNH:**\n"
-            "`k kallen choi` — Bắt đầu phiêu lưu\n"
-            "`k kallen muave` — Mua vé (30,000 💰/vé)\n"
-            "`k kallen nhanvat` — Xem tất cả nhân vật\n"
-            "`k kallen mokuyen <tên>` — Mở khóa nhân vật\n"
-            "`k kallen inventory` — Xem vật phẩm\n"
-            "`k kallen bancuahang` — Bán vật phẩm\n"
-            "`k kallen story <chapter>` — Đọc lại story\n"
-        ),
-        color = discord.Color.purple()
+        title=f"🛡️ TRANG BỊ — {char['name']}",
+        description="\n".join(lines),
+        color=discord.Color.teal()
+    )
+    embed.add_field(
+        name="📊 Chỉ Số Hiện Tại",
+        value=f"⚔️ ATK: **{stats['atk']}** | 🛡️ DEF: **{stats['def']}** | ❤️ HP: **{stats['hp']}** | ✨ CRIT: **{stats['crit']}%**",
+        inline=False
     )
 
-    # Thanh tiến độ
-    prog_bar = kf_bar(progress, 6, fill="🟣", empty="⬜")
-    embed.add_field(name="📊 Tiến Độ", value=f"{prog_bar} {progress}/6 Chapters", inline=False)
+    # Inventory trang bị
+    inv_equips = {k: v for k, v in kf["inventory"].items() if k in KF_EQUIPMENT and v > 0}
+    if inv_equips:
+        inv_lines = []
+        for eid, cnt in list(inv_equips.items())[:8]:
+            eq = KF_EQUIPMENT[eid]
+            inv_lines.append(f"• {eq['name']} x{cnt} [{rarity_emoji(eq['rarity'])}]")
+        embed.add_field(name="📦 Kho Trang Bị", value="\n".join(inv_lines), inline=False)
 
-    if kf_items:
-        items_str = " | ".join(f"**{k}** x{v}" for k, v in list(kf_items.items())[:5])
-        embed.add_field(name="📦 Vật Phẩm KF", value=items_str, inline=False)
+    view = KFEquipActionView(author, cid, kf)
+    await interaction.response.edit_message(embed=embed, view=view)
 
-    embed.set_footer(text="Kallen Fantasy — Inspired by Honkai Impact 3rd")
+
+class KFEquipActionView(discord.ui.View):
+    def __init__(self, author, cid, kf):
+        super().__init__(timeout=60)
+        self.author = author
+        self.cid    = cid
+        self.kf     = kf
+
+    @discord.ui.button(label="⚔️ Trang Bị Vũ Khí", style=discord.ButtonStyle.danger)
+    async def equip_weapon(self, interaction, button):
+        await self._equip_slot(interaction, "weapon")
+
+    @discord.ui.button(label="🛡️ Trang Bị Giáp", style=discord.ButtonStyle.primary)
+    async def equip_armor(self, interaction, button):
+        await self._equip_slot(interaction, "armor")
+
+    @discord.ui.button(label="💍 Trang Bị Phụ Kiện", style=discord.ButtonStyle.success)
+    async def equip_accessory(self, interaction, button):
+        await self._equip_slot(interaction, "accessory")
+
+    @discord.ui.button(label="🗑️ Tháo Tất Cả", style=discord.ButtonStyle.secondary)
+    async def unequip_all(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        ud, kf = get_kf_user(str(self.author.id))
+        for slot in ["weapon", "armor", "accessory"]:
+            eid = kf["equipment"].get(self.cid, {}).get(slot)
+            if eid:
+                kf["inventory"][eid] = kf["inventory"].get(eid, 0) + 1
+                kf["equipment"][self.cid][slot] = None
+        save_kf_user(str(self.author.id), ud)
+        await interaction.response.send_message("✅ Đã tháo toàn bộ trang bị!", ephemeral=True)
+
+    async def _equip_slot(self, interaction, slot):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        ud, kf = get_kf_user(str(self.author.id))
+        # Tìm trang bị phù hợp trong kho
+        fitting = {k: v for k, v in kf["inventory"].items() if k in KF_EQUIPMENT and KF_EQUIPMENT[k]["slot"] == slot and v > 0}
+        if not fitting:
+            return await interaction.response.send_message(f"⚠️ Không có trang bị **{slot}** trong kho!", ephemeral=True)
+
+        options = []
+        for eid, cnt in list(fitting.items())[:25]:
+            eq = KF_EQUIPMENT[eid]
+            options.append(discord.SelectOption(
+                label       = eq["name"][:25],
+                description = f"{rarity_emoji(eq['rarity'])} | {eq['desc'][:40]}",
+                value       = eid
+            ))
+
+        select = discord.ui.Select(placeholder=f"Chọn {slot} để trang bị...", options=options)
+        async def on_select(i):
+            if i.user.id != self.author.id:
+                return await i.response.send_message("Không phải bạn!", ephemeral=True)
+            chosen_eid = i.data["values"][0]
+            ud2, kf2  = get_kf_user(str(self.author.id))
+            # Tháo cái cũ
+            old = kf2["equipment"].get(self.cid, {}).get(slot)
+            if old:
+                kf2["inventory"][old] = kf2["inventory"].get(old, 0) + 1
+            # Gắn cái mới
+            kf2["inventory"][chosen_eid] = max(0, kf2["inventory"].get(chosen_eid, 0) - 1)
+            if self.cid not in kf2["equipment"]:
+                kf2["equipment"][self.cid] = {}
+            kf2["equipment"][self.cid][slot] = chosen_eid
+            save_kf_user(str(self.author.id), ud2)
+            eq = KF_EQUIPMENT[chosen_eid]
+            await i.response.send_message(f"✅ Đã trang bị **{eq['name']}** cho **{KF_CHARACTERS[self.cid]['name']}**!", ephemeral=True)
+        select.callback = on_select
+        v = discord.ui.View(timeout=30)
+        v.add_item(select)
+        await interaction.response.send_message(embed=discord.Embed(description=f"Chọn {slot} để trang bị:"), view=v, ephemeral=True)
+
+    async def interaction_check(self, i):
+        return i.user.id == self.author.id
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 9: CRAFT VIEW
+# ══════════════════════════════════════════════════════════════════════
+
+class KFCraftView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.author = author
+
+        craftable = [k for k, v in KF_EQUIPMENT.items() if v.get("craft")]
+        options   = []
+        for eid in craftable[:25]:
+            eq = KF_EQUIPMENT[eid]
+            mats = " + ".join(f"{v}x {k}" for k, v in eq["craft"].items())
+            options.append(discord.SelectOption(
+                label       = eq["name"][:25],
+                description = f"[{rarity_emoji(eq['rarity'])}] {mats[:40]}",
+                value       = eid
+            ))
+        if options:
+            select = discord.ui.Select(placeholder="Chọn trang bị để chế tạo...", options=options)
+            select.callback = self._craft_cb
+            self.add_item(select)
+
+    async def _craft_cb(self, interaction):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        eid = interaction.data["values"][0]
+        eq  = KF_EQUIPMENT[eid]
+        ud, kf = get_kf_user(str(self.author.id))
+
+        # Kiểm tra nguyên liệu
+        for mat, cnt in eq["craft"].items():
+            have = kf["inventory"].get(mat, 0)
+            if have < cnt:
+                return await interaction.response.send_message(
+                    f"⚠️ Thiếu **{cnt - have}x {mat}**!", ephemeral=True
+                )
+
+        # Trừ nguyên liệu
+        for mat, cnt in eq["craft"].items():
+            kf["inventory"][mat] -= cnt
+
+        kf["inventory"][eid] = kf["inventory"].get(eid, 0) + 1
+        save_kf_user(str(self.author.id), ud)
+        add_history(str(self.author.id), f"KF Craft: {eq['name']}")
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                title="⚒️ CHẾ TẠO THÀNH CÔNG!",
+                description=f"✅ Tạo ra **{eq['name']}** [{rarity_emoji(eq['rarity'])}]\n{eq['desc']}",
+                color=discord.Color.gold()
+            ),
+            ephemeral=True
+        )
+
+    async def interaction_check(self, i):
+        return i.user.id == self.author.id
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 10: CHARACTER PROFILE
+# ══════════════════════════════════════════════════════════════════════
+
+async def show_kf_char_profile(ctx, char_id, author=None):
+    target = author or ctx.author
+    ud, kf  = get_kf_user(str(target.id))
+    char    = KF_CHARACTERS[char_id]
+    unlocked = char_id in kf.get("chars", ["kallen", "fuhua", "sakura"])
+    stats   = get_char_stats(char_id, kf)
+    lv      = stats["lv"]
+    exp     = kf["char_exp"].get(char_id, 0)
+    exp_max = exp_to_level_up(lv)
+    exp_bar = kf_bar(exp, exp_max, fill="🟨", empty="⬜")
+
+    # Custom ảnh
+    avatar_url = kf.get("avatar_url", "") or ""
+    banner_url = kf.get("banner_url", "") or ""
+
+    color = discord.Color.gold() if unlocked else discord.Color.dark_grey()
+    embed = discord.Embed(color=color)
+
+    # Banner bìa
+    if banner_url:
+        embed.set_image(url=banner_url)
+
+    # Avatar
+    if avatar_url:
+        embed.set_thumbnail(url=avatar_url)
+    else:
+        embed.set_thumbnail(url=target.display_avatar.url)
+
+    lock_str = "" if unlocked else " 🔒"
+    embed.title = f"{'✅' if unlocked else '🔒'} {char['name']}{lock_str} — {char['title']}"
+
+    embed.description = (
+        f"*{char['lore']}*\n\n"
+        f"🌟 **Passive:** {char['passive']}"
+    )
+
+    embed.add_field(
+        name="📊 Chỉ Số",
+        value=(
+            f"**Lv {lv}** {f'(MAX)' if lv >= 50 else ''}\n"
+            f"⭐ {exp_bar} {exp}/{exp_max} XP\n"
+            f"⚔️ ATK: **{stats['atk']}** | 🛡️ DEF: **{stats['def']}**\n"
+            f"❤️ HP: **{stats['hp']}** | ✨ CRIT: **{stats['crit']}%**"
+        ),
+        inline=True
+    )
+
+    skills = char["skills"]
+    embed.add_field(
+        name="🎮 Kỹ Năng",
+        value=(
+            f"1️⃣ **{skills['atk']['name']}**\n   {skills['atk']['desc']}\n"
+            f"2️⃣ **{skills['def']['name']}** (MP:{skills['def']['mp']})\n   {skills['def']['desc']}\n"
+            f"3️⃣ **{skills['ult']['name']}** (MP:{skills['ult']['mp']})\n   {skills['ult']['desc']}"
+        ),
+        inline=True
+    )
+
+    equip_desc = get_char_equip_bonus_desc(char_id, kf)
+    embed.add_field(name="🛡️ Trang Bị", value=equip_desc, inline=False)
+
+    if not unlocked:
+        ci = KF_CHARACTERS[char_id]
+        if ci.get("unlock", 0) == 0:
+            embed.add_field(name="🔑 Mở Khóa", value="✅ Mở sẵn", inline=False)
+        else:
+            embed.add_field(
+                name="🔑 Mở Khóa",
+                value=f"Cần **{ci['unlock_count']}x {ci['unlock_item']}**\n`k kallen mokuyen {char_id}`",
+                inline=False
+            )
+
+    bio = kf.get("bio", "")
+    if bio:
+        embed.add_field(name="📝 Bio", value=bio[:200], inline=False)
+
+    embed.set_footer(text=f"Element: {char['element']} | k kallen nangcap {char_id} | k kallen trangbi")
     await ctx.reply(embed=embed, mention_author=False)
 
 
-@kallen.command(aliases=['start', 'play', 'bat_dau'])
-async def choi(ctx):
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 11: COMMANDS
+# ══════════════════════════════════════════════════════════════════════
+
+# NOTE: Thêm vào bot.py sau keep_alive(), trước bot.run()
+# Tất cả lệnh bên dưới phải được đặt TRƯỚC keep_alive()
+
+@bot.group(invoke_without_command=True, aliases=['kf', 'kallenfantasy'])
+async def kallen(ctx):
     user_id = str(ctx.author.id)
-    if user_id in kf_active_games:
-        return await ctx.reply("⚠️ Bạn đang trong ván chơi! Hoàn thành hoặc thoát trước.", mention_author=False)
-
-    ud = load_user(user_id)
-
-    # Mặc định mở 3 nhân vật đầu
-    if "kf_chars" not in ud:
-        ud["kf_chars"] = ["kallen", "fuhua", "sakura"]
-        save_user(user_id)
+    ud, kf  = get_kf_user(user_id)
+    progress = kf.get("progress", 0)
+    tickets  = kf["inventory"].get(KF_TICKET_ITEM, 0)
+    chars    = kf.get("chars", ["kallen"])
 
     embed = discord.Embed(
-        title       = "🗡️ CHỌN NHÂN VẬT",
-        description = "Chọn nhân vật để bắt đầu hành trình!\n\n🔒 = Cần mở khóa bằng vật phẩm",
-        color       = discord.Color.purple()
+        title="🌸 KALLEN FANTASY v2",
+        description=(
+            f"🎟️ Vé: **{tickets}** | 📖 Chapter: **{progress}/9**\n"
+            f"👥 Nhân vật: **{len(chars)}/{len(KF_CHARACTERS)}**\n\n"
+            "**LỆNH:**\n"
+            "`k kallen choi` — Bắt đầu phiêu lưu\n"
+            "`k kallen muave [số]` — Mua vé\n"
+            "`k kallen char [tên]` — Hồ sơ nhân vật\n"
+            "`k kallen nhanvat` — Danh sách nhân vật\n"
+            "`k kallen mokuyen <tên>` — Mở khóa nhân vật\n"
+            "`k kallen nangcap <tên>` — Nâng cấp nhân vật\n"
+            "`k kallen trangbi` — Quản lý trang bị\n"
+            "`k kallen cheta` — Chế tạo trang bị\n"
+            "`k kallen cuahang` — Cửa hàng KF\n"
+            "`k kallen inventory` — Xem kho đồ\n"
+            "`k kallen bancuahang` — Bán vật phẩm\n"
+            "`k kallen raid [tên]` — Phó bản tập thể\n"
+            "`k kallen story <chương>` — Đọc story\n"
+            "`k kallen profile` — Hồ sơ của bạn\n"
+            "`k kallen setavatar <url>` — Đặt ảnh đại diện KF\n"
+            "`k kallen setbanner <url>` — Đặt ảnh bìa KF\n"
+            "`k kallen setbio <text>` — Đặt bio KF\n"
+        ),
+        color=discord.Color.purple()
     )
+    bar = kf_bar(progress, 9, fill="🟣", empty="⬜")
+    embed.add_field(name="📊 Tiến Độ", value=f"{bar} {progress}/9 Chapters", inline=False)
+    total_boss = kf.get("total_boss_kills", 0)
+    raid_clears = len(kf.get("raid_clears", []))
+    embed.add_field(
+        name="🏆 Thống Kê",
+        value=f"Boss đã giết: **{total_boss}** | Raid: **{raid_clears}/{len(KF_RAIDS)}**",
+        inline=False
+    )
+    embed.set_footer(text="Kallen Fantasy v2 — Expanded Universe")
+    await ctx.reply(embed=embed, mention_author=False)
 
-    # Hiển thị thông tin các nhân vật
+
+@kallen.command(aliases=['start', 'play'])
+async def choi(ctx):
+    uid = str(ctx.author.id)
+    if uid in kf_active_games:
+        return await ctx.reply("⚠️ Đang trong ván chơi! Hoàn thành hoặc rút lui trước.", mention_author=False)
+    ud, kf = get_kf_user(uid)
+    if "kf_chars" not in ud:
+        # migrate old format
+        pass
+    if "kf" not in ud:
+        ud["kf"] = {}
+    # Đảm bảo mở sẵn
+    if "chars" not in kf:
+        kf["chars"] = ["kallen", "fuhua", "sakura"]
+        save_kf_user(uid, ud)
+
+    embed = discord.Embed(
+        title="🗡️ CHỌN NHÂN VẬT",
+        description="Chọn nhân vật để bắt đầu hành trình!\n\nMỗi nhân vật có chỉ số và passive khác nhau.",
+        color=discord.Color.purple()
+    )
     for cid, char in KF_CHARACTERS.items():
-        unlocked = cid in ud.get("kf_chars", ["kallen", "fuhua", "sakura"])
-        lock_str = "✅" if unlocked else f"🔒 Cần {char.get('unlock_count',1)}x {char.get('unlock_item','???')}"
+        unlocked = cid in kf.get("chars", [])
+        stats    = get_char_stats(cid, kf)
+        lock     = "✅" if unlocked else "🔒"
         embed.add_field(
-            name  = f"{'✅' if unlocked else '🔒'} {char['name']}",
-            value = f"{char['element']} | ATK:{char['atk']} DEF:{char['def']} HP:{char['hp']}\n{lock_str}",
+            name  = f"{lock} {char['name']} Lv{stats['lv']}",
+            value = f"{char['element']} | ⚔️{stats['atk']} 🛡️{stats['def']} ❤️{stats['hp']} ✨{stats['crit']}%",
             inline= True
         )
-
-    await ctx.reply(embed=embed, view=KFCharSelectView(ctx.author, ud), mention_author=False)
+    await ctx.reply(embed=embed, view=KFCharSelectView(ctx.author, ud, kf), mention_author=False)
 
 
 @kallen.command(aliases=['buy_ticket', 've'])
 async def muave(ctx, amount: int = 1):
     if amount < 1 or amount > 50:
         return await ctx.reply("⚠️ Mua từ 1-50 vé!", mention_author=False)
-    user_id  = str(ctx.author.id)
-    ud       = load_user(user_id)
-    total    = KF_TICKET_PRICE * amount
-
+    uid  = str(ctx.author.id)
+    ud, kf = get_kf_user(uid)
+    total = KF_TICKET_PRICE * amount
     if ud.get("money", 0) < total:
-        return await ctx.reply(f"⚠️ Cần **{total:,} 💰** để mua **{amount} vé**!", mention_author=False)
-
+        return await ctx.reply(f"⚠️ Cần **{total:,} 💰** để mua **{amount}** vé!", mention_author=False)
     ud["money"] -= total
-    ud.setdefault("inventory", {})[KF_TICKET_ITEM] = ud["inventory"].get(KF_TICKET_ITEM, 0) + amount
-    save_user(user_id)
-    add_history(user_id, f"Mua {amount} vé Kallen Fantasy (-{total:,} 💰)")
-
+    kf["inventory"][KF_TICKET_ITEM] = kf["inventory"].get(KF_TICKET_ITEM, 0) + amount
+    save_kf_user(uid, ud)
+    add_history(uid, f"Mua {amount}x vé KF (-{total:,} 💰)")
     await ctx.reply(
         embed=discord.Embed(
-            description=f"🎟️ Mua **{amount} {KF_TICKET_ITEM}** thành công!\n"
-                        f"Tổng chi: **{total:,} 💰** | Tổng vé: **{ud['inventory'][KF_TICKET_ITEM]}**",
+            description=f"🎟️ Mua **{amount} {KF_TICKET_ITEM}**!\nTổng chi: **{total:,} 💰** | Vé còn: **{kf['inventory'][KF_TICKET_ITEM]}**",
             color=discord.Color.green()
-        ),
-        mention_author=False
+        ), mention_author=False
     )
 
 
@@ -5802,127 +7041,286 @@ async def muave(ctx, amount: int = 1):
 async def nhanvat(ctx):
     embed = discord.Embed(title="👥 DANH SÁCH NHÂN VẬT KALLEN FANTASY", color=discord.Color.purple())
     for cid, char in KF_CHARACTERS.items():
-        unlock_lvl = char.get("unlock", 0)
-        if unlock_lvl == 0:
-            unlock_str = "✅ Mở sẵn"
+        ul = char.get("unlock", 0)
+        if ul == 0:
+            ul_str = "✅ Mở sẵn"
         else:
-            unlock_str = f"🔒 {char.get('unlock_count',1)}x {char.get('unlock_item','???')}"
-
+            ul_str = f"🔒 {char.get('unlock_count',1)}x {char.get('unlock_item','???')}"
         embed.add_field(
             name  = f"{char['name']} — *{char['title']}*",
             value = (
-                f"**{char['element']}** | ❤️{char['hp']} ⚔️{char['atk']} 🛡️{char['def']}\n"
-                f"🌟 **Passive:** {char['passive']}\n"
-                f"1️⃣ {char['skills']['atk']['name']}: {char['skills']['atk']['desc']}\n"
-                f"2️⃣ {char['skills']['def']['name']}: {char['skills']['def']['desc']}\n"
-                f"3️⃣ {char['skills']['ult']['name']}: {char['skills']['ult']['desc']}\n"
-                f"🔑 {unlock_str}"
+                f"**{char['element']}** | ❤️{char['hp']} ⚔️{char['atk']} 🛡️{char['def']} ✨{char['crit']}%\n"
+                f"🌟 {char['passive']}\n"
+                f"1️⃣ {char['skills']['atk']['name']} | 2️⃣ {char['skills']['def']['name']} | 3️⃣ {char['skills']['ult']['name']}\n"
+                f"🔑 {ul_str}"
             ),
             inline=False
         )
     await ctx.reply(embed=embed, mention_author=False)
 
 
+@kallen.command(aliases=['hoso'])
+async def char(ctx, char_name: str = None, member: discord.Member = None):
+    uid = str(ctx.author.id)
+    ud, kf = get_kf_user(uid)
+    target = member or ctx.author
+
+    if char_name is None:
+        # Hiện danh sách nhân vật đã mở
+        unlocked = kf.get("chars", ["kallen"])
+        embed = discord.Embed(title=f"👥 NHÂN VẬT CỦA {target.name}", color=discord.Color.purple())
+        for cid in unlocked:
+            if cid in KF_CHARACTERS:
+                stats = get_char_stats(cid, kf)
+                embed.add_field(
+                    name  = KF_CHARACTERS[cid]["name"],
+                    value = f"Lv{stats['lv']} | ⚔️{stats['atk']} 🛡️{stats['def']} ❤️{stats['hp']}",
+                    inline=True
+                )
+        embed.set_footer(text=f"k kallen char <tên nhân vật> để xem chi tiết")
+        return await ctx.reply(embed=embed, mention_author=False)
+
+    cid = char_name.lower()
+    if cid not in KF_CHARACTERS:
+        # Tìm theo tên
+        for k, v in KF_CHARACTERS.items():
+            if char_name.lower() in v["name"].lower():
+                cid = k
+                break
+        else:
+            return await ctx.reply("⚠️ Nhân vật không tồn tại!", mention_author=False)
+
+    await show_kf_char_profile(ctx, cid, target)
+
+
 @kallen.command(aliases=['unlock'])
 async def mokuyen(ctx, char_name: str):
-    char_name = char_name.lower()
-    if char_name not in KF_CHARACTERS:
-        names = ", ".join(KF_CHARACTERS.keys())
-        return await ctx.reply(f"⚠️ Nhân vật không tồn tại! Có: {names}", mention_author=False)
+    cid = char_name.lower()
+    if cid not in KF_CHARACTERS:
+        for k, v in KF_CHARACTERS.items():
+            if char_name.lower() in v["name"].lower():
+                cid = k
+                break
+        else:
+            return await ctx.reply(f"⚠️ Nhân vật '{char_name}' không tồn tại!", mention_author=False)
 
-    user_id = str(ctx.author.id)
-    ud      = load_user(user_id)
-    char    = KF_CHARACTERS[char_name]
+    uid    = str(ctx.author.id)
+    ud, kf = get_kf_user(uid)
+    char   = KF_CHARACTERS[cid]
 
     if char.get("unlock", 0) == 0:
         return await ctx.reply(f"✅ **{char['name']}** đã mở sẵn!", mention_author=False)
+    if cid in kf.get("chars", []):
+        return await ctx.reply(f"✅ **{char['name']}** đã mở rồi!", mention_author=False)
 
-    if char_name in ud.get("kf_chars", []):
-        return await ctx.reply(f"✅ **{char['name']}** đã được mở khóa rồi!", mention_author=False)
-
-    item_need  = char["unlock_item"]
-    count_need = char["unlock_count"]
-    inv        = ud.get("inventory", {})
-    have       = inv.get(item_need, 0)
-
-    if have < count_need:
+    item_n = char["unlock_item"]
+    item_c = char["unlock_count"]
+    have   = kf["inventory"].get(item_n, 0)
+    if have < item_c:
         return await ctx.reply(
-            f"⚠️ Cần **{count_need}x {item_need}** để mở khóa **{char['name']}**!\n"
-            f"Bạn có: **{have}x**. Kiếm từ chiến đấu Kallen Fantasy!",
+            f"⚠️ Cần **{item_c}x {item_n}** | Có: **{have}**\nKiếm từ chiến đấu chương trình chính!",
             mention_author=False
         )
 
-    inv[item_need] -= count_need
-    ud["inventory"] = inv
-    ud.setdefault("kf_chars", ["kallen", "fuhua", "sakura"]).append(char_name)
-    save_user(user_id)
+    kf["inventory"][item_n] -= item_c
+    kf.setdefault("chars", []).append(cid)
+    save_kf_user(uid, ud)
 
     await ctx.reply(
         embed=discord.Embed(
-            title = f"🎉 MỞ KHÓA: {char['name']}",
-            description=f"Đã dùng **{count_need}x {item_need}**!\n\n*{char['lore']}*\n\n💡 **Passive:** {char['passive']}",
-            color = discord.Color.gold()
-        ),
-        mention_author=False
+            title=f"🎉 MỞ KHÓA: {char['name']}",
+            description=f"Dùng **{item_c}x {item_n}**!\n\n*{char['lore']}*\n\n💡 **Passive:** {char['passive']}",
+            color=discord.Color.gold()
+        ), mention_author=False
     )
+
+
+@kallen.command(aliases=['levelup', 'lu'])
+async def nangcap(ctx, char_name: str):
+    cid = char_name.lower()
+    if cid not in KF_CHARACTERS:
+        for k, v in KF_CHARACTERS.items():
+            if char_name.lower() in v["name"].lower():
+                cid = k
+                break
+        else:
+            return await ctx.reply("⚠️ Nhân vật không tồn tại!", mention_author=False)
+
+    uid    = str(ctx.author.id)
+    ud, kf = get_kf_user(uid)
+
+    if cid not in kf.get("chars", []):
+        return await ctx.reply("⚠️ Nhân vật chưa mở khóa!", mention_author=False)
+
+    lv     = kf["char_levels"].get(cid, 1)
+    if lv >= 50:
+        return await ctx.reply("✅ Nhân vật đã đạt **Level 50 MAX**!", mention_author=False)
+
+    exp_need = exp_to_level_up(lv)
+    exp_have = kf["char_exp"].get(cid, 0)
+    cost_money = lv * 5_000  # Tốn tiền để level up manual
+
+    embed = discord.Embed(
+        title=f"⬆️ NÂNG CẤP — {KF_CHARACTERS[cid]['name']}",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="Cấp hiện tại", value=f"**Lv {lv}**", inline=True)
+    embed.add_field(name="XP",           value=f"**{exp_have}/{exp_need}**", inline=True)
+    embed.add_field(name="Chi phí UP",   value=f"**{cost_money:,} 💰**", inline=True)
+    embed.add_field(
+        name="Cách lên cấp",
+        value="• XP từ chiến đấu (tự động)\n• Dùng tiền để up thẳng: nếu có đủ XP\n• Lên cấp tăng **5% mỗi chỉ số**",
+        inline=False
+    )
+
+    if exp_have >= exp_need:
+        # Auto level up
+        kf["char_exp"][cid] -= exp_need
+        kf["char_levels"][cid] = lv + 1
+        new_stats = get_char_stats(cid, kf)
+        save_kf_user(uid, ud)
+        embed.add_field(
+            name="✅ LÊN CẤP!",
+            value=f"**Lv {lv} → Lv {lv+1}**\n⚔️ ATK: {new_stats['atk']} | 🛡️ DEF: {new_stats['def']} | ❤️ HP: {new_stats['hp']}",
+            inline=False
+        )
+    elif ud.get("money", 0) >= cost_money:
+        # Trả tiền để nạp XP
+        add_xp = int(exp_need * 0.3)
+        ud["money"] -= cost_money
+        kf["char_exp"][cid] = min(exp_have + add_xp, exp_need - 1)
+        save_kf_user(uid, ud)
+        embed.add_field(
+            name="💰 Dùng tiền nạp XP",
+            value=f"Trả **{cost_money:,} 💰** → +**{add_xp} XP** (30% thanh XP)",
+            inline=False
+        )
+    else:
+        embed.add_field(
+            name="⚠️",
+            value=f"Thiếu XP ({exp_have}/{exp_need}) và tiền ({ud.get('money',0):,}/{cost_money:,})\nChơi thêm để tích XP!",
+            inline=False
+        )
+
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@kallen.command(aliases=['equip', 'gear'])
+async def trangbi(ctx):
+    uid    = str(ctx.author.id)
+    ud, kf = get_kf_user(uid)
+    embed  = discord.Embed(
+        title="🛡️ QUẢN LÝ TRANG BỊ",
+        description="Chọn nhân vật để trang bị / tháo đồ.\nTrang bị tăng ATK/DEF/HP/CRIT và có bonus đặc biệt theo nhân vật.",
+        color=discord.Color.teal()
+    )
+    await ctx.reply(embed=embed, view=KFEquipCharSelect(ctx.author, kf), mention_author=False)
+
+
+@kallen.command(aliases=['forge', 'craft'])
+async def cheta(ctx):
+    uid    = str(ctx.author.id)
+    ud, kf = get_kf_user(uid)
+    embed  = discord.Embed(
+        title="⚒️ XƯỞNG CHẾ TẠO",
+        description="Dùng vật phẩm drop từ chiến đấu để tạo trang bị.",
+        color=discord.Color.orange()
+    )
+    # Show materials
+    mats = {k: v for k, v in kf["inventory"].items() if k in KF_EXCLUSIVE_ITEMS and v > 0}
+    if mats:
+        embed.add_field(
+            name="🧪 Nguyên Liệu Hiện Có",
+            value="\n".join(f"• {k}: **{v}**" for k, v in mats.items()),
+            inline=False
+        )
+    else:
+        embed.add_field(name="🧪 Nguyên Liệu", value="Chưa có. Chiến đấu để kiếm!", inline=False)
+    await ctx.reply(embed=embed, view=KFCraftView(ctx.author), mention_author=False)
+
+
+@kallen.command(aliases=['shop', 'store'])
+async def cuahang(ctx):
+    uid    = str(ctx.author.id)
+    ud, kf = get_kf_user(uid)
+    embed  = discord.Embed(
+        title="🛒 CỬA HÀNG KALLEN FANTASY",
+        description=f"Ví của bạn: **{ud.get('money',0):,} 💰**\n\nMua vật phẩm hỗ trợ chiến đấu, vé, và trang bị cơ bản.",
+        color=discord.Color.green()
+    )
+    for key, item in list(KF_SHOP_ITEMS.items())[:8]:
+        embed.add_field(
+            name  = item["name"],
+            value = f"{item['price']:,} 💰 | {item['desc']}",
+            inline=True
+        )
+    await ctx.reply(embed=embed, view=KFShopView(ctx.author), mention_author=False)
 
 
 @kallen.command(aliases=['inv', 'items'])
 async def inventory(ctx, member: discord.Member = None):
-    target  = member or ctx.author
-    ud      = load_user(target.id)
-    inv     = ud.get("inventory", {})
-    tickets = inv.get(KF_TICKET_ITEM, 0)
-    kf_inv  = {k: v for k, v in inv.items() if k in KF_EXCLUSIVE_ITEMS and v > 0}
+    target = member or ctx.author
+    ud, kf = get_kf_user(str(target.id))
 
-    embed = discord.Embed(
-        title = f"📦 KALLEN FANTASY INVENTORY — {target.name}",
-        color = discord.Color.purple()
-    )
+    embed = discord.Embed(title=f"📦 KHO ĐỒ KF — {target.name}", color=discord.Color.purple())
+    embed.set_thumbnail(url=target.display_avatar.url)
+
+    # Vé
+    tickets = kf["inventory"].get(KF_TICKET_ITEM, 0)
     embed.add_field(name="🎟️ Vé", value=f"**{tickets}** {KF_TICKET_ITEM}", inline=False)
 
-    if kf_inv:
-        for item, cnt in kf_inv.items():
-            info = KF_EXCLUSIVE_ITEMS[item]
-            embed.add_field(
-                name  = f"{item} x{cnt}",
-                value = f"{info['desc']} | Bán: {info['sell']:,} 💰",
-                inline= True
-            )
-    else:
-        embed.add_field(name="Vật Phẩm", value="Trống. Đi chiến đấu để kiếm!", inline=False)
+    # Nguyên liệu
+    mats = {k: v for k, v in kf["inventory"].items() if k in KF_EXCLUSIVE_ITEMS and v > 0}
+    if mats:
+        embed.add_field(
+            name  = "🧪 Nguyên Liệu",
+            value = "\n".join(f"• **{k}** x{v} — {KF_EXCLUSIVE_ITEMS[k]['sell']:,} 💰/cái" for k, v in list(mats.items())[:10]),
+            inline=False
+        )
 
-    embed.set_footer(text=f"Chapter đã clear: {ud.get('kf_progress', 0)}/6 | k kallen bancuahang")
+    # Trang bị
+    equips = {k: v for k, v in kf["inventory"].items() if k in KF_EQUIPMENT and v > 0}
+    if equips:
+        embed.add_field(
+            name  = "⚔️ Trang Bị",
+            value = "\n".join(f"• {KF_EQUIPMENT[k]['name']} x{v} [{rarity_emoji(KF_EQUIPMENT[k]['rarity'])}]" for k, v in list(equips.items())[:8]),
+            inline=False
+        )
+
+    # Tiêu hao
+    cons = {k: v for k, v in kf.get("consumables", {}).items() if v > 0}
+    if cons:
+        embed.add_field(
+            name  = "💊 Tiêu Hao (dùng trong chiến đấu)",
+            value = "\n".join(f"• **{k}** x{v}" for k, v in cons.items()),
+            inline=False
+        )
+
+    embed.set_footer(text=f"Chapter: {kf.get('progress',0)}/9 | Boss: {kf.get('total_boss_kills',0)} | k kallen bancuahang")
     await ctx.reply(embed=embed, mention_author=False)
 
 
 @kallen.command(aliases=['sell', 'ban'])
 async def bancuahang(ctx, item_name: str = None, amount: int = None):
-    user_id = str(ctx.author.id)
-    ud      = load_user(user_id)
-    inv     = ud.get("inventory", {})
+    uid    = str(ctx.author.id)
+    ud, kf = get_kf_user(uid)
+    inv    = kf["inventory"]
 
     if not item_name:
-        # Hiện danh sách có thể bán
-        kf_inv = {k: v for k, v in inv.items() if k in KF_EXCLUSIVE_ITEMS and v > 0}
-        if not kf_inv:
+        sellable = {k: v for k, v in inv.items() if k in KF_EXCLUSIVE_ITEMS and v > 0}
+        if not sellable:
             return await ctx.reply("📦 Không có vật phẩm KF nào để bán!", mention_author=False)
-        lines = [f"**{k}** x{v} → {KF_EXCLUSIVE_ITEMS[k]['sell']:,} 💰/cái" for k, v in kf_inv.items()]
-        embed = discord.Embed(
-            title       = "💰 CỬA HÀNG KALLEN FANTASY",
-            description = "\n".join(lines) + "\n\n`k kallen bancuahang <tên vật phẩm> <số lượng>`",
-            color       = discord.Color.gold()
-        )
+        lines = [f"**{k}** x{v} → {KF_EXCLUSIVE_ITEMS[k]['sell']:,} 💰/cái" for k, v in sellable.items()]
+        embed = discord.Embed(title="💰 BÁN VẬT PHẨM KF", description="\n".join(lines) + "\n\n`k kallen bancuahang <tên> <số>`", color=discord.Color.gold())
         return await ctx.reply(embed=embed, mention_author=False)
 
-    # Tìm vật phẩm
     matched = None
     for k in KF_EXCLUSIVE_ITEMS:
         if item_name.lower() in k.lower():
             matched = k
             break
     if not matched:
-        return await ctx.reply("⚠️ Không tìm thấy vật phẩm này!", mention_author=False)
+        return await ctx.reply("⚠️ Không tìm thấy vật phẩm!", mention_author=False)
 
     have = inv.get(matched, 0)
     if amount is None:
@@ -5932,16 +7330,11 @@ async def bancuahang(ctx, item_name: str = None, amount: int = None):
 
     total = KF_EXCLUSIVE_ITEMS[matched]["sell"] * amount
     inv[matched] = have - amount
-    ud["inventory"] = inv
-    ud["money"] = ud.get("money", 0) + total
-    save_user(user_id)
-    add_history(user_id, f"Bán {amount}x {matched} (+{total:,} 💰)")
-
+    ud["money"]  = ud.get("money", 0) + total
+    save_kf_user(uid, ud)
+    add_history(uid, f"Bán {amount}x {matched} KF (+{total:,} 💰)")
     await ctx.reply(
-        embed=discord.Embed(
-            description=f"✅ Bán **{amount}x {matched}** → **+{total:,} 💰**!",
-            color=discord.Color.green()
-        ),
+        embed=discord.Embed(description=f"✅ Bán **{amount}x {matched}** → **+{total:,} 💰**!", color=discord.Color.green()),
         mention_author=False
     )
 
@@ -5950,27 +7343,164 @@ async def bancuahang(ctx, item_name: str = None, amount: int = None):
 async def story(ctx, chapter_num: int = 1):
     if chapter_num < 1 or chapter_num > len(KF_CHAPTERS):
         return await ctx.reply(f"⚠️ Chapter từ 1-{len(KF_CHAPTERS)}!", mention_author=False)
-
-    ch = KF_CHAPTERS[chapter_num - 1]
-    is_secret = ch.get("secret", False)
-    if is_secret:
-        ud = load_user(ctx.author.id)
-        if ud.get("kf_progress", 0) < 5:
+    ch       = KF_CHAPTERS[chapter_num - 1]
+    is_sec   = ch.get("secret", False) or ch.get("finale", False)
+    if is_sec:
+        ud, kf = get_kf_user(str(ctx.author.id))
+        if kf.get("progress", 0) < ch["id"] - 1:
             return await ctx.reply("🔒 Chapter này chưa mở khóa!", mention_author=False)
+    embed = discord.Embed(title=f"📖 {ch['title']}", color=discord.Color.purple())
+    embed.add_field(name="🌅 Mở Đầu",    value=ch["story_intro"],  inline=False)
+    embed.add_field(name="⚔️ Giữa Trận", value=ch["story_mid"],    inline=False)
+    embed.add_field(name="🌠 Kết Thúc",  value=ch["story_end"],    inline=False)
+    embed.add_field(name="👿 Boss",       value=f"**{ch['boss']['name']}**\n*{ch['boss']['lore']}*", inline=False)
+    embed.set_footer(text=f"Waves: {ch['waves']} | Vé: {ch['ticket_cost']} | Thưởng: {ch['reward_money']:,} 💰")
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@kallen.command()
+async def profile(ctx, member: discord.Member = None):
+    target = member or ctx.author
+    uid    = str(target.id)
+    ud, kf = get_kf_user(uid)
+    chars  = kf.get("chars", [])
+
+    avatar_url = kf.get("avatar_url", "") or target.display_avatar.url
+    banner_url = kf.get("banner_url", "")
 
     embed = discord.Embed(
-        title = f"📖 {ch['title']}",
-        color = discord.Color.purple()
+        title=f"🌸 HỒ SƠ KALLEN FANTASY — {target.name}",
+        color=discord.Color.purple()
     )
-    embed.add_field(name="🌅 Mở Đầu",        value=ch["story_intro"],  inline=False)
-    embed.add_field(name="⚔️ Giữa Trận",     value=ch["story_mid"],    inline=False)
-    embed.add_field(name="🌠 Kết Thúc",       value=ch["story_end"],    inline=False)
+
+    if banner_url:
+        embed.set_image(url=banner_url)
+    embed.set_thumbnail(url=avatar_url)
+
+    bio = kf.get("bio", "")
+    if bio:
+        embed.description = f"*{bio[:200]}*"
+
     embed.add_field(
-        name  = "👿 Boss",
-        value = f"**{ch['boss']['name']}**\n*{ch['boss']['lore']}*",
-        inline= False
+        name="📊 Tổng Quan",
+        value=(
+            f"📖 Chapter: **{kf.get('progress',0)}/9**\n"
+            f"👥 Nhân vật: **{len(chars)}/{len(KF_CHARACTERS)}**\n"
+            f"🎟️ Vé: **{kf['inventory'].get(KF_TICKET_ITEM,0)}**\n"
+            f"💀 Boss đã giết: **{kf.get('total_boss_kills',0)}**\n"
+            f"⚔️ Raid hoàn thành: **{len(kf.get('raid_clears',[]))}/{len(KF_RAIDS)}**"
+        ),
+        inline=True
     )
-    await ctx.reply(embed=embed, mention_author=False)    
+
+    # Nhân vật mạnh nhất
+    if chars:
+        best_cid  = max(chars, key=lambda c: kf["char_levels"].get(c, 1))
+        best_lv   = kf["char_levels"].get(best_cid, 1)
+        best_name = KF_CHARACTERS.get(best_cid, {}).get("name", best_cid)
+        embed.add_field(
+            name="⭐ Nhân Vật Nổi Bật",
+            value=f"**{best_name}** Lv{best_lv}",
+            inline=True
+        )
+
+    # Trang bị đang đeo
+    equip_lines = []
+    for cid in chars[:3]:
+        eq = kf["equipment"].get(cid, {})
+        for slot, eid in eq.items():
+            if eid and eid in KF_EQUIPMENT:
+                equip_lines.append(f"• {KF_CHARACTERS[cid]['name'].split()[0]}: {KF_EQUIPMENT[eid]['name']}")
+    if equip_lines:
+        embed.add_field(name="🛡️ Trang Bị Nổi Bật", value="\n".join(equip_lines[:5]), inline=False)
+
+    embed.set_footer(text="k kallen setavatar <url> | k kallen setbanner <url> | k kallen setbio <text>")
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@kallen.command()
+async def setavatar(ctx, url: str):
+    uid    = str(ctx.author.id)
+    ud, kf = get_kf_user(uid)
+    kf["avatar_url"] = url
+    save_kf_user(uid, ud)
+    embed = discord.Embed(description="✅ Đã đặt ảnh đại diện KF!", color=discord.Color.green())
+    embed.set_thumbnail(url=url)
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@kallen.command()
+async def setbanner(ctx, url: str):
+    uid    = str(ctx.author.id)
+    ud, kf = get_kf_user(uid)
+    kf["banner_url"] = url
+    save_kf_user(uid, ud)
+    embed = discord.Embed(description="✅ Đã đặt ảnh bìa KF!", color=discord.Color.green())
+    embed.set_image(url=url)
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@kallen.command()
+async def setbio(ctx, *, text: str):
+    if len(text) > 200:
+        return await ctx.reply("⚠️ Bio tối đa 200 ký tự!", mention_author=False)
+    uid    = str(ctx.author.id)
+    ud, kf = get_kf_user(uid)
+    kf["bio"] = text
+    save_kf_user(uid, ud)
+    await ctx.reply(embed=discord.Embed(description=f"✅ Bio: *{text}*", color=discord.Color.green()), mention_author=False)
+
+
+@kallen.command()
+async def raid(ctx, *, raid_name: str = None):
+    if raid_name is None:
+        embed = discord.Embed(title="⚔️ PHÓ BẢN CHUNG KẾT (RAID)", color=discord.Color.dark_red())
+        for rid, r in KF_RAIDS.items():
+            embed.add_field(
+                name  = r["name"],
+                value = (
+                    f"{r['desc']}\n"
+                    f"👥 {r['min_players']}-{r['max_players']} người | 🎟️ {r['ticket_cost']} vé/người\n"
+                    f"💀 HP: {r['boss_hp']:,} | 💰 {r['reward_money']:,} 💰\n"
+                    f"`k kallen raid {rid}`"
+                ),
+                inline=False
+            )
+        return await ctx.reply(embed=embed, mention_author=False)
+
+    # Tìm raid
+    raid_id = None
+    for rid, r in KF_RAIDS.items():
+        if raid_name.lower() in rid.lower() or raid_name.lower() in r["name"].lower():
+            raid_id = rid
+            break
+    if not raid_id:
+        return await ctx.reply("⚠️ Không tìm thấy raid!", mention_author=False)
+
+    raid    = KF_RAIDS[raid_id]
+    uid     = str(ctx.author.id)
+    ud, kf  = get_kf_user(uid)
+
+    # Kiểm tra vé
+    tickets = kf["inventory"].get(KF_TICKET_ITEM, 0)
+    if tickets < raid["ticket_cost"]:
+        return await ctx.reply(f"⚠️ Cần **{raid['ticket_cost']} {KF_TICKET_ITEM}**! Có: {tickets}", mention_author=False)
+
+    kf["inventory"][KF_TICKET_ITEM] -= raid["ticket_cost"]
+    save_kf_user(uid, ud)
+
+    view = KFRaidLobbyView(ctx.author, raid_id, f"{raid_id}_{ctx.message.id}")
+    embed = discord.Embed(
+        title=f"⚔️ LOBBY RAID — {raid['name']}",
+        description=(
+            f"{raid['desc']}\n"
+            f"👥 {len([str(ctx.author.id)])}/{raid['max_players']} người\n"
+            f"💀 Boss HP: {raid['boss_hp']:,} | Thưởng: {raid['reward_money']:,} 💰"
+        ),
+        color=discord.Color.dark_red()
+    )
+    await ctx.reply(embed=embed, view=view, mention_author=False)
+
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
