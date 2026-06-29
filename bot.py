@@ -4984,7 +4984,7 @@ KF_CHAPTERS = [
         "story_end": (
             "🌅 **Bình minh ló dạng...**\n\n"
             "Kallen đánh lui đợt tấn công đầu tiên. Cô bé hồ ly — Yae Sakura — "
-            "nhìn với đôi mắt ngưỡng mộ. Một tình bạn bắt đầu từ đây."
+            "nhìn với đôi mắt ngưỡng mộ. Một tình yêu bắt đầu từ đây."
         ),
         "enemies": [
             {"name": "Zombie Honkai 🧟",     "hp": 120, "atk": 25, "def": 5,  "xp": 30,  "drop": "Thiết Phẩm Kallen ⚙️", "drop_rate": 0.4},
