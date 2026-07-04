@@ -5055,8 +5055,8 @@ KF_CHAPTERS = [
             "*\"Ngươi mạnh hơn ta nghĩ. Nhưng trận chiến thật sự... còn chưa bắt đầu.\"*"
         ),
         "enemies": [
-            {"name": "Hầu Vệ Honkai ⚡",    "hp": 250, "atk": 55, "def": 20, "xp": 90,  "drop": "Tinh Thể Honkai 💠",   "drop_rate": 0.5},
-            {"name": "Cánh Tay Herrscher 🌊","hp": 300, "atk": 65, "def": 25, "xp": 110, "drop": "Giọt Máu Herrscher 🩸","drop_rate": 0.25},
+            {"name": "Hầu Vệ Honkai ⚡",    "hp": 250, "atk": 55, "def": 20, "xp": 90,  "drop": "Hồn Ngọc Elysia 💗",   "drop_rate": 0.2},
+            {"name": "Cánh Tay Herrscher 🌊","hp": 300, "atk": 65, "def": 25, "xp": 110, "drop": "Hồn Ngọc Elysia 💗","drop_rate": 0.25},
             {"name": "Phân Thân Honkai 👁️",  "hp": 350, "atk": 75, "def": 30, "xp": 130, "drop": "Giọt Máu Herrscher 🩸","drop_rate": 0.3},
         ],
         "boss": {
