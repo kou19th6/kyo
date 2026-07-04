@@ -5625,102 +5625,762 @@ class KFGameState:
         self.ult_block_turns = 0
 
 
-def kf_battle_embed(state: KFGameState, msg: str = "", color=None):
-    char    = KF_CHARACTERS[state.char_id]
-    is_boss = state.wave == 99
-    if color is None:
-        color = discord.Color.dark_red() if is_boss else discord.Color.purple()
-
-    hp_bar  = kf_bar(state.hp,       state.max_hp)
-    ehp_bar = kf_bar(state.enemy_hp, state.enemy_max_hp) if state.enemy else ""
-    mp_bar  = kf_bar(state.mp, state.max_mp, fill="🟦", empty="⬜")
-
-    title = f"{'👿BOSS ' if is_boss else '⚔️'} {state.chapter['title']} — Wave {state.wave if state.wave != 99 else 'BOSS'}/{state.chapter['waves']}"
-
-    status = ""
-    if state.invincible:   status += " 🔰BẤT TỬ"
-    if state.shield:       status += " ✨NÉ"
-    if state.def_boost>0:  status += f" 🛡️+{int(state.def_boost)}%"
-    if state.burn_turns>0: status += f" 🔥{state.burn_dmg}x{state.burn_turns}"
-    if state.ult_blocked:  status += " 🚫ULT"
-    if state.kevin_stacks: status += f" ⚡x{state.kevin_stacks}"
-
-    embed = discord.Embed(title=title, color=color)
-    embed.add_field(
-        name  = f"{char['name']} Lv{state.lv}",
-        value = (
-            f"❤️ {hp_bar} **{max(0,state.hp)}/{state.max_hp}**\n"
-            f"💙 {mp_bar} **{state.mp}/{state.max_mp} MP**"
-            f"{status}"
-        ),
-        inline=False
-    )
-
-    if state.enemy:
-        stun = " 😵CHOÁNG" if state.stunned else ""
-        embed.add_field(
-            name  = f"{'👿 BOSS: ' if is_boss else '👾 '}{state.enemy['name']}{stun}",
-            value = f"❤️ {ehp_bar} **{max(0,state.enemy_hp)}/{state.enemy_max_hp}**",
-            inline=False
-        )
-
-    skills = char["skills"]
-    ult_ready = "✅" if state.mp >= state.max_mp else f"({state.mp}/{state.max_mp}MP)"
-    embed.add_field(
-        name  = "🎮 Kỹ Năng",
-        value = (
-            f"1️⃣ **{skills['atk']['name']}** — {skills['atk']['desc']}\n"
-            f"2️⃣ **{skills['def']['name']}** (MP:{skills['def']['mp']}) — {skills['def']['desc']}\n"
-            f"3️⃣ **{skills['ult']['name']}** {ult_ready} — {skills['ult']['desc']}\n"
-            f"💊 Tiên Dược: `4️⃣` | Nước MP: `5️⃣`"
-        ),
-        inline=False
-    )
-
-    if msg:
-        embed.add_field(name="📣 Diễn Biến", value=msg[-900:], inline=False)
-
-    embed.set_footer(
-        text=f"XP: +{state.total_xp} | 💰 +{state.total_money:,} | Lượt {state.turn}"
-    )
-    return embed
-
-
-# ══════════════════════════════════════════════════════════════════════
-# SECTION 4: BATTLE VIEW
-# ══════════════════════════════════════════════════════════════════════
-
 class KFBattleView(discord.ui.View):
     def __init__(self, user_id, state: KFGameState):
         super().__init__(timeout=180)
-        self.user_id = str(user_id)
-        self.state   = state
+        self.user_id  = str(user_id)
+        self.state    = state
+        self.finished = False          # FLAG chống double-process
         self.update_buttons()
-
+ 
+    # ── Tự dọn dẹp khi timeout ──────────────────────────────────────
+    async def on_timeout(self):
+        if self.finished:
+            return
+        self.finished = True
+        uid = self.user_id
+ 
+        # Xóa khỏi active games
+        kf_active_games.pop(uid, None)
+ 
+        # Lưu XP + drops đã kiếm được
+        try:
+            state = self.state
+            ud, kf = get_kf_user(uid)
+            cid = state.char_id
+            kf["char_exp"][cid] = kf["char_exp"].get(cid, 0) + state.total_xp
+            while kf["char_exp"][cid] >= exp_to_level_up(kf["char_levels"].get(cid, 1)):
+                kf["char_exp"][cid] -= exp_to_level_up(kf["char_levels"][cid])
+                kf["char_levels"][cid] = kf["char_levels"].get(cid, 1) + 1
+            for item, cnt in state.drops.items():
+                kf["inventory"][item] = kf["inventory"].get(item, 0) + cnt
+            if state.total_money > 0:
+                ud["money"] = ud.get("money", 0) + state.total_money
+            kf["consumables"] = {k: v for k, v in state.consumables.items() if v > 0}
+            save_kf_user(uid, ud)
+        except Exception as e:
+            print(f"[KF] on_timeout save error for {uid}: {e}")
+ 
+        # Disable tất cả nút
+        for item in self.children:
+            item.disabled = True
+ 
     def update_buttons(self):
         state = self.state
         for item in self.children:
-            if hasattr(item, "label"):
-                if "ULT" in str(item.label):
-                    item.disabled = (state.mp < state.max_mp) or state.ult_blocked
-                    item.label = f"3️⃣ ULT {'✅' if state.mp >= state.max_mp and not state.ult_blocked else f'({state.mp}MP)'}"
-                elif "💊" in str(item.label):
-                    cnt = sum(v for k, v in state.consumables.items() if "Dược" in k or "Tiên" in k)
-                    item.label = f"4️⃣ 💊({cnt})"
-                    item.disabled = cnt <= 0
-                elif "💙" in str(item.label):
-                    cnt = state.consumables.get("💙 Nước Hồi MP", 0)
-                    item.label = f"5️⃣ 💙({cnt})"
-                    item.disabled = cnt <= 0
-
-    async def interaction_check(self, interaction: discord.Interaction):
+            if not hasattr(item, "label"):
+                continue
+            lbl = str(item.label)
+            if "ULT" in lbl:
+                ready = state.mp >= state.max_mp and not state.ult_blocked
+                item.disabled = not ready
+                item.label = f"3️⃣ ULT {'✅' if ready else f'({state.mp}/{state.max_mp}MP)'}"
+            elif lbl.startswith("4️⃣"):
+                cnt = sum(v for k, v in state.consumables.items() if any(
+                    kw in k for kw in ["Dược", "Tiên", "Elixir"]
+                ))
+                item.label = f"4️⃣ 💊({cnt})"
+                item.disabled = cnt <= 0
+            elif lbl.startswith("5️⃣"):
+                cnt = state.consumables.get("💙 Nước Hồi MP", 0)
+                item.label = f"5️⃣ 💙({cnt})"
+                item.disabled = cnt <= 0
+ 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if str(interaction.user.id) != self.user_id:
-            await interaction.response.send_message("Đây không phải ván của bạn!", ephemeral=True)
+            await interaction.response.send_message(
+                "❌ Đây không phải ván của bạn!", ephemeral=True
+            )
             return False
         return True
-
-    async def on_timeout(self):
+ 
+    # ── Guard chống double-click ──────────────────────────────────────
+    async def _guard(self, interaction) -> bool:
+        if self.finished:
+            await interaction.response.send_message(
+                "⚠️ Trận đã kết thúc. Dùng `k kallen choi` để chơi lại.",
+                ephemeral=True
+            )
+            return False
+        return True
+ 
+    # ══════════════════════════════════════════════════════════════════
+    # NÚT KỸ NĂNG
+    # ══════════════════════════════════════════════════════════════════
+    @discord.ui.button(label="1️⃣ ATK", style=discord.ButtonStyle.danger, row=0)
+    async def btn_atk(self, interaction, button):
+        if not await self._guard(interaction):
+            return
+        await self.do_skill(interaction, "atk")
+ 
+    @discord.ui.button(label="2️⃣ DEF", style=discord.ButtonStyle.primary, row=0)
+    async def btn_def(self, interaction, button):
+        if not await self._guard(interaction):
+            return
+        await self.do_skill(interaction, "def")
+ 
+    @discord.ui.button(label="3️⃣ ULT ✨", style=discord.ButtonStyle.success, row=0)
+    async def btn_ult(self, interaction, button):
+        if not await self._guard(interaction):
+            return
+        await self.do_skill(interaction, "ult")
+ 
+    @discord.ui.button(label="4️⃣ 💊(0)", style=discord.ButtonStyle.secondary, row=1, disabled=True)
+    async def btn_potion(self, interaction, button):
+        if not await self._guard(interaction):
+            return
+        state = self.state
+        priority = [
+            "✨ Tiên Dược Honkai",
+            "🔮 Linh Dược Lớn",
+            "⚗️ Linh Dược Vừa",
+            "🧪 Linh Dược Nhỏ",
+        ]
+        used = next((p for p in priority if state.consumables.get(p, 0) > 0), None)
+        if not used:
+            return await interaction.response.send_message("Không còn thuốc!", ephemeral=True)
+ 
+        state.consumables[used] -= 1
+        heal_amt = 0
+        mp_amt   = 0
+        for v in KF_SHOP_ITEMS.values():
+            if v["name"] == used:
+                heal_amt = v.get("effect", {}).get("heal", 0)
+                mp_amt   = v.get("effect", {}).get("mp", 0)
+                break
+ 
+        if heal_amt:
+            state.heal(heal_amt)
+        if mp_amt:
+            state.gain_mp(mp_amt)
+ 
+        self.update_buttons()
+        log_msg = f"💊 Dùng **{used}** → Hồi **{heal_amt} HP**"
+        if mp_amt:
+            log_msg += f" + **{mp_amt} MP**"
+        await interaction.response.edit_message(
+            embed=kf_battle_embed(state, log_msg), view=self
+        )
+ 
+    @discord.ui.button(label="5️⃣ 💙(0)", style=discord.ButtonStyle.secondary, row=1, disabled=True)
+    async def btn_mp(self, interaction, button):
+        if not await self._guard(interaction):
+            return
+        state = self.state
+        cnt = state.consumables.get("💙 Nước Hồi MP", 0)
+        if cnt <= 0:
+            return await interaction.response.send_message("Không còn nước MP!", ephemeral=True)
+        state.consumables["💙 Nước Hồi MP"] -= 1
+        state.gain_mp(50)
+        self.update_buttons()
+        await interaction.response.edit_message(
+            embed=kf_battle_embed(state, f"💙 **Nước Hồi MP** → +50 MP! MP: **{state.mp}/{state.max_mp}**"),
+            view=self,
+        )
+ 
+    @discord.ui.button(label="🚪 Thoát", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_flee(self, interaction, button):
+        if not await self._guard(interaction):
+            return
+        self.finished = True
+        state = self.state
         kf_active_games.pop(self.user_id, None)
+        self.stop()
+        for item in self.children:
+            item.disabled = True
+ 
+        # Lưu tiến độ
+        ud, kf = get_kf_user(self.user_id)
+        cid = state.char_id
+        kf["char_exp"][cid] = kf["char_exp"].get(cid, 0) + state.total_xp
+        while kf["char_exp"][cid] >= exp_to_level_up(kf["char_levels"].get(cid, 1)):
+            kf["char_exp"][cid] -= exp_to_level_up(kf["char_levels"][cid])
+            kf["char_levels"][cid] = kf["char_levels"].get(cid, 1) + 1
+        for item2, cnt in state.drops.items():
+            kf["inventory"][item2] = kf["inventory"].get(item2, 0) + cnt
+        if state.total_money > 0:
+            ud["money"] = ud.get("money", 0) + state.total_money
+        kf["consumables"] = {k: v for k, v in state.consumables.items() if v > 0}
+        save_kf_user(self.user_id, ud)
+ 
+        embed = discord.Embed(
+            title="🚪 Rút Lui",
+            description=(
+                f"Đã thoát khỏi **{state.chapter['title']}**\n\n"
+                f"⭐ XP lưu: **+{state.total_xp}**\n"
+                f"💰 Tiền lưu: **+{state.total_money:,} 💰**\n"
+                f"📦 {_drop_summary(state.drops)}"
+            ),
+            color=discord.Color.dark_grey(),
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
+ 
+    # ══════════════════════════════════════════════════════════════════
+    # LOGIC CHIẾN ĐẤU (giữ nguyên logic, chỉ bọc try/except)
+    # ══════════════════════════════════════════════════════════════════
+    async def do_skill(self, interaction, skill_key: str):
+        try:
+            await self._do_skill_inner(interaction, skill_key)
+        except Exception as e:
+            print(f"[KF] do_skill error for {self.user_id}: {e}")
+            self.finished = True
+            kf_active_games.pop(self.user_id, None)
+            try:
+                await interaction.response.send_message(
+                    "⚠️ Lỗi chiến đấu! Trận đã kết thúc. Dùng `k kallen thoat` nếu còn kẹt.",
+                    ephemeral=True,
+                )
+            except Exception:
+                pass
+ 
+    async def _do_skill_inner(self, interaction, skill_key: str):
+        state  = self.state
+        char   = KF_CHARACTERS[state.char_id]
+        skill  = char["skills"][skill_key]
+        log    = []
+ 
+        # Kiểm tra MP và ULT block
+        if skill["mp"] > 0 and state.mp < skill["mp"]:
+            return await interaction.response.send_message(
+                f"⚠️ Thiếu **{skill['mp']} MP**! Hiện có **{state.mp} MP**.", ephemeral=True
+            )
+        if skill_key == "ult" and state.ult_blocked:
+            return await interaction.response.send_message("🚫 ULT đang bị phong ấn!", ephemeral=True)
+ 
+        state.turn += 1
+ 
+        # Giảm ult block timer
+        if state.ult_block_turns > 0:
+            state.ult_block_turns -= 1
+            if state.ult_block_turns == 0:
+                state.ult_blocked = False
+                log.append("✅ ULT đã được giải phong!")
+ 
+        # Đốt đầu lượt
+        if state.burn_turns > 0:
+            dmg = state.burn_dmg
+            state.hp = max(1, state.hp - dmg)
+            state.burn_turns -= 1
+            log.append(f"🔥 Bỏng đốt **-{dmg} HP** (còn {state.burn_turns} lượt)")
+ 
+        # Elysia passive heal đầu lượt
+        if state.char_id == "elysia":
+            state.heal(15)
+            log.append("💗 Elysia passive: **+15 HP**")
+ 
+        # Tính CRIT
+        kevin_mult   = 1.0
+        if state.char_id == "kevin":
+            kevin_mult = 1 + min(state.kevin_stacks, 10) * 0.05
+ 
+        crit       = random.random() < state.crit_rate
+        crit_mult  = 1.8 if crit else 1.0
+        seele_dbl  = state.char_id == "seele" and crit
+        if seele_dbl:
+            crit_mult = 2.5
+ 
+        # ─────────────────── PLAYER ACTION ──────────────────────────
+        if skill_key == "atk":
+            state.mp -= skill["mp"]
+            mult = skill["mult"] * kevin_mult
+            if state.wave == 99 and state.char_id == "kallen":
+                mult *= 1.2
+            if state.char_id == "sakura":
+                mult *= 1.25
+            dmg = int(state.atk * mult * crit_mult * random.uniform(0.9, 1.1))
+            state.enemy_hp = max(0, state.enemy_hp - dmg)
+            state.gain_mp(20)
+            if state.char_id == "kevin":
+                state.kevin_stacks = min(state.kevin_stacks + 1, 10)
+            c_str = " 💥**CRIT!**" if crit else ""
+            d_str = " 🦋**+HIT!**" if seele_dbl else ""
+            log.append(f"⚔️ **{skill['name']}**{c_str}{d_str} → 🩸 **{dmg} ST**")
+            if seele_dbl and state.enemy_hp > 0:
+                dmg2 = int(state.atk * skill["mult"] * random.uniform(0.7, 0.9))
+                state.enemy_hp = max(0, state.enemy_hp - dmg2)
+                log.append(f"  🦋 Bướm Đêm tấn công thêm → **{dmg2} ST**")
+            # Aponia stun
+            if state.char_id == "aponia" and random.random() < 0.25:
+                state.stunned = True
+                log.append("  ⛓️ Choáng kẻ thù lượt tiếp!")
+ 
+        elif skill_key == "def":
+            state.mp -= skill["mp"]
+            self._apply_def_skill(state, char, log)
+ 
+        elif skill_key == "ult":
+            state.mp = 0
+            mult = skill["mult"] * kevin_mult
+            if state.wave == 99 and state.char_id == "kallen":
+                mult *= 1.2
+            if state.char_id == "sakura":
+                mult *= 1.25
+            dmg = int(state.atk * mult * crit_mult * random.uniform(0.9, 1.1))
+            state.enemy_hp = max(0, state.enemy_hp - dmg)
+            c_str = " 💥**CRIT!**" if crit else ""
+ 
+            if state.char_id == "elysia":
+                state.heal(50)
+                log.append(f"🌸 **{skill['name']}**{c_str} → **{dmg} ST** + 💗 hồi **50 HP**")
+            elif state.char_id == "pardofelis":
+                state.stunned = True
+                log.append(f"🌋 **{skill['name']}**{c_str} → **{dmg} ST** + 😵 choáng 2 lượt")
+            elif state.char_id == "seele":
+                log.append(f"🦋 **{skill['name']}**{c_str} → **{dmg} ST** ✨ CRIT rate tăng lượt này!")
+            else:
+                log.append(f"✨ **{skill['name']}**{c_str} → 🩸 **{dmg} ST**!")
+            if state.char_id == "kevin":
+                state.kevin_stacks = 0
+ 
+        # Fu Hua kill heal
+        if state.char_id == "fuhua" and state.enemy_hp <= 0 and state.wave != 99:
+            state.heal(30)
+ 
+        # Enemy chết
+        if state.enemy_hp <= 0:
+            await self.on_enemy_die(interaction, log)
+            return
+ 
+        # ─────────────────── ENEMY TURN ─────────────────────────────
+        state.invincible = False
+        self._do_enemy_turn(state, log, interaction)
+ 
+        # Kevin giáp charge
+        if state.char_id == "kevin":
+            state.kevin_charges += 1
+            if state.kevin_charges >= 5:
+                state.shield       = True
+                state.kevin_charges = 0
+                log.append("❄️ **Kevin Giáp**: Tích 5 charge → 🛡️ Tự né đòn tiếp!")
+ 
+        # Reset def boost
+        state.def_boost = 0
+        state.gain_mp(10)
+ 
+        if state.is_dead():
+            await self.on_player_die(interaction, log)
+            return
+ 
+        self.update_buttons()
+        await interaction.response.edit_message(
+            embed=kf_battle_embed(state, "\n".join(log)), view=self
+        )
+ 
+    def _apply_def_skill(self, state, char, log):
+        sk = char["skills"]["def"]
+        cid = state.char_id
+        if cid == "fuhua":
+            state.shield = True
+            log.append(f"🛡️ **{sk['name']}** → ✨ Sẽ né hoàn toàn đòn tiếp theo!")
+        elif cid == "kallen":
+            state.def_boost = 40
+            log.append(f"🛡️ **{sk['name']}** → 🔰 Giảm **40% ST** lượt này!")
+        elif cid == "sakura":
+            state.def_boost = 25
+            log.append(f"📿 **{sk['name']}** → 🌸 Hút **25% ST** thành HP!")
+        elif cid == "otto":
+            state.def_boost = 50
+            log.append(f"⚡ **{sk['name']}** → 🛡️ Giảm **50% ST** + Phản **20%**!")
+        elif cid == "kevin":
+            state.invincible = True
+            state.heal(50)
+            log.append(f"💀 **{sk['name']}** → 🔰 Bất tử lượt này + 💗 Hồi **50 HP**!")
+        elif cid == "elysia":
+            state.heal(60)
+            state.def_boost = 30
+            log.append(f"🤗 **{sk['name']}** → 💗 Hồi **60 HP** + 🛡️ Giảm **30% ST**!")
+        elif cid == "aponia":
+            state.def_boost = 45
+            log.append(f"🙏 **{sk['name']}** → 🛡️ Giảm **45% ST** + Phản **15%**!")
+        elif cid == "seele":
+            state.shield = True
+            log.append(f"👻 **{sk['name']}** → ✨ Né đòn + Phản **0.5x**!")
+        elif cid == "vill_v":
+            state.def_boost = 25
+            log.append(f"🎩 **{sk['name']}** → 🛡️ Giảm **25% ST** + Phản **25%**!")
+        elif cid == "pardofelis":
+            state.def_boost = 50
+            state.heal(20)
+            log.append(f"🐱 **{sk['name']}** → 🛡️ Giảm **50% ST** + 💗 Hồi **20 HP**!")
+        else:
+            state.def_boost = 30
+            log.append(f"🛡️ **{sk['name']}** → Phòng thủ **30%**!")
+ 
+    def _do_enemy_turn(self, state, log, interaction):
+        if state.stunned:
+            log.append(f"😵 **{state.enemy['name']}** bị choáng — bỏ lượt!")
+            state.stunned = False
+            return
+ 
+        enemy   = state.enemy
+        is_boss = state.wave == 99
+ 
+        if is_boss and state.turn % 3 == 0 and enemy.get("skills"):
+            self._boss_special(state, enemy, log)
+        else:
+            raw = int(enemy["atk"] * random.uniform(0.85, 1.15))
+            self._apply_enemy_hit(state, raw, enemy["name"], log)
+ 
+        # Rare boss burn
+        if is_boss and random.random() < 0.08:
+            state.burn_dmg   = 20
+            state.burn_turns = 2
+            log.append("🔥 Boss gây **đốt** → -20 HP/lượt trong 2 lượt!")
+ 
+        # Pardofelis charge khi bị đánh
+        if state.char_id == "pardofelis":
+            state.gain_mp(10)
+ 
+    def _boss_special(self, state, enemy, log):
+        skill_str = random.choice(enemy["skills"])
+        s = skill_str.lower()
+ 
+        if "hồi" in s:
+            nums = [int(w) for w in skill_str.split() if w.isdigit()]
+            heal_a = nums[0] if nums else 200
+            state.enemy_hp = min(state.enemy_max_hp, state.enemy_hp + heal_a)
+            log.append(f"👿 **{skill_str.split('(')[0].strip()}** → 💚 Boss hồi **{heal_a} HP**!")
+            return
+ 
+        if "reset" in s or "50%" in s:
+            state.hp = max(1, state.hp // 2)
+            log.append(f"👿 **{skill_str.split('(')[0].strip()}** → ⚡ HP bạn bị giảm 50%!")
+            return
+ 
+        if "vô hiệu" in s or "phong ấn" in s:
+            state.ult_blocked    = True
+            state.ult_block_turns = 2
+            raw = int(enemy["atk"] * 0.5)
+            actual = state.take_damage(raw)
+            log.append(f"👿 **{skill_str.split('(')[0].strip()}** → 🚫 ULT bị phong ấn + **{actual} ST**!")
+            return
+ 
+        # Damage multiplier
+        if "x" in skill_str:
+            try:
+                mult = float(skill_str.split("x")[1].split(" ")[0].rstrip(")"))
+            except Exception:
+                mult = 2.0
+            raw = int(enemy["atk"] * mult * random.uniform(0.9, 1.1))
+        elif "ST" in skill_str:
+            nums = [int(w) for w in skill_str.split() if w.isdigit()]
+            raw = nums[0] if nums else 80
+        else:
+            raw = enemy["atk"]
+ 
+        self._apply_enemy_hit(state, raw, f"Boss — {skill_str.split('(')[0].strip()}", log)
+ 
+    def _apply_enemy_hit(self, state, raw, source_name, log):
+        actual = state.take_damage(raw)
+        # Phản đòn
+        reflect = 0
+        if state.char_id == "otto" and state.def_boost >= 50:
+            reflect = int(actual * 0.2)
+        elif state.char_id == "vill_v" and state.def_boost >= 25:
+            reflect = int(actual * 0.25)
+        elif state.char_id == "aponia" and state.def_boost >= 45:
+            reflect = int(actual * 0.15)
+        elif state.char_id == "seele" and state.shield:
+            reflect = int(raw * 0.5)
+            actual  = 0  # shield đã né
+            state.shield = False
+ 
+        if reflect:
+            state.enemy_hp = max(0, state.enemy_hp - reflect)
+ 
+        # Sakura hút sát thương
+        if state.char_id == "sakura" and state.def_boost >= 25 and actual > 0:
+            absorb = int(actual * 0.25)
+            state.heal(absorb)
+            log.append(
+                f"👾 **{source_name}** → 🩸 **{actual} ST** | 🌸 Hút **{absorb} HP**"
+                + (f" | Phản **{reflect} ST**" if reflect else "")
+            )
+            return
+ 
+        dmg_str = f"🩸 **{actual} ST**" if actual else "🛡️ **NÉ!**"
+        ref_str = f" | ⚡ Phản **{reflect} ST**" if reflect else ""
+        log.append(f"👾 **{source_name}** → {dmg_str}{ref_str}")
+ 
+    # ══════════════════════════════════════════════════════════════════
+    # ENEMY DIE / PLAYER DIE / FINISH
+    # ══════════════════════════════════════════════════════════════════
+    async def on_enemy_die(self, interaction, log):
+        state   = self.state
+        enemy   = state.enemy
+        is_boss = state.wave == 99
+ 
+        xp = enemy.get("xp", 50)
+        state.total_xp += xp
+        log.append(f"💀 **{enemy['name']}** bị tiêu diệt! ✨ **+{xp} XP**")
+ 
+        if state.char_id == "fuhua" and not is_boss:
+            state.heal(30)
+            log.append("🦅 Fu Hua passive: 💗 Hồi **30 HP**")
+ 
+        # Drop
+        if not is_boss and random.random() < enemy.get("drop_rate", 0.3):
+            drop = enemy.get("drop", "Tinh Thể Honkai 💠")
+            state.drops[drop] = state.drops.get(drop, 0) + 1
+            log.append(f"📦 Drop: **{drop}**!")
+ 
+        if is_boss:
+            self.finished = True
+            await self.finish_chapter(interaction, log)
+            return
+ 
+        if state.wave >= state.chapter["waves"]:
+            # Load boss
+            state.load_boss()
+            boss_intro = (
+                f"\n{'═'*28}\n"
+                f"👿 **BOSS XUẤT HIỆN!**\n"
+                f"🔴 **{state.enemy['name']}**\n"
+                f"*{state.enemy.get('lore', '')}*\n"
+            )
+            for bs in state.enemy.get("skills", []):
+                boss_intro += f"  ⚠️ {bs}\n"
+            self.update_buttons()
+            await interaction.response.edit_message(
+                embed=kf_battle_embed(state, "\n".join(log) + boss_intro, color=discord.Color.dark_red()),
+                view=self,
+            )
+        else:
+            state.next_wave_enemy()
+            log.append(
+                f"\n{'─'*28}\n"
+                f"👾 Wave **{state.wave}/{state.chapter['waves']}**: **{state.enemy['name']}** xuất hiện!"
+            )
+            self.update_buttons()
+            await interaction.response.edit_message(
+                embed=kf_battle_embed(state, "\n".join(log)), view=self
+            )
+ 
+    async def on_player_die(self, interaction, log):
+        self.finished = True
+        kf_active_games.pop(self.user_id, None)
+        self.stop()
+        for item in self.children:
+            item.disabled = True
+ 
+        log.append(f"\n💀 **{KF_CHARACTERS[self.state.char_id]['name']}** đã ngã xuống...")
+ 
+        ud, kf = get_kf_user(self.user_id)
+        state  = self.state
+        cid    = state.char_id
+        kf["char_exp"][cid] = kf["char_exp"].get(cid, 0) + state.total_xp
+        while kf["char_exp"][cid] >= exp_to_level_up(kf["char_levels"].get(cid, 1)):
+            kf["char_exp"][cid] -= exp_to_level_up(kf["char_levels"][cid])
+            kf["char_levels"][cid] = kf["char_levels"].get(cid, 1) + 1
+        for item2, cnt in state.drops.items():
+            kf["inventory"][item2] = kf["inventory"].get(item2, 0) + cnt
+        kf["consumables"] = {k: v for k, v in state.consumables.items() if v > 0}
+        save_kf_user(self.user_id, ud)
+ 
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                title="💀 THẤT BẠI",
+                description="\n".join(log[-6:]) + f"\n\n📦 XP: **+{state.total_xp}** | {_drop_summary(state.drops)}",
+                color=discord.Color.dark_red(),
+            ),
+            view=self,
+        )
+ 
+    async def finish_chapter(self, interaction, log):
+        state   = self.state
+        chapter = state.chapter
+        boss    = chapter["boss"]
+        uid     = self.user_id
+ 
+        kf_active_games.pop(uid, None)
+        self.stop()
+        for item in self.children:
+            item.disabled = True
+ 
+        money_r = chapter["reward_money"]
+        state.total_money += money_r
+        di, dc  = boss.get("drop_item"), boss.get("drop_count", 1)
+        if di:
+            state.drops[di] = state.drops.get(di, 0) + dc
+ 
+        ud, kf = get_kf_user(uid)
+        cid    = state.char_id
+        kf["char_exp"][cid] = kf["char_exp"].get(cid, 0) + state.total_xp
+        lv_ups = []
+        while kf["char_exp"][cid] >= exp_to_level_up(kf["char_levels"].get(cid, 1)):
+            kf["char_exp"][cid] -= exp_to_level_up(kf["char_levels"][cid])
+            kf["char_levels"][cid] = kf["char_levels"].get(cid, 1) + 1
+            lv_ups.append(f"⬆️ **{KF_CHARACTERS[cid]['name']}** lên **Lv{kf['char_levels'][cid]}**!")
+ 
+        for item2, cnt in state.drops.items():
+            kf["inventory"][item2] = kf["inventory"].get(item2, 0) + cnt
+        kf["consumables"] = {k: v for k, v in state.consumables.items() if v > 0}
+        ud["money"] = ud.get("money", 0) + state.total_money
+ 
+        chid = chapter["id"]
+        if chid > kf.get("progress", 0):
+            kf["progress"] = chid
+ 
+        title_r = boss.get("title_reward", "")
+        title_line = ""
+        if title_r and title_r not in ud.get("assets", []):
+            ud.setdefault("assets", []).append(title_r)
+            title_line = f"\n🏷️ **Danh hiệu mới: {title_r}**"
+ 
+        kf["total_boss_kills"] = kf.get("total_boss_kills", 0) + 1
+        save_kf_user(uid, ud)
+        add_history(uid, f"KF C{chid} ✅ (+{state.total_money:,} 💰)")
+ 
+        unlock_line = ""
+        if chid == 5:
+            unlock_line = "\n🌟 **Chapter 6 (SECRET) đã mở khóa!**"
+        elif chid == 6:
+            unlock_line = "\n🌟 **Chapter 7 đã mở khóa!**"
+        elif chid == 8:
+            unlock_line = "\n🌟 **Chapter 9 FINALE đã mở khóa!**"
+ 
+        desc = (
+            chapter["story_end"] +
+            f"\n\n{'═'*28}\n"
+            f"💰 Tiền: **+{state.total_money:,} 💰**\n"
+            f"⭐ XP: **+{state.total_xp}**\n"
+            f"📦 {_drop_summary(state.drops)}"
+            f"{title_line}{unlock_line}"
+        )
+        if lv_ups:
+            desc += "\n" + "\n".join(lv_ups)
+ 
+        result = discord.Embed(
+            title=f"🎉 CHIẾN THẮNG! — {chapter['title']}",
+            description=desc,
+            color=discord.Color.gold(),
+        )
+        result.set_footer(text="k kallen choi → chơi tiếp | k kallen char → nâng cấp nhân vật")
+        await interaction.response.edit_message(embed=result, view=self)
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════
+# FIX 3: kf_battle_embed MỚI — GIAO DIỆN ĐẸP HƠN
+# THAY THẾ function kf_battle_embed cũ
+# ══════════════════════════════════════════════════════════════════════
+ 
+def kf_battle_embed(state: KFGameState, msg: str = "", color=None) -> discord.Embed:
+    char    = KF_CHARACTERS[state.char_id]
+    is_boss = state.wave == 99
+ 
+    if color is None:
+        color = discord.Color.dark_red() if is_boss else discord.Color.purple()
+ 
+    # ── Thanh HP/MP ──────────────────────────────────────────────────
+    hp_pct = max(0, state.hp) / state.max_hp
+    mp_pct = state.mp / state.max_mp
+ 
+    def hp_bar(cur, max_, length=12):
+        if max_ == 0:
+            return "⬛" * length
+        r = max(0, min(cur, max_)) / max_
+        f = int(r * length)
+        fill = "🟩" if r > 0.5 else "🟨" if r > 0.25 else "🟥"
+        return fill * f + "⬛" * (length - f)
+ 
+    def mp_bar_fn(cur, max_, length=8):
+        if max_ == 0:
+            return "⬛" * length
+        f = int(min(cur, max_) / max_ * length)
+        return "🟦" * f + "⬜" * (length - f)
+ 
+    def enemy_bar(cur, max_, length=12):
+        if max_ == 0:
+            return "⬛" * length
+        r = max(0, min(cur, max_)) / max_
+        f = int(r * length)
+        fill = "🟥" if r > 0.5 else "🟧" if r > 0.25 else "💔"
+        return fill * f + "⬛" * (length - f)
+ 
+    # ── Trạng thái nhân vật ──────────────────────────────────────────
+    status_icons = []
+    if state.invincible:   status_icons.append("🔰")
+    if state.shield:       status_icons.append("✨NÉ")
+    if state.def_boost>0:  status_icons.append(f"🛡️+{int(state.def_boost)}%")
+    if state.burn_turns>0: status_icons.append(f"🔥{state.burn_dmg}×{state.burn_turns}")
+    if state.ult_blocked:  status_icons.append("🚫ULT")
+    if state.kevin_stacks: status_icons.append(f"⚡×{state.kevin_stacks}")
+    status_str = "  ".join(status_icons)
+ 
+    # ── Tiêu đề ──────────────────────────────────────────────────────
+    wave_str = "BOSS 👿" if is_boss else f"Wave {state.wave}/{state.chapter['waves']}"
+    title    = f"{'⚔️' if not is_boss else '💀'} {state.chapter['title'].split(':')[1].strip()} [{wave_str}]"
+ 
+    embed = discord.Embed(title=title, color=color)
+ 
+    # ── Nhân vật ─────────────────────────────────────────────────────
+    hp_display = hp_bar(state.hp, state.max_hp)
+    mp_display = mp_bar_fn(state.mp, state.max_mp)
+    lv = state.lv
+ 
+    player_val = (
+        f"❤️ `{hp_display}` **{max(0,state.hp)}/{state.max_hp}**\n"
+        f"💙 `{mp_display}` **{state.mp}/{state.max_mp} MP**"
+    )
+    if status_str:
+        player_val += f"\n{status_str}"
+ 
+    embed.add_field(
+        name  = f"🗡️ {char['name']}  Lv{lv}  •  {char['element']}",
+        value = player_val,
+        inline= True,
+    )
+ 
+    # ── Kẻ thù ───────────────────────────────────────────────────────
+    if state.enemy:
+        stun_str = "  😵 CHOÁNG" if state.stunned else ""
+        e_hp_bar = enemy_bar(state.enemy_hp, state.enemy_max_hp)
+        embed.add_field(
+            name  = f"{'👿 BOSS' if is_boss else '👾'} {state.enemy['name']}{stun_str}",
+            value = f"❤️ `{e_hp_bar}` **{max(0,state.enemy_hp):,}/{state.enemy_max_hp:,}**",
+            inline= True,
+        )
+ 
+    embed.add_field(name="\u200b", value="\u200b", inline=False)  # spacer
+ 
+    # ── Kỹ năng ──────────────────────────────────────────────────────
+    skills    = char["skills"]
+    ult_rdy   = state.mp >= state.max_mp and not state.ult_blocked
+    ult_label = "✅ Sẵn sàng!" if ult_rdy else (f"🚫 Phong ấn" if state.ult_blocked else f"⏳ {state.mp}/{state.max_mp} MP")
+ 
+    skill_val = (
+        f"**1️⃣ {skills['atk']['name']}**\n"
+        f"   ↳ {skills['atk']['desc']}\n"
+        f"**2️⃣ {skills['def']['name']}** *(MP: {skills['def']['mp']})*\n"
+        f"   ↳ {skills['def']['desc']}\n"
+        f"**3️⃣ {skills['ult']['name']}** ─ {ult_label}\n"
+        f"   ↳ {skills['ult']['desc']}\n"
+        f"**4️⃣** 💊 Linh Dược  •  **5️⃣** 💙 Nước MP  •  **🚪** Thoát"
+    )
+    embed.add_field(name="🎮 Kỹ Năng", value=skill_val, inline=False)
+ 
+    # ── Diễn biến ────────────────────────────────────────────────────
+    if msg:
+        # Giới hạn độ dài
+        lines = msg.split("\n")
+        if len(lines) > 10:
+            lines = lines[-10:]
+        embed.add_field(
+            name  = "📣 Diễn Biến",
+            value = "\n".join(lines)[:950],
+            inline= False,
+        )
+ 
+    # ── Footer ───────────────────────────────────────────────────────
+    embed.set_footer(
+        text=(
+            f"Lượt {state.turn}  •  "
+            f"⭐ XP: +{state.total_xp}  •  "
+            f"💰 +{state.total_money:,}  •  "
+            f"📦 {len(state.drops)} loại drop"
+        )
+    )
+    return embed
 
     @discord.ui.button(label="1️⃣ ATK", style=discord.ButtonStyle.danger)
     async def btn_atk(self, interaction, button):
@@ -6982,6 +7642,45 @@ async def kallen(ctx):
     embed.set_footer(text="Kallen Fantasy v2 — Expanded Universe")
     await ctx.reply(embed=embed, mention_author=False)
 
+@kallen.command(aliases=['exit', 'quit', 'leave'])
+async def thoat(ctx):
+    """Thoát khẩn cấp khỏi trận đấu nếu bị kẹt."""
+    uid = str(ctx.author.id)
+    if uid in kf_active_games:
+        state = kf_active_games.pop(uid)
+        embed = discord.Embed(
+            title="🚪 THOÁT KHẨN CẤP",
+            description=(
+                f"Đã thoát khỏi **{state.chapter['title']}**.\n\n"
+                f"📊 XP đã tích: **+{state.total_xp}**\n"
+                f"💰 Tiền đã nhận: **+{state.total_money:,} 💰**\n"
+                f"📦 Drops: {_drop_summary(state.drops)}\n\n"
+                f"*Dùng `k kallen choi` để bắt đầu lại.*"
+            ),
+            color=discord.Color.orange()
+        )
+        # Vẫn lưu XP và drops
+        ud, kf = get_kf_user(uid)
+        cid = state.char_id
+        kf["char_exp"][cid] = kf["char_exp"].get(cid, 0) + state.total_xp
+        while kf["char_exp"][cid] >= exp_to_level_up(kf["char_levels"].get(cid, 1)):
+            kf["char_exp"][cid] -= exp_to_level_up(kf["char_levels"][cid])
+            kf["char_levels"][cid] = kf["char_levels"].get(cid, 1) + 1
+        for item, cnt in state.drops.items():
+            kf["inventory"][item] = kf["inventory"].get(item, 0) + cnt
+        if state.total_money > 0:
+            ud["money"] = ud.get("money", 0) + state.total_money
+        kf["consumables"] = {k: v for k, v in state.consumables.items() if v > 0}
+        save_kf_user(uid, ud)
+        await ctx.reply(embed=embed, mention_author=False)
+    else:
+        await ctx.reply(
+            embed=discord.Embed(
+                description="✅ Bạn không đang trong trận nào.",
+                color=discord.Color.green()
+            ),
+            mention_author=False
+        )
 
 @kallen.command(aliases=['start', 'play'])
 async def choi(ctx):
