@@ -24,7 +24,7 @@ bot.remove_command('help')
 # =====================================================================
 try:
     genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
-    AI_MODEL = genai.GenerativeModel("gemini-2.5-flash")
+    AI_MODEL = genai.GenerativeModel("gemini-3.5-flash")
 except Exception as e:
     print(f"[WARN] Không khởi tạo được AI client: {e}")
     AI_MODEL = None
