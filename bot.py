@@ -37,7 +37,7 @@ async def get_ai_reply(prompt: str, username: str) -> str:
         return "⚠️ AI chưa được cấu hình! Báo admin thiết lập GEMINI_API_KEY."
     try:
         system_prompt = (
-            "Bạn là trợ lý AI thân thiện trong một Discord server tên KYO CLUB. "
+            "Bạn là trợ lý AI thân thiện trong một Discord server "
             "Trả lời ngắn gọn, tự nhiên, dùng tiếng Việt trừ khi được hỏi bằng ngôn ngữ khác. "
             "Không dùng markdown quá phức tạp, phù hợp hiển thị trong Discord."
         )
