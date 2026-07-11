@@ -8319,6 +8319,38 @@ async def on_message_edit(before, after):
 
     except Exception as e:
         print(f"[WARN] on_message_edit log lỗi: {e}")
+@bot.command(aliases=['sendchat', 'chatas'])
+@commands.has_permissions(administrator=True)
+async def kchat(ctx, channel: discord.TextChannel, *, message: str):
+    """Bot gửi tin nhắn thay bạn vào kênh chỉ định. Dùng: k kchat #kênh <nội dung>"""
+    try:
+        await channel.send(message)
+    except discord.Forbidden:
+        return await ctx.reply(
+            embed=discord.Embed(description=f"⚠️ Bot không có quyền gửi tin nhắn tại {channel.mention}!", color=discord.Color.red()),
+            mention_author=False
+        )
+    except Exception as e:
+        return await ctx.reply(
+            embed=discord.Embed(description=f"⚠️ Lỗi: {e}", color=discord.Color.red()),
+            mention_author=False
+        )
+
+    # Xóa lệnh gốc để không lộ ai đã gửi (tùy chọn, có thể bỏ nếu không cần)
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
+    # Gửi xác nhận riêng tư (tự xóa sau 5s) để bạn biết đã gửi thành công
+    try:
+        confirm = await ctx.send(embed=discord.Embed(
+            description=f"✅ Đã gửi tin nhắn đến {channel.mention}",
+            color=discord.Color.green()
+        ), delete_after=5)
+    except Exception:
+        pass
+
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
