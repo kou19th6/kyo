@@ -8201,6 +8201,80 @@ async def raid(ctx, *, raid_name: str = None):
     await ctx.reply(embed=embed, view=view, mention_author=False)
 
 # =====================================================================
+# LOG TIN NHẮN BỊ XÓA
+# =====================================================================
+@bot.command(aliases=['setlogchannel', 'setlog'])
+@commands.has_permissions(administrator=True)
+async def dathenhkenh(ctx, *, args=""):
+    """Đặt kênh lưu log tin nhắn bị xóa. Dùng: k setlog #kênh | k setlog clear"""
+    server_id = str(ctx.guild.id)
+
+    if "clear" in args.lower() or "xoa" in args.lower():
+        config_col.update_one({"_id": server_id}, {"$unset": {"log_channel": ""}})
+        if server_id in CONFIG_CACHE and "log_channel" in CONFIG_CACHE[server_id]:
+            del CONFIG_CACHE[server_id]["log_channel"]
+        return await ctx.send(embed=discord.Embed(description="✅ Đã tắt log tin nhắn xóa.", color=discord.Color.green()))
+
+    mentions = ctx.message.channel_mentions
+    if not mentions:
+        return await ctx.send(embed=discord.Embed(description="⚠️ VD: `k setlog #log-tin-nhan`", color=discord.Color.red()))
+
+    channel_id = mentions[0].id
+    config_col.update_one({"_id": server_id}, {"$set": {"log_channel": channel_id}}, upsert=True)
+    if server_id not in CONFIG_CACHE:
+        CONFIG_CACHE[server_id] = {}
+    CONFIG_CACHE[server_id]["log_channel"] = channel_id
+
+    await ctx.send(embed=discord.Embed(
+        description=f"✅ Tin nhắn bị xóa sẽ được lưu tại {mentions[0].mention}",
+        color=discord.Color.green()
+    ))
+@bot.event
+async def on_message_delete(message):
+    if message.author.bot:
+        return
+    if not message.guild:
+        return
+
+    try:
+        server_config = load_server_config(message.guild.id)
+        log_channel_id = server_config.get("log_channel")
+        if not log_channel_id:
+            return
+
+        log_channel = message.guild.get_channel(log_channel_id)
+        if not log_channel:
+            return
+
+        content = message.content if message.content else "No text content"
+
+        embed = discord.Embed(
+            title="🗑️ Tin Nhắn Đã Xóa",
+            color=discord.Color.red(),
+            timestamp=datetime.now()
+        )
+        embed.set_author(name=str(message.author), icon_url=message.author.display_avatar.url)
+        embed.add_field(name="User", value=f"{message.author} (`{message.author.id}`)", inline=False)
+        embed.add_field(name="Nội Dung", value=content[:1000], inline=False)
+        embed.add_field(name="Tại Khu Vực", value=message.channel.mention, inline=False)
+
+        files = []
+        # Cố gắng tải lại ảnh/tệp đính kèm trước khi CDN xóa hẳn
+        for attachment in message.attachments:
+            try:
+                file = await attachment.to_file()
+                files.append(file)
+                if attachment.content_type and "image" in attachment.content_type:
+                    embed.set_image(url=f"attachment://{file.filename}")
+            except Exception as e:
+                print(f"[WARN] Không tải được attachment khi log xóa: {e}")
+
+        await log_channel.send(embed=embed, files=files if files else discord.utils.MISSING)
+
+    except Exception as e:
+        print(f"[WARN] on_message_delete log lỗi: {e}")
+
+# =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
 keep_alive() 
