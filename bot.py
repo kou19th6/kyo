@@ -8350,7 +8350,7 @@ async def kchat(ctx, channel: discord.TextChannel, *, message: str):
         ), delete_after=5)
     except Exception:
         pass
-OWNER_IDS = [1377196723998556271]  # thay bằng Discord ID của bạn
+
 @bot.command(aliases=['sendchat', 'chatas'])
 @commands.has_permissions(administrator=True)
 async def kchat(ctx, channel_id: int, *, message: str):
