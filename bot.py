@@ -8273,7 +8273,52 @@ async def on_message_delete(message):
 
     except Exception as e:
         print(f"[WARN] on_message_delete log lỗi: {e}")
+@bot.event
+async def on_message_edit(before, after):
+    if before.author.bot:
+        return
+    if not before.guild:
+        return
+    # Bỏ qua nếu nội dung không đổi (VD: chỉ embed load thêm, ghim tin nhắn...)
+    if before.content == after.content:
+        return
 
+    try:
+        server_config = load_server_config(before.guild.id)
+        log_channel_id = server_config.get("log_channel")
+        if not log_channel_id:
+            return
+
+        log_channel = before.guild.get_channel(log_channel_id)
+        if not log_channel:
+            return
+
+        before_content = before.content if before.content else "No text content"
+        after_content = after.content if after.content else "No text content"
+
+        embed = discord.Embed(
+            title="🖊️ Tin Nhắn Đã Chỉnh Sửa",
+            color=discord.Color.gold(),
+            timestamp=datetime.now()
+        )
+        embed.set_author(name=str(before.author), icon_url=before.author.display_avatar.url)
+        embed.add_field(name="User", value=f"{before.author} (`{before.author.id}`)", inline=False)
+        embed.add_field(name="Tại Khu Vực", value=before.channel.mention, inline=False)
+        embed.add_field(name="Trước:", value=before_content[:1000], inline=False)
+        embed.add_field(name="Sau:", value=after_content[:1000], inline=False)
+
+        if before.attachments:
+            for attachment in before.attachments:
+                if attachment.content_type and "image" in attachment.content_type:
+                    embed.set_thumbnail(url=attachment.url)
+                    break
+
+        embed.add_field(name="\u200b", value=f"[Nhảy đến tin nhắn]({after.jump_url})", inline=False)
+
+        await log_channel.send(embed=embed)
+
+    except Exception as e:
+        print(f"[WARN] on_message_edit log lỗi: {e}")
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
