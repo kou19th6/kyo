@@ -8441,6 +8441,232 @@ async def kchat(ctx, channel_id: int, *, message: str):
     except Exception:
         pass
 # =====================================================================
+# SAO CHÉP SERVER (CLONE) - Copy roles & kênh sang server khác
+# KHÔNG xóa gì ở server đích, chỉ tạo mới giống server nguồn
+# Dán đoạn này vào bot.py, TRƯỚC dòng keep_alive()
+# Yêu cầu: OWNER_IDS đã được định nghĩa (đã có sẵn trong bot.py của bạn)
+# =====================================================================
+
+class CloneConfirmView(discord.ui.View):
+    def __init__(self, author, source_guild, dest_guild):
+        super().__init__(timeout=60)
+        self.author = author
+        self.source_guild = source_guild
+        self.dest_guild = dest_guild
+        self.confirmed = False
+
+    @discord.ui.button(label="✅ Xác nhận sao chép", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        self.confirmed = True
+        for c in self.children:
+            c.disabled = True
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                description="🔄 Bắt đầu sao chép... Quá trình có thể mất vài phút.",
+                color=discord.Color.blue()
+            ),
+            view=self
+        )
+        self.stop()
+
+    @discord.ui.button(label="❌ Hủy", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        for c in self.children:
+            c.disabled = True
+        await interaction.response.edit_message(
+            embed=discord.Embed(description="❌ Đã hủy sao chép.", color=discord.Color.dark_grey()),
+            view=self
+        )
+        self.stop()
+
+
+@bot.command(aliases=['clone', 'copyserver'])
+async def saochep(ctx, dest_guild_id: int):
+    """Sao chép toàn bộ role + kênh từ server hiện tại sang server đích (không xóa gì ở đích)."""
+    if ctx.author.id not in OWNER_IDS:
+        return await ctx.reply("⛔ Chỉ chủ bot mới được dùng lệnh này!", mention_author=False)
+
+    source_guild = ctx.guild
+    dest_guild = bot.get_guild(dest_guild_id)
+
+    if not dest_guild:
+        return await ctx.reply(embed=discord.Embed(
+            description="⚠️ Bot không có trong server đích hoặc ID sai! Mời bot vào server đó trước.",
+            color=discord.Color.red()
+        ), mention_author=False)
+
+    dst_me = dest_guild.me
+    if not (dst_me.guild_permissions.manage_roles and dst_me.guild_permissions.manage_channels):
+        return await ctx.reply(embed=discord.Embed(
+            description="⚠️ Bot thiếu quyền `Manage Roles` / `Manage Channels` ở server đích!",
+            color=discord.Color.red()
+        ), mention_author=False)
+
+    embed = discord.Embed(
+        title="⚠️ XÁC NHẬN SAO CHÉP SERVER",
+        description=(
+            f"Nguồn: **{source_guild.name}** ({len(source_guild.roles)} roles, {len(source_guild.channels)} kênh)\n"
+            f"Đích: **{dest_guild.name}**\n\n"
+            f"Sẽ **tạo mới** toàn bộ role & kênh giống hệt server nguồn vào server đích.\n"
+            f"⚠️ Không xóa dữ liệu cũ ở server đích, chỉ thêm vào.\n"
+            f"⏳ Quá trình có thể mất nhiều phút do giới hạn Discord API."
+        ),
+        color=discord.Color.orange()
+    )
+    view = CloneConfirmView(ctx.author, source_guild, dest_guild)
+    await ctx.reply(embed=embed, view=view, mention_author=False)
+    await view.wait()
+
+    if not view.confirmed:
+        return
+
+    status_msg = await ctx.send(embed=discord.Embed(description="🔄 Đang sao chép Roles...", color=discord.Color.blue()))
+
+    # ── BƯỚC 1: SAO CHÉP ROLES ──────────────────────────────────────
+    role_map = {}  # {source_role_id: dest_role}
+    source_roles = [r for r in source_guild.roles if r.name != "@everyone" and not r.managed]
+    source_roles_sorted = sorted(source_roles, key=lambda r: r.position)
+
+    for role in source_roles_sorted:
+        try:
+            new_role = await dest_guild.create_role(
+                name=role.name,
+                permissions=role.permissions,
+                colour=role.colour,
+                hoist=role.hoist,
+                mentionable=role.mentionable,
+                reason=f"Sao chép từ {source_guild.name} bởi {ctx.author}"
+            )
+            role_map[role.id] = new_role
+            await asyncio.sleep(0.7)  # tránh rate limit
+        except discord.Forbidden:
+            continue
+        except Exception as e:
+            print(f"[CLONE] Lỗi tạo role {role.name}: {e}")
+            continue
+
+    # Sắp xếp lại vị trí role cho đúng thứ tự (role bot phải nằm trên các role mới)
+    try:
+        positions = {}
+        for src_role in source_roles_sorted:
+            if src_role.id in role_map:
+                positions[role_map[src_role.id]] = src_role.position
+        if positions:
+            await dest_guild.edit_role_positions(positions=positions)
+    except Exception as e:
+        print(f"[CLONE] Lỗi sắp xếp vị trí role: {e}")
+
+    await status_msg.edit(embed=discord.Embed(
+        description=f"✅ Đã sao chép **{len(role_map)}/{len(source_roles)}** roles!\n🔄 Đang sao chép Kênh...",
+        color=discord.Color.blue()
+    ))
+
+    # ── BƯỚC 2: SAO CHÉP CATEGORIES + CHANNELS ──────────────────────
+    def convert_overwrites(source_overwrites):
+        """Chuyển permission overwrites từ role nguồn sang role đích (bỏ qua overwrite theo member cụ thể)."""
+        new_overwrites = {}
+        for target, overwrite in source_overwrites.items():
+            if isinstance(target, discord.Role):
+                if target.name == "@everyone":
+                    new_overwrites[dest_guild.default_role] = overwrite
+                elif target.id in role_map:
+                    new_overwrites[role_map[target.id]] = overwrite
+        return new_overwrites
+
+    category_map = {}
+    channel_count = 0
+    total_channels = len(source_guild.channels)
+
+    categories_sorted = sorted(source_guild.categories, key=lambda c: c.position)
+    for cat in categories_sorted:
+        try:
+            overwrites = convert_overwrites(cat.overwrites)
+            new_cat = await dest_guild.create_category(
+                name=cat.name,
+                overwrites=overwrites,
+                reason=f"Sao chép từ {source_guild.name}"
+            )
+            category_map[cat.id] = new_cat
+            channel_count += 1
+            await asyncio.sleep(0.7)
+        except Exception as e:
+            print(f"[CLONE] Lỗi tạo category {cat.name}: {e}")
+
+    other_channels = [c for c in source_guild.channels if not isinstance(c, discord.CategoryChannel)]
+    other_channels_sorted = sorted(other_channels, key=lambda c: c.position)
+
+    for ch in other_channels_sorted:
+        try:
+            overwrites = convert_overwrites(ch.overwrites)
+            parent_cat = category_map.get(ch.category_id) if ch.category_id else None
+
+            if isinstance(ch, discord.TextChannel):
+                await dest_guild.create_text_channel(
+                    name=ch.name,
+                    category=parent_cat,
+                    topic=ch.topic,
+                    nsfw=ch.nsfw,
+                    slowmode_delay=ch.slowmode_delay,
+                    overwrites=overwrites,
+                    reason=f"Sao chép từ {source_guild.name}"
+                )
+            elif isinstance(ch, discord.VoiceChannel):
+                await dest_guild.create_voice_channel(
+                    name=ch.name,
+                    category=parent_cat,
+                    bitrate=min(ch.bitrate, dest_guild.bitrate_limit),
+                    user_limit=ch.user_limit,
+                    overwrites=overwrites,
+                    reason=f"Sao chép từ {source_guild.name}"
+                )
+            elif isinstance(ch, discord.StageChannel):
+                await dest_guild.create_stage_channel(
+                    name=ch.name,
+                    category=parent_cat,
+                    overwrites=overwrites,
+                    reason=f"Sao chép từ {source_guild.name}"
+                )
+            elif isinstance(ch, discord.ForumChannel):
+                await dest_guild.create_forum(
+                    name=ch.name,
+                    category=parent_cat,
+                    topic=ch.topic,
+                    overwrites=overwrites,
+                    reason=f"Sao chép từ {source_guild.name}"
+                )
+            else:
+                continue
+
+            channel_count += 1
+            await asyncio.sleep(0.7)
+
+            if channel_count % 5 == 0:
+                await status_msg.edit(embed=discord.Embed(
+                    description=f"🔄 Đang sao chép Kênh... ({channel_count}/{total_channels})",
+                    color=discord.Color.blue()
+                ))
+        except discord.Forbidden:
+            continue
+        except Exception as e:
+            print(f"[CLONE] Lỗi tạo kênh {ch.name}: {e}")
+            continue
+
+    final_embed = discord.Embed(
+        title="✅ SAO CHÉP HOÀN TẤT!",
+        description=(
+            f"Nguồn: **{source_guild.name}**\n"
+            f"Đích: **{dest_guild.name}**\n\n"
+            f"📋 Roles: **{len(role_map)}/{len(source_roles)}**\n"
+            f"📁 Kênh & Category: **{channel_count}/{total_channels}**"
+        ),
+        color=discord.Color.green()
+    )
+    await status_msg.edit(embed=final_embed)
+# =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
 keep_alive() 
