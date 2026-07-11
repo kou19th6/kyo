@@ -42,6 +42,9 @@ async def get_ai_reply(prompt: str, username: str) -> str:
         full_prompt = f"{system_prompt}\n\n{username} hỏi: {prompt}"
         response = AI_MODEL.generate_content(full_prompt)
         return response.text
+    except Exception as e:
+        print(f"[ERROR] AI error: {e}")
+        return "⚠️ AI đang gặp sự cố, thử lại sau nhé!"
 # =====================================================================
 # KHO ẢNH GIF ĐỘNG
 # =====================================================================
