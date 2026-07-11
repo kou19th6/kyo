@@ -8450,6 +8450,6 @@ async def kchat(ctx, channel_id: int, *, message: str):
 keep_alive() 
 
 TOKEN_PART_1 = 'MTUxODUwMzkzNDIyNDg5NjAwMA.GyKHSc.'
-TOKEN_PART_2 = 'doan_2'
+TOKEN_PART_2 = 'WCjwsbS87_itRFAJxPTpDOCbFcmmjhQdcDSDU0'
 
 bot.run(TOKEN_PART_1 + TOKEN_PART_2)
