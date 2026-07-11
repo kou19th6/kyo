@@ -23,7 +23,7 @@ bot.remove_command('help')
 # AI TRẢ LỜI KHI TAG BOT
 # =====================================================================
 try:
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY", "GEMINI_API_KEY-2"))
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY", "GEMINI_API_KEY-2", "GEMINI_API_KEY-3", "GEMINI_API_KEY-4", "GEMINI_API_KEY-5"))
     AI_MODEL = genai.GenerativeModel("gemini-3.5-flash")
 except Exception as e:
     print(f"[WARN] Không khởi tạo được AI client: {e}")
