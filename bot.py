@@ -23,7 +23,7 @@ bot.remove_command('help')
 # AI TRẢ LỜI KHI TAG BOT
 # =====================================================================
 try:
-    AI_CLIENT = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    AI_CLIENT = genai.configure(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
 except Exception as e:
     print(f"[WARN] Không khởi tạo được AI client: {e}")
     AI_CLIENT = None
