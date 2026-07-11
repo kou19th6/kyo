@@ -8322,7 +8322,7 @@ async def on_message_edit(before, after):
 # =====================================================================
 # KCHAT - GỬI TIN NHẮN XUYÊN SERVER (CHỈ OWNER)
 # =====================================================================
-OWNER_IDS = [1377196723998556271]  # Discord ID của bạn
+OWNER_IDS = [kou19th6]  # Discord ID của bạn
 KCHAT_SENT_IDS = set()  # Lưu ID tin nhắn gửi qua kchat để loại khỏi log
 
 @bot.command(aliases=['sendchat', 'chatas'])
