@@ -23,7 +23,7 @@ bot.remove_command('help')
 # AI TRẢ LỜI KHI TAG BOT
 # =====================================================================
 try:
-    AI_CLIENT = anthropic.Anthropic(api_key=os.getenv("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", ""))
+    AI_CLIENT = anthropic.Anthropic(api_key=os.getenv("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", "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"))
 except Exception as e:
     print(f"[WARN] Không khởi tạo được AI client: {e}")
     AI_CLIENT = None
@@ -36,7 +36,7 @@ async def get_ai_reply(prompt: str, username: str) -> str:
         return "⚠️ AI chưa được cấu hình! Báo admin thiết lập ANTHROPIC_API_KEY."
     try:
         response = AI_CLIENT.messages.create(
-            model="claude-3-5-haiku-20241022",
+            model="claude-3-5-haiku",
             max_tokens=600,
             system=(
                 "Bạn là trợ lý AI thân thiện trong một Discord server tên KYO CLUB. "
