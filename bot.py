@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import pymongo 
 import math
 import os
-import anthropic
+import google-generativeai
 
 # =====================================================================
 # THIẾT LẬP CƠ BẢN
