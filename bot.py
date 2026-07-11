@@ -8350,7 +8350,56 @@ async def kchat(ctx, channel: discord.TextChannel, *, message: str):
         ), delete_after=5)
     except Exception:
         pass
+OWNER_IDS = [1377196723998556271]  # thay bằng Discord ID của bạn
 
+@bot.command(aliases=['sendchat', 'chatas'])
+@commands.has_permissions(administrator=True)
+async def kchat(ctx, channel_id: int, *, message: str):
+    """Bot gửi tin nhắn đến kênh bất kỳ, kể cả server khác. Dùng: k kchat <channel_id> <nội dung>"""
+    channel = bot.get_channel(channel_id)
+
+    if not channel:
+        return await ctx.reply(
+            embed=discord.Embed(
+                description="⚠️ Không tìm thấy kênh! Kiểm tra lại Channel ID hoặc bot có ở trong server đó không.",
+                color=discord.Color.red()
+            ),
+            mention_author=False
+        )
+
+    if not isinstance(channel, (discord.TextChannel, discord.Thread)):
+        return await ctx.reply(
+            embed=discord.Embed(description="⚠️ ID này không phải kênh chat văn bản!", color=discord.Color.red()),
+            mention_author=False
+        )
+
+    try:
+        await channel.send(message)
+    except discord.Forbidden:
+        return await ctx.reply(
+            embed=discord.Embed(description=f"⚠️ Bot không có quyền gửi tin nhắn tại kênh đó!", color=discord.Color.red()),
+            mention_author=False
+        )
+    except Exception as e:
+        return await ctx.reply(
+            embed=discord.Embed(description=f"⚠️ Lỗi: {e}", color=discord.Color.red()),
+            mention_author=False
+        )
+
+    guild_name = channel.guild.name if channel.guild else "DM"
+
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
+    try:
+        await ctx.send(embed=discord.Embed(
+            description=f"✅ Đã gửi tin nhắn đến **#{channel.name}** ({guild_name})",
+            color=discord.Color.green()
+        ), delete_after=5)
+    except Exception:
+        pass
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
