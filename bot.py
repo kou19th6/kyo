@@ -24,7 +24,7 @@ bot.remove_command('help')
 # =====================================================================
 try:
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    AI_MODEL = genai.GenerativeModel("gemini-2.5-flash-lite")
+    AI_MODEL = genai.GenerativeModel("gemini-3.5-flash")
 except Exception as e:
     print(f"[WARN] Không khởi tạo được AI client: {e}")
     AI_MODEL = None
@@ -33,8 +33,6 @@ ai_cooldowns = {}
 AI_COOLDOWN_SECONDS = 8
 
 async def get_ai_reply(prompt: str, username: str) -> str:
-    if not AI_MODEL:
-        return "⚠️ AI chưa được cấu hình! Báo admin thiết lập GEMINI_API_KEY."
     try:
         system_prompt = (
             "Bạn là trợ lý AI thân thiện trong một Discord server "
