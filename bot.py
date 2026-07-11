@@ -36,7 +36,7 @@ async def get_ai_reply(prompt: str, username: str) -> str:
         return "⚠️ AI chưa được cấu hình! Báo admin thiết lập ANTHROPIC_API_KEY."
     try:
         response = AI_CLIENT.messages.create(
-            model="claude-haiku-3-5",
+            model="claude-3-5-haiku-20241022",
             max_tokens=600,
             system=(
                 "Bạn là trợ lý AI thân thiện trong một Discord server tên KYO CLUB. "
