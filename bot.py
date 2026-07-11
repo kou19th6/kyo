@@ -23,29 +23,27 @@ bot.remove_command('help')
 # AI TRẢ LỜI KHI TAG BOT
 # =====================================================================
 try:
-    AI_CLIENT = genai.configure(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
+    AI_MODEL = genai.GenerativeModel("gemini-2.5-flash")
 except Exception as e:
     print(f"[WARN] Không khởi tạo được AI client: {e}")
-    AI_CLIENT = None
+    AI_MODEL = None
 
 ai_cooldowns = {}
 AI_COOLDOWN_SECONDS = 8
 
 async def get_ai_reply(prompt: str, username: str) -> str:
-    if not AI_CLIENT:
-        return "⚠️ AI chưa được cấu hình! Báo admin thiết lập ANTHROPIC_API_KEY."
+    if not AI_MODEL:
+        return "⚠️ AI chưa được cấu hình! Báo admin thiết lập GEMINI_API_KEY."
     try:
-        response = AI_CLIENT.messages.create(
-            model="gemini-2.5-flash",
-            max_tokens=600,
-            system=(
-                "Bạn là trợ lý AI thân thiện trong một Discord server tên KYO CLUB. "
-                "Trả lời ngắn gọn, tự nhiên, dùng tiếng Việt trừ khi được hỏi bằng ngôn ngữ khác. "
-                "Không dùng markdown quá phức tạp, phù hợp hiển thị trong Discord."
-            ),
-            messages=[{"role": "user", "content": f"{username} hỏi: {prompt}"}]
+        system_prompt = (
+            "Bạn là trợ lý AI thân thiện trong một Discord server tên KYO CLUB. "
+            "Trả lời ngắn gọn, tự nhiên, dùng tiếng Việt trừ khi được hỏi bằng ngôn ngữ khác. "
+            "Không dùng markdown quá phức tạp, phù hợp hiển thị trong Discord."
         )
-        return response.content[0].text
+        full_prompt = f"{system_prompt}\n\n{username} hỏi: {prompt}"
+        response = AI_MODEL.generate_content(full_prompt)
+        return response.text
     except Exception as e:
         print(f"[ERROR] AI error: {e}")
         return "⚠️ AI đang gặp sự cố, thử lại sau nhé!"
