@@ -1,4 +1,4 @@
 discord.py
 Flask
 pymongo
-anthropic
+google-generativeai
