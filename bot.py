@@ -8319,42 +8319,18 @@ async def on_message_edit(before, after):
 
     except Exception as e:
         print(f"[WARN] on_message_edit log lỗi: {e}")
-@bot.command(aliases=['sendchat', 'chatas'])
-@commands.has_permissions(administrator=True)
-async def kchat(ctx, channel: discord.TextChannel, *, message: str):
-    """Bot gửi tin nhắn thay bạn vào kênh chỉ định. Dùng: k kchat #kênh <nội dung>"""
-    try:
-        await channel.send(message)
-    except discord.Forbidden:
-        return await ctx.reply(
-            embed=discord.Embed(description=f"⚠️ Bot không có quyền gửi tin nhắn tại {channel.mention}!", color=discord.Color.red()),
-            mention_author=False
-        )
-    except Exception as e:
-        return await ctx.reply(
-            embed=discord.Embed(description=f"⚠️ Lỗi: {e}", color=discord.Color.red()),
-            mention_author=False
-        )
-
-    # Xóa lệnh gốc để không lộ ai đã gửi (tùy chọn, có thể bỏ nếu không cần)
-    try:
-        await ctx.message.delete()
-    except Exception:
-        pass
-
-    # Gửi xác nhận riêng tư (tự xóa sau 5s) để bạn biết đã gửi thành công
-    try:
-        confirm = await ctx.send(embed=discord.Embed(
-            description=f"✅ Đã gửi tin nhắn đến {channel.mention}",
-            color=discord.Color.green()
-        ), delete_after=5)
-    except Exception:
-        pass
+# =====================================================================
+# KCHAT - GỬI TIN NHẮN XUYÊN SERVER (CHỈ OWNER)
+# =====================================================================
+OWNER_IDS = [1377196723998556271]  # Discord ID của bạn
+KCHAT_SENT_IDS = set()  # Lưu ID tin nhắn gửi qua kchat để loại khỏi log
 
 @bot.command(aliases=['sendchat', 'chatas'])
-@commands.has_permissions(administrator=True)
 async def kchat(ctx, channel_id: int, *, message: str):
     """Bot gửi tin nhắn đến kênh bất kỳ, kể cả server khác. Dùng: k kchat <channel_id> <nội dung>"""
+    if ctx.author.id not in OWNER_IDS:
+        return await ctx.reply("⛔ Bạn không có quyền dùng lệnh này!", mention_author=False)
+
     channel = bot.get_channel(channel_id)
 
     if not channel:
@@ -8373,10 +8349,11 @@ async def kchat(ctx, channel_id: int, *, message: str):
         )
 
     try:
-        await channel.send(message)
+        sent_msg = await channel.send(message)
+        KCHAT_SENT_IDS.add(sent_msg.id)  # Đánh dấu để loại khỏi log xóa/sửa
     except discord.Forbidden:
         return await ctx.reply(
-            embed=discord.Embed(description=f"⚠️ Bot không có quyền gửi tin nhắn tại kênh đó!", color=discord.Color.red()),
+            embed=discord.Embed(description="⚠️ Bot không có quyền gửi tin nhắn tại kênh đó!", color=discord.Color.red()),
             mention_author=False
         )
     except Exception as e:
@@ -8399,6 +8376,7 @@ async def kchat(ctx, channel_id: int, *, message: str):
         ), delete_after=5)
     except Exception:
         pass
+
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
