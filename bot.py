@@ -23,7 +23,7 @@ bot.remove_command('help')
 # AI TRẢ LỜI KHI TAG BOT
 # =====================================================================
 try:
-    AI_CLIENT = anthropic.Anthropic(api_key=os.getenv("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", ""))
+    AI_CLIENT = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
 except Exception as e:
     print(f"[WARN] Không khởi tạo được AI client: {e}")
     AI_CLIENT = None
