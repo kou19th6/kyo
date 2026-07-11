@@ -7,6 +7,8 @@ import time
 from datetime import datetime, timedelta 
 import pymongo 
 import math
+import os
+import anthropic
 
 # =====================================================================
 # THIẾT LẬP CƠ BẢN
@@ -17,7 +19,36 @@ intents.members = True
 
 bot = commands.Bot(command_prefix=['K ', 'k ', 'K', 'k'], intents=intents)
 bot.remove_command('help')
+# =====================================================================
+# AI TRẢ LỜI KHI TAG BOT
+# =====================================================================
+try:
+    AI_CLIENT = anthropic.Anthropic(api_key=os.getenv("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", "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"))
+except Exception as e:
+    print(f"[WARN] Không khởi tạo được AI client: {e}")
+    AI_CLIENT = None
 
+ai_cooldowns = {}
+AI_COOLDOWN_SECONDS = 8
+
+async def get_ai_reply(prompt: str, username: str) -> str:
+    if not AI_CLIENT:
+        return "⚠️ AI chưa được cấu hình! Báo admin thiết lập ANTHROPIC_API_KEY."
+    try:
+        response = AI_CLIENT.messages.create(
+            model="claude-3-5-haiku-20241022",
+            max_tokens=600,
+            system=(
+                "Bạn là trợ lý AI thân thiện trong một Discord server tên KYO CLUB. "
+                "Trả lời ngắn gọn, tự nhiên, dùng tiếng Việt trừ khi được hỏi bằng ngôn ngữ khác. "
+                "Không dùng markdown quá phức tạp, phù hợp hiển thị trong Discord."
+            ),
+            messages=[{"role": "user", "content": f"{username} hỏi: {prompt}"}]
+        )
+        return response.content[0].text
+    except Exception as e:
+        print(f"[ERROR] AI error: {e}")
+        return "⚠️ AI đang gặp sự cố, thử lại sau nhé!"
 # =====================================================================
 # KHO ẢNH GIF ĐỘNG
 # =====================================================================
@@ -3775,6 +3806,43 @@ async def lyhon(ctx):
 @bot.event
 async def on_message(message):
     if message.author.bot: return
+
+    # ═══════════════════════════════════════════
+    # AI TRẢ LỜI KHI BỊ TAG
+    # ═══════════════════════════════════════════
+    if bot.user in message.mentions and not message.mention_everyone:
+        question = message.content
+        for mention in message.mentions:
+            question = question.replace(f"<@{mention.id}>", "").replace(f"<@!{mention.id}>", "")
+        question = question.strip()
+
+        if question:
+            uid_check = str(message.author.id)
+            now_check = datetime.now()
+            if uid_check in ai_cooldowns:
+                diff = (now_check - ai_cooldowns[uid_check]).total_seconds()
+                if diff < AI_COOLDOWN_SECONDS:
+                    await message.reply(
+                        embed=discord.Embed(
+                            description=f"⏳ Đợi {int(AI_COOLDOWN_SECONDS - diff)}s nữa rồi hỏi tiếp nhé!",
+                            color=discord.Color.orange()
+                        ),
+                        mention_author=False
+                    )
+                    return
+
+            ai_cooldowns[uid_check] = now_check
+            async with message.channel.typing():
+                reply_text = await get_ai_reply(question, message.author.display_name)
+
+            embed = discord.Embed(description=reply_text[:4000], color=discord.Color.blurple())
+            embed.set_author(name=f"🤖 Trả lời {message.author.display_name}", icon_url=bot.user.display_avatar.url)
+            try:
+                await message.reply(embed=embed, mention_author=False)
+            except Exception as e:
+                print(f"[WARN] Không gửi được AI reply: {e}")
+            return
+
     user_id = str(message.author.id)
     
     # FIX: luôn process commands TRƯỚC, kể cả người ở tù
