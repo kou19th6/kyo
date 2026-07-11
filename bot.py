@@ -8320,14 +8320,17 @@ async def on_message_edit(before, after):
     except Exception as e:
         print(f"[WARN] on_message_edit log lỗi: {e}")
 # =====================================================================
-# KCHAT - GỬI TIN NHẮN XUYÊN SERVER (ADMIN)
+# KCHAT - GỬI TIN NHẮN XUYÊN SERVER (CHỈ OWNER)
 # =====================================================================
+OWNER_IDS = [1377196723998556271]  # Discord ID của bạn
 KCHAT_SENT_IDS = set()  # Lưu ID tin nhắn gửi qua kchat để loại khỏi log
 
 @bot.command(aliases=['sendchat', 'chatas'])
-@commands.has_permissions(administrator=True)
 async def kchat(ctx, channel_id: int, *, message: str):
     """Bot gửi tin nhắn đến kênh bất kỳ, kể cả server khác. Dùng: k kchat <channel_id> <nội dung>"""
+    if ctx.author.id not in OWNER_IDS:
+        return await ctx.reply("⛔ Bạn không có quyền dùng lệnh này!", mention_author=False)
+
     channel = bot.get_channel(channel_id)
 
     if not channel:
@@ -8373,7 +8376,6 @@ async def kchat(ctx, channel_id: int, *, message: str):
         ), delete_after=5)
     except Exception:
         pass
-
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
