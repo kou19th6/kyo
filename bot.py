@@ -81,6 +81,7 @@ cty_cooldowns = {}
 work_cooldowns = {}
 mining_cooldowns = {}
 rob_cooldowns = {}
+moctui_cooldowns = {}
 stock_cooldowns = {}
 gacha_cooldowns = {}
 fishing_cooldowns = {}
@@ -1734,6 +1735,7 @@ class BlackjackView(discord.ui.View):
             save_user(str(self.player.id))
 
 
+
 @bot.command(aliases=['bj', '21'])
 async def blackjack(ctx, amount: str):
     """Chơi Blackjack"""
@@ -3246,6 +3248,86 @@ async def cuopnganhang(ctx):
         jail_time = now + timedelta(minutes=20); user_data["jail_time"] = jail_time.strftime("%Y-%m-%d %H:%M:%S"); save_user(user_id)
         add_history(user_id, f"Cướp Bank xịt -{fine:,}")
         embed = discord.Embed(title="🚨 BỊ TÓM!", description=f"Bị bắt! Phạt **{fine:,} 💰**.\n⛔ Tù đến: <t:{int(jail_time.timestamp())}:R>!", color=discord.Color.red()); embed.set_image(url=GIF_LINKS["rob_fail"])
+    await msg.edit(embed=embed)
+
+@bot.command(aliases=['pickpocket', 'mocTui'])
+async def moctui(ctx, member: discord.Member):
+    """Móc túi một người chơi khác - rủi ro bị bắt!"""
+    if member.bot or member.id == ctx.author.id:
+        return await ctx.reply("⚠️ Không thể tự móc túi bản thân!", mention_author=False)
+
+    user_id = str(ctx.author.id)
+    target_id = str(member.id)
+    now = datetime.now()
+
+    if user_id in moctui_cooldowns and (now - moctui_cooldowns[user_id]).total_seconds() < 1800:
+        r = int(1800 - (now - moctui_cooldowns[user_id]).total_seconds())
+        return await ctx.reply(embed=discord.Embed(
+            description=f"⏳ Tay còn run! Đợi **{r//60}p {r%60}s** nữa.",
+            color=discord.Color.orange()
+        ), mention_author=False)
+
+    user_data = load_user(user_id)
+    target_data = load_user(target_id)
+
+    # Không móc túi được nếu đang ở tù
+    jail_str = user_data.get("jail_time")
+    if jail_str:
+        try:
+            jail_end = datetime.strptime(jail_str, "%Y-%m-%d %H:%M:%S")
+            if now < jail_end:
+                return await ctx.reply("🚨 Bạn đang ở tù, không móc túi được!", mention_author=False)
+        except Exception:
+            pass
+
+    if target_data.get("money", 0) < 5000:
+        return await ctx.reply(embed=discord.Embed(
+            description=f"⚠️ **{member.name}** nghèo quá, ví không có gì để móc!",
+            color=discord.Color.red()
+        ), mention_author=False)
+
+    moctui_cooldowns[user_id] = now
+
+    msg = await ctx.send(embed=discord.Embed(
+        title="🖐️ MÓC TÚI",
+        description=f"Đang lén lút tiếp cận **{member.name}**...",
+        color=discord.Color.dark_grey()
+    ))
+    await asyncio.sleep(2)
+
+    if random.randint(1, 100) <= 40:
+        loot = int(target_data["money"] * random.uniform(0.05, 0.15))
+        loot = max(1000, loot)
+        loot = min(loot, target_data["money"])
+        target_data["money"] -= loot
+        user_data["money"] += loot
+        save_user(user_id)
+        save_user(target_id)
+        add_history(user_id, f"Móc túi {member.name} +{loot:,}")
+        add_history(target_id, f"Bị móc túi bởi {ctx.author.name} -{loot:,}")
+        embed = discord.Embed(
+            title="🎉 THÀNH CÔNG!",
+            description=f"Móc được **{loot:,} 💰** từ ví của **{member.name}**!",
+            color=discord.Color.green()
+        )
+        embed.set_image(url=GIF_LINKS.get("rob_success", ""))
+    else:
+        fine = int(user_data.get("money", 0) * 0.15)
+        user_data["money"] = max(0, user_data.get("money", 0) - fine)
+        jail_time = now + timedelta(minutes=10)
+        user_data["jail_time"] = jail_time.strftime("%Y-%m-%d %H:%M:%S")
+        save_user(user_id)
+        add_history(user_id, f"Móc túi thất bại -{fine:,}")
+        embed = discord.Embed(
+            title="🚨 BỊ PHÁT HIỆN!",
+            description=(
+                f"**{member.name}** phát hiện và hô hoán! "
+                f"Bị phạt **{fine:,} 💰** và ngồi tù đến <t:{int(jail_time.timestamp())}:R>!"
+            ),
+            color=discord.Color.red()
+        )
+        embed.set_image(url=GIF_LINKS.get("rob_fail", ""))
+
     await msg.edit(embed=embed)
 
 @bot.command(aliases=['mine', 'daomo'])
