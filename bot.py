@@ -3885,6 +3885,9 @@ async def on_ready():
     print(f'>>> BOT {bot.user} ĐÃ SẴN SÀNG!')
     print('>>> VERSION 7.1 - PATCHED & BALANCED')
     print('================================================')
+    new_g, new_e = scan_source_for_assets()   # 👈 THÊM DÒNG NÀY
+    if new_g or new_e:
+        print(f'>>> [ASSET SCAN] GIF mới: {new_g} | Emoji mới: {new_e}')
     await bot.change_presence(activity=discord.Game(name="k help | Bot 7.1 Patched"))
 
 # =====================================================================
@@ -8929,6 +8932,397 @@ async def xoakenh(ctx, name: str):
         await ctx.reply(embed=discord.Embed(
             description=f"⚠️ Không tìm thấy kênh **{name}** đã lưu.", color=discord.Color.red()
         ), mention_author=False)
+# =====================================================================
+# 🎨 HỆ THỐNG QUẢN LÝ ASSET (GIF / EMOJI) - TỰ ĐỘNG PHÁT HIỆN
+# Admin cấp cao chỉnh sửa qua bảng nút bấm, không cần sửa code
+# =====================================================================
+import re
+
+SUPER_ADMIN_IDS = OWNER_IDS + [1377196723998556271]   # 👉 thêm ID admin cấp cao khác vào đây nếu cần
+
+bot_assets_col = db["bot_assets"]
+BOT_FILE_PATH = os.path.abspath(__file__)
+
+DEFAULT_GIF_LINKS = dict(GIF_LINKS)
+DEFAULT_EMOJIS = {
+    "money": "💰", "bank": "🏦", "level_up": "🌟", "jail": "🚨",
+    "win": "🎉", "lose": "💀", "marry": "💍", "daily": "🎁",
+    "work": "💼", "mine": "⛏️", "fish": "🎣", "gacha": "🥚",
+    "rob_success": "🎉", "rob_fail": "🚨", "quest": "📋",
+    "company": "🏢", "stock_up": "📈", "stock_down": "📉",
+}
+CUSTOM_EMOJIS = dict(DEFAULT_EMOJIS)
+
+
+# ── HÀM WRAPPER: dùng E("key") thay cho emoji viết cứng ─────────────
+def E(key, default_emoji="❓"):
+    """Lấy emoji tùy biến. Tự đăng ký key mới ngay lần đầu được gọi."""
+    if key in CUSTOM_EMOJIS:
+        return CUSTOM_EMOJIS[key]
+    val = DEFAULT_EMOJIS.get(key, default_emoji)
+    CUSTOM_EMOJIS[key] = val
+    DEFAULT_EMOJIS.setdefault(key, val)
+    try:
+        bot_assets_col.update_one({"_id": "config"}, {"$set": {f"emojis.{key}": val}}, upsert=True)
+    except Exception:
+        pass
+    return val
+
+
+def is_super_admin_id(uid):
+    return uid in SUPER_ADMIN_IDS
+
+
+def load_bot_assets():
+    """Nạp cấu hình GIF/Emoji đã lưu trong DB khi bot khởi động."""
+    try:
+        doc = bot_assets_col.find_one({"_id": "config"})
+    except Exception as e:
+        print(f"[WARN] load_bot_assets error: {e}")
+        doc = None
+    if not doc:
+        doc = {"_id": "config", "gifs": {}, "emojis": {}}
+        try: bot_assets_col.insert_one(doc)
+        except Exception: pass
+    for k, v in doc.get("gifs", {}).items():
+        GIF_LINKS[k] = v
+    for k, v in doc.get("emojis", {}).items():
+        CUSTOM_EMOJIS[k] = v
+
+load_bot_assets()
+
+
+def save_gif(key, url):
+    GIF_LINKS[key] = url
+    try:
+        bot_assets_col.update_one({"_id": "config"}, {"$set": {f"gifs.{key}": url}}, upsert=True)
+    except Exception as e:
+        print(f"[WARN] save_gif error: {e}")
+
+
+def save_emoji(key, emoji):
+    CUSTOM_EMOJIS[key] = emoji
+    try:
+        bot_assets_col.update_one({"_id": "config"}, {"$set": {f"emojis.{key}": emoji}}, upsert=True)
+    except Exception as e:
+        print(f"[WARN] save_emoji error: {e}")
+
+
+# ── QUÉT FILE NGUỒN ĐỂ TỰ PHÁT HIỆN ASSET MỚI ────────────────────────
+def scan_source_for_assets():
+    """Đọc lại chính file bot.py, tìm GIF_LINKS[...] và E(...) chưa được đăng ký."""
+    try:
+        with open(BOT_FILE_PATH, "r", encoding="utf-8") as f:
+            source = f.read()
+    except Exception as e:
+        print(f"[SCAN] Lỗi đọc file: {e}")
+        return [], []
+
+    new_gifs, new_emojis = [], []
+
+    # --- GIF ---
+    gif_patterns = [
+        r'GIF_LINKS\[\s*["\']([\w\-]+)["\']\s*\]\s*=\s*["\']([^"\']+)["\']',
+        r'GIF_LINKS\.get\(\s*["\']([\w\-]+)["\']\s*,\s*["\']([^"\']*)["\']\s*\)',
+        r'GIF_LINKS\[\s*["\']([\w\-]+)["\']\s*\]',
+    ]
+    found = {}
+    for pat in gif_patterns:
+        for m in re.finditer(pat, source):
+            key = m.group(1)
+            val = m.group(2) if m.lastindex and m.lastindex >= 2 else ""
+            if key not in found or val:
+                found[key] = val
+    for key, val in found.items():
+        if key not in GIF_LINKS:
+            GIF_LINKS[key] = val or "https://media.giphy.com/media/xUPGcguWZHRC2HyBRS/giphy.gif"
+            DEFAULT_GIF_LINKS[key] = GIF_LINKS[key]
+            new_gifs.append(key)
+
+    # --- EMOJI ---
+    emoji_patterns = [
+        r'E\(\s*["\']([\w\-]+)["\']\s*,\s*["\']([^"\']+)["\']\s*\)',
+        r'E\(\s*["\']([\w\-]+)["\']\s*\)',
+    ]
+    found_e = {}
+    for pat in emoji_patterns:
+        for m in re.finditer(pat, source):
+            key = m.group(1)
+            val = m.group(2) if m.lastindex and m.lastindex >= 2 else ""
+            if key not in found_e or val:
+                found_e[key] = val
+    for key, val in found_e.items():
+        if key not in CUSTOM_EMOJIS:
+            CUSTOM_EMOJIS[key] = val or "❓"
+            DEFAULT_EMOJIS[key] = CUSTOM_EMOJIS[key]
+            new_emojis.append(key)
+
+    if new_gifs or new_emojis:
+        updates = {}
+        for k in new_gifs:
+            updates[f"gifs.{k}"] = GIF_LINKS[k]
+        for k in new_emojis:
+            updates[f"emojis.{k}"] = CUSTOM_EMOJIS[k]
+        try:
+            bot_assets_col.update_one({"_id": "config"}, {"$set": updates}, upsert=True)
+        except Exception as e:
+            print(f"[SCAN] Lỗi lưu: {e}")
+
+    return new_gifs, new_emojis
+
+
+def asset_stats_embed():
+    gif_total  = len(GIF_LINKS)
+    gif_custom = sum(1 for k, v in GIF_LINKS.items() if DEFAULT_GIF_LINKS.get(k) != v)
+    emo_total  = len(CUSTOM_EMOJIS)
+    emo_custom = sum(1 for k, v in CUSTOM_EMOJIS.items() if DEFAULT_EMOJIS.get(k) != v)
+
+    embed = discord.Embed(title="🎨 BẢNG ĐIỀU KHIỂN ASSET", color=discord.Color.gold())
+    embed.description = (
+        f"🎬 GIF: `{make_progress_bar(gif_custom, gif_total, 10)}` **{gif_custom}/{gif_total}** đã chỉnh\n"
+        f"😀 Emoji: `{make_progress_bar(emo_custom, emo_total, 10)}` **{emo_custom}/{emo_total}** đã chỉnh\n"
+        f"───────────────\n"
+        f"👇 Chọn mục bên dưới để chỉnh sửa"
+    )
+    embed.set_footer(text="Chỉ Admin Cấp Cao mới thao tác được")
+    return embed
+
+
+# ── MODAL NHẬP DỮ LIỆU ──────────────────────────────────────────────
+class GifUrlModal(discord.ui.Modal, title="Chỉnh sửa GIF"):
+    def __init__(self, key, parent_view):
+        super().__init__()
+        self.key = key
+        self.parent_view = parent_view
+        self.url_input = discord.ui.TextInput(
+            label=f"URL GIF mới cho '{key}'"[:45],
+            placeholder="https://media.giphy.com/media/.../giphy.gif",
+            default=GIF_LINKS.get(key, ""),
+            style=discord.TextStyle.short,
+            required=True,
+        )
+        self.add_item(self.url_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        url = self.url_input.value.strip()
+        if not (url.startswith("http://") or url.startswith("https://")):
+            return await interaction.response.send_message("⚠️ URL không hợp lệ!", ephemeral=True)
+        save_gif(self.key, url)
+        embed = discord.Embed(title=f"✅ Đã cập nhật GIF `{self.key}`", color=discord.Color.green())
+        embed.set_image(url=url)
+        await interaction.response.edit_message(embed=embed, view=self.parent_view)
+
+
+class EmojiValueModal(discord.ui.Modal, title="Chỉnh sửa Emoji"):
+    def __init__(self, key, parent_view):
+        super().__init__()
+        self.key = key
+        self.parent_view = parent_view
+        self.emoji_input = discord.ui.TextInput(
+            label=f"Emoji mới cho '{key}'"[:45],
+            placeholder="💰 hoặc <:tencustom:id>",
+            default=CUSTOM_EMOJIS.get(key, ""),
+            style=discord.TextStyle.short,
+            required=True,
+        )
+        self.add_item(self.emoji_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        val = self.emoji_input.value.strip()
+        save_emoji(self.key, val)
+        embed = discord.Embed(
+            title="✅ Đã cập nhật Emoji",
+            description=f"`{self.key}` → {val}",
+            color=discord.Color.green()
+        )
+        await interaction.response.edit_message(embed=embed, view=self.parent_view)
+
+
+# ── SUB-PANEL: QUẢN LÝ GIF ──────────────────────────────────────────
+class GifSelect(discord.ui.Select):
+    def __init__(self, page=0):
+        keys = sorted(GIF_LINKS.keys())
+        chunk = keys[page*25:(page+1)*25]
+        options = []
+        for k in chunk:
+            tag = " 🔧" if GIF_LINKS[k] != DEFAULT_GIF_LINKS.get(k) else ""
+            options.append(discord.SelectOption(label=f"{k}{tag}"[:100], value=k))
+        if not options:
+            options = [discord.SelectOption(label="Không có GIF nào", value="none")]
+        super().__init__(placeholder="Chọn GIF để chỉnh sửa...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.values[0] == "none":
+            return await interaction.response.send_message("⚠️ Không có gì để chọn.", ephemeral=True)
+        key = self.values[0]
+        view = self.view
+        await interaction.response.send_modal(GifUrlModal(key, view.back_view()))
+
+
+class GifManageView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=120)
+        self.author = author
+        self.add_item(GifSelect())
+
+    def back_view(self):
+        return AssetMainView(self.author)
+
+    @discord.ui.button(label="🔄 Reset tất cả GIF", style=discord.ButtonStyle.danger, row=1)
+    async def reset_all_gif(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        GIF_LINKS.clear(); GIF_LINKS.update(DEFAULT_GIF_LINKS)
+        try: bot_assets_col.update_one({"_id": "config"}, {"$set": {"gifs": {}}}, upsert=True)
+        except Exception: pass
+        await interaction.response.edit_message(embed=asset_stats_embed(), view=self.back_view())
+
+    @discord.ui.button(label="◀ Quay lại", style=discord.ButtonStyle.secondary, row=1)
+    async def back(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        await interaction.response.edit_message(embed=asset_stats_embed(), view=self.back_view())
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+
+# ── SUB-PANEL: QUẢN LÝ EMOJI ────────────────────────────────────────
+class EmojiSelect(discord.ui.Select):
+    def __init__(self, page=0):
+        keys = sorted(CUSTOM_EMOJIS.keys())
+        chunk = keys[page*25:(page+1)*25]
+        options = []
+        for k in chunk:
+            tag = " 🔧" if CUSTOM_EMOJIS[k] != DEFAULT_EMOJIS.get(k) else ""
+            options.append(discord.SelectOption(label=f"{k}{tag}"[:100], description=str(CUSTOM_EMOJIS[k])[:100], value=k))
+        if not options:
+            options = [discord.SelectOption(label="Không có Emoji nào", value="none")]
+        super().__init__(placeholder="Chọn Emoji để chỉnh sửa...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.values[0] == "none":
+            return await interaction.response.send_message("⚠️ Không có gì để chọn.", ephemeral=True)
+        key = self.values[0]
+        view = self.view
+        await interaction.response.send_modal(EmojiValueModal(key, view.back_view()))
+
+
+class EmojiManageView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=120)
+        self.author = author
+        self.add_item(EmojiSelect())
+
+    def back_view(self):
+        return AssetMainView(self.author)
+
+    @discord.ui.button(label="🔄 Reset tất cả Emoji", style=discord.ButtonStyle.danger, row=1)
+    async def reset_all_emoji(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        CUSTOM_EMOJIS.clear(); CUSTOM_EMOJIS.update(DEFAULT_EMOJIS)
+        try: bot_assets_col.update_one({"_id": "config"}, {"$set": {"emojis": {}}}, upsert=True)
+        except Exception: pass
+        await interaction.response.edit_message(embed=asset_stats_embed(), view=self.back_view())
+
+    @discord.ui.button(label="◀ Quay lại", style=discord.ButtonStyle.secondary, row=1)
+    async def back(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        await interaction.response.edit_message(embed=asset_stats_embed(), view=self.back_view())
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+
+# ── PANEL CHÍNH ──────────────────────────────────────────────────────
+class AssetMainView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=180)
+        self.author = author
+
+    @discord.ui.button(label="🎬 Quản Lý GIF", style=discord.ButtonStyle.primary, row=0)
+    async def btn_gif(self, interaction, button):
+        await interaction.response.edit_message(embed=asset_stats_embed(), view=GifManageView(self.author))
+
+    @discord.ui.button(label="😀 Quản Lý Emoji", style=discord.ButtonStyle.primary, row=0)
+    async def btn_emoji(self, interaction, button):
+        await interaction.response.edit_message(embed=asset_stats_embed(), view=EmojiManageView(self.author))
+
+    @discord.ui.button(label="📋 Xem Danh Sách", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_list(self, interaction, button):
+        gif_lines = " | ".join(f"`{k}`" for k in sorted(GIF_LINKS.keys()))
+        emo_lines = "\n".join(f"`{k}`: {v}" for k, v in sorted(CUSTOM_EMOJIS.items()))
+        embed = discord.Embed(title="📋 DANH SÁCH ASSET", color=discord.Color.blue())
+        embed.add_field(name="🎬 GIF", value=(gif_lines[:1000] or "Trống"), inline=False)
+        embed.add_field(name="😀 Emoji", value=(emo_lines[:1000] or "Trống"), inline=False)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="🔍 Quét Tính Năng Mới", style=discord.ButtonStyle.success, row=1)
+    async def btn_scan(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        new_g, new_e = scan_source_for_assets()
+        if not new_g and not new_e:
+            desc = "✅ Không có asset mới nào chưa được đăng ký."
+        else:
+            desc = ""
+            if new_g: desc += f"🎬 GIF mới phát hiện: {', '.join(f'`{k}`' for k in new_g)}\n"
+            if new_e: desc += f"😀 Emoji mới phát hiện: {', '.join(f'`{k}`' for k in new_e)}\n"
+            desc += "\n👉 Vào **Quản Lý GIF/Emoji** để chỉnh sửa ngay!"
+        await interaction.response.edit_message(
+            embed=discord.Embed(title="🔍 KẾT QUẢ QUÉT FILE BOT", description=desc, color=discord.Color.blue()),
+            view=self
+        )
+
+    @discord.ui.button(label="🔄 Reset Toàn Bộ", style=discord.ButtonStyle.danger, row=1)
+    async def btn_reset_all(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        GIF_LINKS.clear(); GIF_LINKS.update(DEFAULT_GIF_LINKS)
+        CUSTOM_EMOJIS.clear(); CUSTOM_EMOJIS.update(DEFAULT_EMOJIS)
+        try:
+            bot_assets_col.update_one({"_id": "config"}, {"$set": {"gifs": {}, "emojis": {}}}, upsert=True)
+        except Exception: pass
+        await interaction.response.edit_message(
+            embed=discord.Embed(description="🔄 Đã reset toàn bộ GIF & Emoji về mặc định!", color=discord.Color.gold()),
+            view=self
+        )
+
+    @discord.ui.button(label="❌ Đóng", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_close(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        for c in self.children:
+            c.disabled = True
+        await interaction.response.edit_message(
+            embed=discord.Embed(description="✅ Đã đóng bảng điều khiển.", color=discord.Color.dark_grey()),
+            view=self
+        )
+        self.stop()
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+
+@bot.command(aliases=['asset', 'quanlyasset'])
+async def assets(ctx):
+    if not is_super_admin_id(ctx.author.id):
+        return await ctx.reply(embed=discord.Embed(
+            description="⛔ Chỉ **Admin Cấp Cao** mới dùng được lệnh này!",
+            color=discord.Color.red()
+        ), mention_author=False)
+    await ctx.reply(embed=asset_stats_embed(), view=AssetMainView(ctx.author), mention_author=False)
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
