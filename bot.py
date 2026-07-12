@@ -4,6 +4,8 @@ from keep_alive import keep_alive
 import random 
 import asyncio 
 import time
+import re
+import aiohttp
 from datetime import datetime, timedelta 
 import pymongo 
 import math
@@ -8666,6 +8668,267 @@ async def saochep(ctx, dest_guild_id: int):
         color=discord.Color.green()
     )
     await status_msg.edit(embed=final_embed)
+# =====================================================================
+# TÍNH NĂNG: LƯU & XEM KÊNH YOUTUBE
+# k yt <tên> <link kênh>   -> LƯU kênh mới
+# k yt <tên>                -> XEM lại kênh đã lưu (banner, avatar, sub...)
+# k dskenh                  -> xem danh sách kênh đã lưu
+# k xoakenh <tên>           -> xóa kênh đã lưu
+# =====================================================================
+#
+# CÁCH CÀI ĐẶT:
+# 1) Lấy YouTube Data API v3 key (bạn đã bật API rồi, giờ chỉ cần tạo key):
+#    Google Cloud Console -> Mã định danh -> Tạo thông tin đăng nhập -> API key
+# 2) Thêm biến môi trường YOUTUBE_API_KEY = key vừa tạo (giống cách bạn thêm GEMINI_API_KEY)
+# 3) aiohttp thường có sẵn (dependency của discord.py). Nếu chưa: pip install aiohttp
+#
+# CÁCH GHÉP VÀO bot.py CỦA BẠN:
+# - Dán TOÀN BỘ đoạn code dưới đây vào bất kỳ đâu TRƯỚC dòng keep_alive()
+# =====================================================================
+
+YOUTUBE_API_KEY = os.getenv("AIzaSyCREtj07yoFzF_WgNg6Swm1t3FdHkBd1TU")
+youtube_channels_col = db["youtube_channels"]  # tạo collection mới trong Mongo
+
+
+async def resolve_channel_query(link_or_handle: str):
+    """
+    Trích xuất channel_id (nếu link dạng /channel/UC...) hoặc handle/query
+    để gọi API. Trả về (channel_id, handle_or_query)
+    """
+    link = link_or_handle.strip()
+
+    m = re.search(r"channel/(UC[\w-]{20,})", link)
+    if m:
+        return m.group(1), None
+
+    m = re.search(r"(@[\w.\-]+)", link)
+    if m:
+        return None, m.group(1)
+
+    m = re.search(r"(?:c|user)/([\w\-]+)", link)
+    if m:
+        return None, m.group(1)
+
+    if link.startswith("@"):
+        return None, link
+
+    # Không khớp mẫu nào -> coi như từ khóa tìm kiếm (tên kênh)
+    return None, link
+
+
+async def fetch_youtube_channel(channel_id=None, handle_or_query=None):
+    """Gọi YouTube Data API v3, trả về dict thông tin kênh hoặc None."""
+    if not YOUTUBE_API_KEY:
+        return None
+
+    async with aiohttp.ClientSession() as session:
+        params = {"key": YOUTUBE_API_KEY, "part": "snippet,statistics,brandingSettings"}
+
+        if channel_id:
+            params["id"] = channel_id
+
+        elif handle_or_query and handle_or_query.startswith("@"):
+            params["forHandle"] = handle_or_query
+
+        else:
+            # Fallback: search theo tên kênh
+            search_params = {
+                "key": YOUTUBE_API_KEY,
+                "part": "snippet",
+                "type": "channel",
+                "q": handle_or_query,
+                "maxResults": 1,
+            }
+            try:
+                async with session.get(
+                    "https://www.googleapis.com/youtube/v3/search", params=search_params
+                ) as resp:
+                    data = await resp.json()
+            except Exception as e:
+                print(f"[YT] search error: {e}")
+                return None
+
+            items = data.get("items", [])
+            if not items:
+                return None
+            params["id"] = items[0]["snippet"]["channelId"]
+
+        try:
+            async with session.get(
+                "https://www.googleapis.com/youtube/v3/channels", params=params
+            ) as resp:
+                data = await resp.json()
+        except Exception as e:
+            print(f"[YT] channels error: {e}")
+            return None
+
+        items = data.get("items", [])
+        if not items:
+            return None
+        return items[0]
+
+
+def build_channel_embed(channel_data: dict, saved_name: str) -> discord.Embed:
+    snippet  = channel_data.get("snippet", {})
+    stats    = channel_data.get("statistics", {})
+    branding = channel_data.get("brandingSettings", {})
+
+    title = snippet.get("title", "N/A")
+    handle = snippet.get("customUrl", "")
+    if handle and not handle.startswith("@"):
+        handle = "@" + handle
+
+    description = snippet.get("description", "") or "Không có mô tả"
+    if len(description) > 300:
+        description = description[:297] + "..."
+
+    thumbs = snippet.get("thumbnails", {})
+    avatar_url = (thumbs.get("high") or thumbs.get("medium") or thumbs.get("default") or {}).get("url")
+
+    banner_url = branding.get("image", {}).get("bannerExternalUrl")
+
+    sub_hidden = stats.get("hiddenSubscriberCount", False)
+    sub_count  = stats.get("subscriberCount")
+    if sub_hidden or not sub_count:
+        sub_str = "Đã ẩn"
+    else:
+        sub_str = f"{int(sub_count):,}".replace(",", ".")
+
+    video_count = stats.get("videoCount", "0")
+    channel_url = f"https://youtube.com/channel/{channel_data.get('id','')}"
+
+    embed = discord.Embed(
+        title=f"📺 {title}",
+        url=channel_url,
+        description=description,
+        color=discord.Color.red(),
+    )
+    if avatar_url:
+        embed.set_thumbnail(url=avatar_url)
+    if banner_url:
+        embed.set_image(url=banner_url + "=w1280")
+
+    embed.add_field(name="🔗 Handle", value=handle or "N/A", inline=True)
+    embed.add_field(name="👥 Người đăng ký", value=f"**{sub_str}**", inline=True)
+    embed.add_field(name="🎬 Video", value=f"**{video_count}**", inline=True)
+    embed.set_footer(text=f"Tên lưu: {saved_name}  |  k yt {saved_name} để xem lại")
+    return embed
+
+
+@bot.command(aliases=['youtube', 'ytkenh'])
+async def yt(ctx, name: str, *, link: str = None):
+    """
+    Lưu kênh:  k yt <tên> <link hoặc @handle>
+    Xem kênh:  k yt <tên>
+    """
+    if not YOUTUBE_API_KEY:
+        return await ctx.reply(
+            embed=discord.Embed(
+                description="⚠️ Bot chưa cấu hình `YOUTUBE_API_KEY`! Báo admin thêm biến môi trường này.",
+                color=discord.Color.red()
+            ),
+            mention_author=False
+        )
+
+    name_key = name.lower().strip()
+
+    # ── TRƯỜNG HỢP 1: CÓ LINK -> LƯU KÊNH MỚI ─────────────────────────
+    if link:
+        msg = await ctx.reply(
+            embed=discord.Embed(description="🔍 Đang tra cứu kênh Youtube...", color=discord.Color.blue()),
+            mention_author=False
+        )
+
+        cid, handle_or_query = await resolve_channel_query(link)
+        data = await fetch_youtube_channel(channel_id=cid, handle_or_query=handle_or_query)
+
+        if not data:
+            return await msg.edit(embed=discord.Embed(
+                description="⚠️ Không tìm thấy kênh này! Kiểm tra lại link hoặc @handle.",
+                color=discord.Color.red()
+            ))
+
+        youtube_channels_col.update_one(
+            {"_id": f"{ctx.guild.id}_{name_key}"},
+            {"$set": {
+                "guild_id": ctx.guild.id,
+                "name": name_key,
+                "display_name": name,
+                "channel_id": data["id"],
+                "added_by": str(ctx.author.id),
+                "added_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }},
+            upsert=True
+        )
+
+        embed = build_channel_embed(data, name)
+        embed.set_footer(text=f"✅ Đã lưu! Gõ `k yt {name_key}` để xem lại bất cứ lúc nào.")
+        return await msg.edit(embed=embed)
+
+    # ── TRƯỜNG HỢP 2: KHÔNG CÓ LINK -> XEM LẠI KÊNH ĐÃ LƯU ────────────
+    saved = youtube_channels_col.find_one({"_id": f"{ctx.guild.id}_{name_key}"})
+    if not saved:
+        return await ctx.reply(
+            embed=discord.Embed(
+                description=(
+                    f"⚠️ Chưa có kênh nào tên **{name}** được lưu.\n"
+                    f"Dùng `k yt {name} <link kênh>` để lưu mới!"
+                ),
+                color=discord.Color.orange()
+            ),
+            mention_author=False
+        )
+
+    msg = await ctx.reply(
+        embed=discord.Embed(description="🔍 Đang tải thông tin kênh...", color=discord.Color.blue()),
+        mention_author=False
+    )
+    data = await fetch_youtube_channel(channel_id=saved["channel_id"])
+    if not data:
+        return await msg.edit(embed=discord.Embed(
+            description="⚠️ Không lấy được dữ liệu kênh (có thể kênh đã bị xóa/đổi tên).",
+            color=discord.Color.red()
+        ))
+    embed = build_channel_embed(data, saved["display_name"])
+    await msg.edit(embed=embed)
+
+
+@bot.command(aliases=['listkenh'])
+async def dskenh(ctx):
+    """Xem danh sách kênh Youtube đã lưu trong server."""
+    try:
+        docs = list(youtube_channels_col.find({"guild_id": ctx.guild.id}))
+    except Exception:
+        docs = []
+
+    if not docs:
+        return await ctx.reply(embed=discord.Embed(
+            description="📺 Chưa có kênh nào được lưu. Dùng `k yt <tên> <link>` để thêm!",
+            color=discord.Color.light_grey()
+        ), mention_author=False)
+
+    lines = [f"• `k yt {d['name']}` — <@{d['added_by']}> lưu" for d in docs]
+    embed = discord.Embed(
+        title="📺 DANH SÁCH KÊNH ĐÃ LƯU",
+        description="\n".join(lines),
+        color=discord.Color.red()
+    )
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@bot.command(aliases=['delkenh', 'removekenh'])
+async def xoakenh(ctx, name: str):
+    """Xóa kênh đã lưu: k xoakenh <tên>"""
+    name_key = name.lower().strip()
+    result = youtube_channels_col.delete_one({"_id": f"{ctx.guild.id}_{name_key}"})
+    if result.deleted_count:
+        await ctx.reply(embed=discord.Embed(
+            description=f"✅ Đã xóa kênh **{name}**.", color=discord.Color.green()
+        ), mention_author=False)
+    else:
+        await ctx.reply(embed=discord.Embed(
+            description=f"⚠️ Không tìm thấy kênh **{name}** đã lưu.", color=discord.Color.red()
+        ), mention_author=False)
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
