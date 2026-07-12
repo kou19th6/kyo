@@ -374,23 +374,18 @@ def check_achievement(user_id, user_data):
 # GLOBAL CHECK
 # =====================================================================
 @bot.check
-async def global_jail_and_channel_check(ctx):
-    if ctx.author.guild_permissions.administrator:
-        return True
-    if ctx.command and ctx.command.name == "help":
-        return True
-
-    user_data = load_user(ctx.author.id)
-    jail_time_str = user_data.get("jail_time")
-
-    if jail_time_str:
+if jail_time_str:
         try:
             jail_end = datetime.strptime(jail_time_str, "%Y-%m-%d %H:%M:%S")
             if datetime.now() < jail_end:
                 embed = discord.Embed(
                     title="🚨 BÁO ĐỘNG ĐỎ!",
-                    description=f"{ctx.author.mention} đang bóc lịch trong trại giam!\n\n"
-                                f"⏳ Mãn hạn: <t:{int(jail_end.timestamp())}:R>",
+                    description=(
+                        f"{ctx.author.mention} đang bóc lịch trong trại giam!\n\n"
+                        f"{random.choice(JAIL_CELL_FLAVOR)}\n\n"
+                        f"⏳ Mãn hạn: <t:{int(jail_end.timestamp())}:R>\n\n"
+                        f"💡 `k toaan` (hầu tòa) | `k baolanh` (bảo lãnh) | `k vuotngu` (vượt ngục)"
+                    ),
                     color=discord.Color.red()
                 )
                 embed.set_thumbnail(url=GIF_LINKS["jail"])
@@ -3250,9 +3245,22 @@ async def cuopnganhang(ctx):
         embed = discord.Embed(title="🚨 BỊ TÓM!", description=f"Bị bắt! Phạt **{fine:,} 💰**.\n⛔ Tù đến: <t:{int(jail_time.timestamp())}:R>!", color=discord.Color.red()); embed.set_image(url=GIF_LINKS["rob_fail"])
     await msg.edit(embed=embed)
 
+# =====================================================================
+# MÓC TÚI (đã nâng cấp) + PHẠT THEO TỈ LỆ NẠN NHÂN + TRỪ VÀO NGÂN HÀNG
+# =====================================================================
+moctui_cooldowns = {}
+
+JAIL_ENTRY_FLAVOR = [
+    "🚔 Còng tay lạnh ngắt siết vào cổ tay, tiếng còng xe cảnh sát hụ vang cả con phố.",
+    "👮 Bạn bị áp giải qua đám đông đang chỉ trỏ, mặt cúi gằm vì xấu hổ.",
+    "🚪 Cánh cửa sắt phòng giam đóng sầm lại, tiếng vang dội vào tường đá lạnh lẽo.",
+    "📋 Cai ngục ném cho bạn bộ đồ tù kẻ sọc và một cái chăn mỏng dính.",
+    "🥶 Đêm đầu tiên trong xà lim, bạn co ro trên sàn xi măng lạnh buốt.",
+]
+
 @bot.command(aliases=['pickpocket', 'mocTui'])
 async def moctui(ctx, member: discord.Member):
-    """Móc túi một người chơi khác - rủi ro bị bắt!"""
+    """Móc túi một người chơi khác - rủi ro bị bắt và phải bồi thường!"""
     if member.bot or member.id == ctx.author.id:
         return await ctx.reply("⚠️ Không thể tự móc túi bản thân!", mention_author=False)
 
@@ -3263,20 +3271,19 @@ async def moctui(ctx, member: discord.Member):
     if user_id in moctui_cooldowns and (now - moctui_cooldowns[user_id]).total_seconds() < 1800:
         r = int(1800 - (now - moctui_cooldowns[user_id]).total_seconds())
         return await ctx.reply(embed=discord.Embed(
-            description=f"⏳ Tay còn run! Đợi **{r//60}p {r%60}s** nữa.",
+            description=f"⏳ Tay còn run sau vụ trước! Đợi **{r//60}p {r%60}s** nữa.",
             color=discord.Color.orange()
         ), mention_author=False)
 
     user_data = load_user(user_id)
     target_data = load_user(target_id)
 
-    # Không móc túi được nếu đang ở tù
     jail_str = user_data.get("jail_time")
     if jail_str:
         try:
             jail_end = datetime.strptime(jail_str, "%Y-%m-%d %H:%M:%S")
             if now < jail_end:
-                return await ctx.reply("🚨 Bạn đang ở tù, không móc túi được!", mention_author=False)
+                return await ctx.reply("🚨 Bạn đang ở tù, tay chân bị xích, không móc túi được!", mention_author=False)
         except Exception:
             pass
 
@@ -3290,44 +3297,332 @@ async def moctui(ctx, member: discord.Member):
 
     msg = await ctx.send(embed=discord.Embed(
         title="🖐️ MÓC TÚI",
-        description=f"Đang lén lút tiếp cận **{member.name}**...",
+        description=f"Đang lén lút len lỏi qua đám đông, tiếp cận **{member.name}**...",
         color=discord.Color.dark_grey()
     ))
     await asyncio.sleep(2)
 
     if random.randint(1, 100) <= 40:
+        # ── THÀNH CÔNG ──────────────────────────────────────────────
         loot = int(target_data["money"] * random.uniform(0.05, 0.15))
-        loot = max(1000, loot)
-        loot = min(loot, target_data["money"])
+        loot = max(1000, min(loot, target_data["money"]))
         target_data["money"] -= loot
         user_data["money"] += loot
         save_user(user_id)
         save_user(target_id)
         add_history(user_id, f"Móc túi {member.name} +{loot:,}")
         add_history(target_id, f"Bị móc túi bởi {ctx.author.name} -{loot:,}")
+
         embed = discord.Embed(
             title="🎉 THÀNH CÔNG!",
-            description=f"Móc được **{loot:,} 💰** từ ví của **{member.name}**!",
+            description=f"Nhanh tay lẹ mắt! Móc được **{loot:,} 💰** từ ví của **{member.name}** rồi lẩn vào đám đông.",
             color=discord.Color.green()
         )
         embed.set_image(url=GIF_LINKS.get("rob_success", ""))
-    else:
-        fine = int(user_data.get("money", 0) * 0.15)
-        user_data["money"] = max(0, user_data.get("money", 0) - fine)
-        jail_time = now + timedelta(minutes=10)
-        user_data["jail_time"] = jail_time.strftime("%Y-%m-%d %H:%M:%S")
-        save_user(user_id)
-        add_history(user_id, f"Móc túi thất bại -{fine:,}")
+        await msg.edit(embed=embed)
+        return
+
+    # ── THẤT BẠI: PHẠT THEO TỈ LỆ TÀI SẢN NẠN NHÂN ──────────────────
+    fine_rate = random.uniform(0.10, 0.25)
+    fine = int(target_data.get("money", 0) * fine_rate)
+    fine = max(5000, fine)
+
+    cash_before = user_data.get("money", 0)
+    bank_before = user_data.get("bank", 0)
+    total_assets = cash_before + bank_before
+
+    paid_from_cash = min(cash_before, fine)
+    remaining = fine - paid_from_cash
+    paid_from_bank = min(bank_before, remaining)
+    unpaid = max(0, fine - paid_from_cash - paid_from_bank)
+
+    user_data["money"] = cash_before - paid_from_cash
+    user_data["bank"] = bank_before - paid_from_bank
+
+    # Nạn nhân được bồi thường 1 phần từ khoản phạt như "tiền báo án"
+    compensation = int((paid_from_cash + paid_from_bank) * 0.3)
+    target_data["money"] = target_data.get("money", 0) + compensation
+
+    # Tiền án tăng dần -> án tù dài hơn cho tái phạm
+    user_data["crime_record"] = user_data.get("crime_record", 0) + 1
+    crime_lv = user_data["crime_record"]
+    base_jail_min = 10
+    jail_minutes = min(60, base_jail_min + (crime_lv - 1) * 5)
+    if unpaid > 0:
+        jail_minutes += 10  # không đủ tiền bồi thường -> ở tù lâu hơn
+
+    jail_time = now + timedelta(minutes=jail_minutes)
+    user_data["jail_time"] = jail_time.strftime("%Y-%m-%d %H:%M:%S")
+    user_data["court_used"] = False  # reset quyền hầu tòa cho lần bắt này
+
+    save_user(user_id)
+    save_user(target_id)
+    add_history(user_id, f"Móc túi thất bại, phạt -{paid_from_cash+paid_from_bank:,} (nợ {unpaid:,})")
+    add_history(target_id, f"Nhận bồi thường vụ móc túi hụt +{compensation:,}")
+
+    pay_breakdown = f"💵 Trừ ví: **{paid_from_cash:,} 💰**"
+    if paid_from_bank > 0:
+        pay_breakdown += f"\n🏦 Trừ ngân hàng: **{paid_from_bank:,} 💰**"
+    if unpaid > 0:
+        pay_breakdown += f"\n⚠️ Không đủ khả năng bồi thường: nợ lại **{unpaid:,} 💰** (án tù +10 phút)"
+
+    flavor = random.choice(JAIL_ENTRY_FLAVOR)
+
+    embed = discord.Embed(
+        title="🚨 BỊ BẮT TẠI TRẬN!",
+        description=(
+            f"**{member.name}** hét lên và tóm được cổ tay bạn! Cảnh sát ập tới ngay sau đó.\n\n"
+            f"⚖️ Tiền án lần thứ **{crime_lv}** — mức phạt tính theo tài sản nạn nhân (**{int(fine_rate*100)}%**)\n"
+            f"{pay_breakdown}\n"
+            f"🎁 {member.name} nhận bồi thường: **{compensation:,} 💰**\n\n"
+            f"{flavor}\n"
+            f"⛓️ Ngồi tù đến <t:{int(jail_time.timestamp())}:R>!\n\n"
+            f"💡 Trong tù bạn có thể: `k toaan` (hầu tòa) | `k baolanh` (bảo lãnh) | `k vuotnguc` (vượt ngục - liều mạng)"
+        ),
+        color=discord.Color.red()
+    )
+    embed.set_image(url=GIF_LINKS.get("rob_fail", ""))
+    await msg.edit(embed=embed)
+
+# =====================================================================
+# CUỘC SỐNG TRONG TÙ: TÒA ÁN — BẢO LÃNH — VƯỢT NGỤC
+# =====================================================================
+JAIL_CELL_FLAVOR = [
+    "🥄 Bữa cơm tù chỉ có cháo loãng và một mẩu bánh mì cứng như đá.",
+    "🎲 Mấy tay tù nhân già rủ bạn chơi bài ăn thuốc lá để giết thời gian.",
+    "📖 Bạn ngồi đếm từng vết khắc trên tường - dấu tích của những kẻ ở trước.",
+    "🚿 Vòi nước phòng tắm chung rỉ sét, nước lạnh buốt chảy nhỏ giọt.",
+    "🔦 Đèn hành lang nhấp nháy suốt đêm, tiếng bước chân cai ngục tuần tra vọng lại.",
+    "🐀 Một con chuột cống chạy ngang qua chân, bạn giật mình tỉnh giấc.",
+    "📻 Radio cũ của cai ngục phát bản tin về đợt truy quét tội phạm mới.",
+]
+
+def get_jail_end(user_data):
+    jail_str = user_data.get("jail_time")
+    if not jail_str:
+        return None
+    try:
+        end = datetime.strptime(jail_str, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return None
+    return end
+
+
+class CourtTrialView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.author = author
+
+    @discord.ui.button(label="⚖️ Nhận Tội", style=discord.ButtonStyle.secondary)
+    async def plead_guilty(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải phiên tòa của bạn!", ephemeral=True)
+        uid = str(self.author.id)
+        user_data = load_user(uid)
+        end = get_jail_end(user_data)
+        if not end or datetime.now() >= end:
+            self.stop()
+            return await interaction.response.edit_message(
+                embed=discord.Embed(description="✅ Bạn đã được tự do, không cần hầu tòa nữa.", color=discord.Color.green()),
+                view=None
+            )
+
+        remain = int((end - datetime.now()).total_seconds())
+        fine = max(3000, int(remain * 15))  # càng còn nhiều thời gian, phạt càng cao để đổi lấy giảm án
+
+        for c in self.children:
+            c.disabled = True
+
+        if user_data.get("money", 0) + user_data.get("bank", 0) < fine:
+            self.stop()
+            return await interaction.response.edit_message(
+                embed=discord.Embed(
+                    description=f"⚠️ Bạn không đủ **{fine:,} 💰** để nộp phạt nhận tội. Thẩm phán lắc đầu, giữ nguyên án tù.",
+                    color=discord.Color.red()
+                ),
+                view=self
+            )
+
+        pay_cash = min(user_data.get("money", 0), fine)
+        pay_bank = fine - pay_cash
+        user_data["money"] -= pay_cash
+        user_data["bank"] -= pay_bank
+
+        new_remain = max(0, remain // 2)
+        new_end = datetime.now() + timedelta(seconds=new_remain)
+        user_data["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
+        save_user(uid)
+        add_history(uid, f"Hầu tòa nhận tội -{fine:,} (giảm 50% án)")
+
         embed = discord.Embed(
-            title="🚨 BỊ PHÁT HIỆN!",
+            title="⚖️ TÒA TUYÊN ÁN",
             description=(
-                f"**{member.name}** phát hiện và hô hoán! "
-                f"Bị phạt **{fine:,} 💰** và ngồi tù đến <t:{int(jail_time.timestamp())}:R>!"
+                f"Bạn thành khẩn nhận tội trước thẩm phán.\n"
+                f"💰 Nộp phạt: **{fine:,} 💰**\n"
+                f"⏳ Án tù giảm còn: <t:{int(new_end.timestamp())}:R>"
+            ),
+            color=discord.Color.gold()
+        )
+        self.stop()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="🗣️ Kêu Oan", style=discord.ButtonStyle.danger)
+    async def plead_not_guilty(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải phiên tòa của bạn!", ephemeral=True)
+        uid = str(self.author.id)
+        user_data = load_user(uid)
+        end = get_jail_end(user_data)
+        if not end or datetime.now() >= end:
+            self.stop()
+            return await interaction.response.edit_message(
+                embed=discord.Embed(description="✅ Bạn đã được tự do, không cần hầu tòa nữa.", color=discord.Color.green()),
+                view=None
+            )
+
+        for c in self.children:
+            c.disabled = True
+
+        if random.randint(1, 100) <= 30:
+            user_data["jail_time"] = None
+            save_user(uid)
+            add_history(uid, "Hầu tòa kêu oan thành công, được tha bổng!")
+            embed = discord.Embed(
+                title="⚖️ TRẮNG ÁN!",
+                description="Bồi thẩm đoàn không đủ bằng chứng buộc tội. Bạn được **THA BỔNG** ngay tại tòa!",
+                color=discord.Color.green()
+            )
+        else:
+            remain = int((end - datetime.now()).total_seconds())
+            new_remain = int(remain * 1.5)
+            new_end = datetime.now() + timedelta(seconds=new_remain)
+            user_data["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
+            save_user(uid)
+            add_history(uid, "Hầu tòa kêu oan thất bại, án tăng 50%")
+            embed = discord.Embed(
+                title="⚖️ THẨM PHÁN NỔI GIẬN!",
+                description=(
+                    f"Thẩm phán cho rằng bạn ngoan cố chối tội, tuyên tăng án!\n"
+                    f"⏳ Ngồi tù đến <t:{int(new_end.timestamp())}:R>"
+                ),
+                color=discord.Color.red()
+            )
+        self.stop()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
+@bot.command(aliases=['court', 'hautoa'])
+async def toaan(ctx):
+    """Hầu tòa khi đang ở tù: nhận tội (giảm 50% án, tốn tiền) hoặc kêu oan (30% được thả, 70% án +50%)."""
+    uid = str(ctx.author.id)
+    user_data = load_user(uid)
+    end = get_jail_end(user_data)
+
+    if not end or datetime.now() >= end:
+        return await ctx.reply("✅ Bạn không đang bị giam, không cần hầu tòa!", mention_author=False)
+
+    if user_data.get("court_used", False):
+        return await ctx.reply("⚠️ Bạn đã dùng quyền hầu tòa cho lần bị giam này rồi!", mention_author=False)
+
+    user_data["court_used"] = True
+    save_user(uid)
+
+    embed = discord.Embed(
+        title="⚖️ PHIÊN TÒA XÉT XỬ",
+        description=(
+            f"{random.choice(JAIL_CELL_FLAVOR)}\n\n"
+            f"Bạn được áp giải ra tòa. Thẩm phán hỏi: *\"Bị cáo có nhận tội không?\"*\n\n"
+            f"⚖️ **Nhận Tội**: Nộp phạt theo thời gian án còn lại, đổi lấy giảm **50%** án tù.\n"
+            f"🗣️ **Kêu Oan**: 30% được **tha bổng ngay**, nhưng 70% án tù tăng thêm **50%**."
+        ),
+        color=discord.Color.blue()
+    )
+    await ctx.reply(embed=embed, view=CourtTrialView(ctx.author), mention_author=False)
+
+
+@bot.command(aliases=['bail'])
+async def baolanh(ctx):
+    """Trả tiền bảo lãnh ra tù ngay lập tức."""
+    uid = str(ctx.author.id)
+    user_data = load_user(uid)
+    end = get_jail_end(user_data)
+
+    if not end or datetime.now() >= end:
+        return await ctx.reply("✅ Bạn không đang bị giam!", mention_author=False)
+
+    remain = int((end - datetime.now()).total_seconds())
+    bail_cost = max(5000, int(remain * 25))
+
+    total = user_data.get("money", 0) + user_data.get("bank", 0)
+    if total < bail_cost:
+        return await ctx.reply(embed=discord.Embed(
+            description=f"⚠️ Bảo lãnh cần **{bail_cost:,} 💰** (cả ví + ngân hàng), bạn chỉ có **{total:,} 💰**.",
+            color=discord.Color.red()
+        ), mention_author=False)
+
+    pay_cash = min(user_data.get("money", 0), bail_cost)
+    pay_bank = bail_cost - pay_cash
+    user_data["money"] -= pay_cash
+    user_data["bank"] -= pay_bank
+    user_data["jail_time"] = None
+    save_user(uid)
+    add_history(uid, f"Bảo lãnh ra tù -{bail_cost:,}")
+
+    await ctx.reply(embed=discord.Embed(
+        title="💰 BẢO LÃNH THÀNH CÔNG",
+        description=f"Nộp **{bail_cost:,} 💰** tiền bảo lãnh. Cánh cửa sắt mở ra, bạn bước ra ánh sáng tự do!",
+        color=discord.Color.green()
+    ), mention_author=False)
+
+
+@bot.command(aliases=['escape', 'vuotnguc'])
+async def vuotngu(ctx):
+    """Liều mạng vượt ngục: 25% thành công thoát ngay, 75% bị bắt lại và án nặng hơn."""
+    uid = str(ctx.author.id)
+    user_data = load_user(uid)
+    end = get_jail_end(user_data)
+
+    if not end or datetime.now() >= end:
+        return await ctx.reply("✅ Bạn không đang bị giam, chạy trốn cái gì!", mention_author=False)
+
+    msg = await ctx.reply(embed=discord.Embed(
+        title="🏃 VƯỢT NGỤC",
+        description=f"{random.choice(JAIL_CELL_FLAVOR)}\n\nĐêm khuya, bạn lén trèo qua hàng rào kẽm gai...",
+        color=discord.Color.dark_grey()
+    ), mention_author=False)
+    await asyncio.sleep(2.5)
+
+    if random.randint(1, 100) <= 25:
+        user_data["jail_time"] = None
+        user_data["bounty"] = user_data.get("bounty", 0) + 20000
+        save_user(uid)
+        add_history(uid, "Vượt ngục thành công! Bị treo thưởng truy nã")
+        embed = discord.Embed(
+            title="🎉 VƯỢT NGỤC THÀNH CÔNG!",
+            description=(
+                "Bạn chạy thoát vào màn đêm, tiếng còi báo động vang lên phía sau lưng!\n\n"
+                "⚠️ Nhưng giờ bạn bị treo thưởng truy nã **+20,000 💰**, cẩn thận thợ săn tiền thưởng!"
+            ),
+            color=discord.Color.gold()
+        )
+    else:
+        remain = int((end - datetime.now()).total_seconds())
+        new_remain = int(remain * 2)
+        new_end = datetime.now() + timedelta(seconds=new_remain)
+        fine = min(user_data.get("money", 0), 10000)
+        user_data["money"] -= fine
+        user_data["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
+        save_user(uid)
+        add_history(uid, f"Vượt ngục thất bại -{fine:,}, án tăng gấp đôi")
+        embed = discord.Embed(
+            title="🚨 BỊ TÓM LẠI!",
+            description=(
+                f"Đèn pha cai ngục quét trúng bạn ngay khi vừa trèo qua tường!\n"
+                f"💰 Phạt roi vọt: **{fine:,} 💰**\n"
+                f"⏳ Án tù tăng gấp đôi, đến <t:{int(new_end.timestamp())}:R>!"
             ),
             color=discord.Color.red()
         )
-        embed.set_image(url=GIF_LINKS.get("rob_fail", ""))
-
     await msg.edit(embed=embed)
 
 @bot.command(aliases=['mine', 'daomo'])
@@ -3515,6 +3810,19 @@ HELP_PAGES = [
         ),
     },
     {
+        "title": "🤖 AI TRA CỨU & TRÒ CHUYỆN",
+        "color": discord.Color.blurple(),
+        "desc": (
+            "`kh <câu hỏi>` — Tra Google + AI tổng hợp trả lời\n"
+            "   VD: `kh thủ đô nước Pháp là gì`\n"
+            "   ⏳ Cooldown 10 giây/lần\n\n"
+            "`@Bot <câu hỏi>` — Tag bot để hỏi đáp tự nhiên (không cần search Google)\n"
+            "   ⏳ Cooldown 8 giây/lần\n\n"
+            "💡 Dùng `kh` khi cần thông tin **thực tế, cập nhật** (tin tức, định nghĩa, sự kiện...).\n"
+            "Dùng tag bot khi chỉ muốn **trò chuyện** hoặc hỏi ý kiến chung chung."
+        ),
+    },
+    {
         "title": "📈 CHỨNG KHOÁN (k ck / trade)",
         "color": discord.Color.blue(),
         "desc": (
@@ -3555,7 +3863,26 @@ HELP_PAGES = [
         "desc": (
             "`k vongquay` (`spin`/`wheel`) — Vòng quay free, hồi 20h\n"
             "`k gacha` — Đập trứng thú cưng (CD 5p, phí 50,000 💰)\n"
-            "`k cuopnganhang` (`cuop`) — Cướp ngân hàng (CD 2h, rủi ro tù)"
+            "`k cuopnganhang` (`cuop`) — Cướp ngân hàng (CD 2h, cần bank ≥200k)\n"
+            "`k moctui @user` — Móc túi trực tiếp người chơi (CD 30p)\n"
+            "   ✅ 40% thành công: lấy 5-15% ví nạn nhân\n"
+            "   ❌ 60% thất bại: bị phạt theo % tài sản nạn nhân + đi tù"
+        ),
+    },
+    {
+        "title": "⛓️ CUỘC SỐNG TRONG TÙ",
+        "color": discord.Color.dark_grey(),
+        "desc": (
+            "Khi bị bắt (cướp/móc túi thất bại), bạn có các lựa chọn sau:\n\n"
+            "`k toaan` (`court`) — Hầu tòa (dùng 1 lần/lượt bị giam)\n"
+            "   ⚖️ Nhận Tội: nộp phạt, giảm 50% thời gian án\n"
+            "   🗣️ Kêu Oan: 30% được tha bổng ngay, 70% án +50%\n\n"
+            "`k baolanh` (`bail`) — Trả tiền bảo lãnh ra tù ngay lập tức\n"
+            "   (chi phí tính theo thời gian án còn lại)\n\n"
+            "`k vuotngu` (`escape`) — Liều mạng vượt ngục\n"
+            "   ✅ 25%: thoát ngay nhưng bị treo thưởng truy nã +20,000 💰\n"
+            "   ❌ 75%: bị tóm lại, án tù gấp đôi + phạt tiền\n\n"
+            "💡 Tiền án (crime record) tăng dần theo số lần bị bắt → án cơ bản dài hơn."
         ),
     },
     {
@@ -3599,7 +3926,9 @@ HELP_PAGES = [
             "`k cty luong <tiền>` — Phát lương toàn công ty (Chủ tịch)\n"
             "`k cty chucvu @user <role>` — Đặt chức vụ (Chủ tịch)\n"
             "`k cty doitenchuc <role> <tên>` — Đổi tên chức vụ\n"
-            "`k cty roi` — Rời/giải tán công ty"
+            "`k cty roi` — Rời/giải tán công ty\n\n"
+            "**Thương trường:** `k cty vaycty` | `k cty tranocty` | `k cty quangcao`\n"
+            "`k cty boicong` | `k cty giandiep` | `k cty anninh` | `k cty cotuc`"
         ),
     },
     {
@@ -3625,20 +3954,57 @@ HELP_PAGES = [
             "`k kallen muave [số lượng]` — Mua vé (30,000 💰/vé)\n"
             "`k kallen nhanvat` — Xem danh sách nhân vật & kỹ năng\n"
             "`k kallen mokuyen <tên>` — Mở khóa nhân vật bằng vật phẩm\n"
+            "`k kallen nangcap <tên>` — Nâng cấp nhân vật\n"
+            "`k kallen trangbi` — Quản lý trang bị\n"
+            "`k kallen cheta` — Chế tạo trang bị\n"
+            "`k kallen cuahang` — Cửa hàng KF\n"
             "`k kallen inventory` (`inv`) — Xem túi đồ Kallen Fantasy\n"
             "`k kallen bancuahang` — Bán vật phẩm KF lấy tiền\n"
-            "`k kallen story <chương>` — Đọc lại cốt truyện\n\n"
-            "📖 6 Chapter (1 ẩn), mỗi Chapter có nhiều Wave + Boss riêng."
+            "`k kallen raid [tên]` — Phó bản tập thể\n"
+            "`k kallen story <chương>` — Đọc lại cốt truyện\n"
+            "`k kallen profile` — Hồ sơ KF của bạn\n"
+            "`k kallen thoat` — Thoát khẩn cấp nếu bị kẹt trong trận\n\n"
+            "📖 9 Chapter (2 ẩn/finale), mỗi Chapter có nhiều Wave + Boss riêng."
         ),
     },
 ]
 
 
+class HelpCategorySelect(discord.ui.Select):
+    def __init__(self, parent_view):
+        self.parent_view = parent_view
+        options = [
+            discord.SelectOption(
+                label=page["title"].replace("_", " "),
+                description=f"Trang {i+1}/{len(HELP_PAGES)}",
+                value=str(i),
+                emoji=page["title"].split()[0] if page["title"].split()[0].strip() else None,
+            )
+            for i, page in enumerate(HELP_PAGES)
+        ]
+        super().__init__(
+            placeholder="📂 Chọn danh mục để xem nhanh...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            row=0,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.parent_view.author.id:
+            return await interaction.response.send_message("Đây không phải menu của bạn!", ephemeral=True)
+        self.parent_view.page = int(self.values[0])
+        self.parent_view._update_buttons()
+        await interaction.response.edit_message(embed=self.parent_view.make_embed(), view=self.parent_view)
+
+
 class HelpPaginatorView(discord.ui.View):
     def __init__(self, author):
-        super().__init__(timeout=120)
+        super().__init__(timeout=300)
         self.author = author
         self.page = 0
+        self.message = None
+        self.add_item(HelpCategorySelect(self))
         self._update_buttons()
 
     def _update_buttons(self):
@@ -3647,6 +4013,11 @@ class HelpPaginatorView(discord.ui.View):
         self.btn_next.disabled = self.page >= len(HELP_PAGES) - 1
         self.btn_last.disabled = self.page >= len(HELP_PAGES) - 1
         self.btn_page.label = f"{self.page + 1}/{len(HELP_PAGES)}"
+        # Đồng bộ dropdown hiển thị đúng lựa chọn hiện tại
+        for item in self.children:
+            if isinstance(item, HelpCategorySelect):
+                for opt in item.options:
+                    opt.default = (opt.value == str(self.page))
 
     def make_embed(self):
         data = HELP_PAGES[self.page]
@@ -3657,48 +4028,64 @@ class HelpPaginatorView(discord.ui.View):
         )
         if bot.user.avatar:
             embed.set_thumbnail(url=bot.user.avatar.url)
-        embed.set_footer(text=f"Trang {self.page + 1}/{len(HELP_PAGES)} | Tiền tố lệnh: k")
+        embed.set_footer(text=f"Trang {self.page + 1}/{len(HELP_PAGES)} | k help | Chọn ở dropdown để nhảy nhanh")
         return embed
 
-    @discord.ui.button(label="⏮", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="⏮", style=discord.ButtonStyle.secondary, row=1)
     async def btn_first(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.page = 0
         self._update_buttons()
         await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
-    @discord.ui.button(label="◀ Trước", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.primary, row=1)
     async def btn_prev(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.page > 0:
             self.page -= 1
         self._update_buttons()
         await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
-    @discord.ui.button(label="1/1", style=discord.ButtonStyle.secondary, disabled=True)
+    @discord.ui.button(label="1/1", style=discord.ButtonStyle.secondary, disabled=True, row=1)
     async def btn_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         pass
 
-    @discord.ui.button(label="Sau ▶", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.primary, row=1)
     async def btn_next(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.page < len(HELP_PAGES) - 1:
             self.page += 1
         self._update_buttons()
         await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
-    @discord.ui.button(label="⏭", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="⏭", style=discord.ButtonStyle.secondary, row=1)
     async def btn_last(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.page = len(HELP_PAGES) - 1
         self._update_buttons()
         await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
+    @discord.ui.button(label="🔄 Làm Mới", style=discord.ButtonStyle.success, row=2)
+    async def btn_refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
+        new_view = HelpPaginatorView(self.author)
+        new_view.page = self.page
+        new_view._update_buttons()
+        await interaction.response.edit_message(embed=new_view.make_embed(), view=new_view)
+        new_view.message = interaction.message
+
     async def on_timeout(self):
         for child in self.children:
             child.disabled = True
+        if self.message:
+            try:
+                embed = self.make_embed()
+                embed.set_footer(text="⏳ Menu đã hết hạn — gõ lại `k help` để mở menu mới")
+                await self.message.edit(embed=embed, view=self)
+            except Exception:
+                pass
 
 
 @bot.command()
 async def help(ctx):
     view = HelpPaginatorView(ctx.author)
-    await ctx.reply(embed=view.make_embed(), view=view, mention_author=False)
+    msg = await ctx.reply(embed=view.make_embed(), view=view, mention_author=False)
+    view.message = msg
 
 @bot.command()
 async def rank(ctx, member: discord.Member = None):
