@@ -9482,8 +9482,114 @@ def E(key, default_emoji="❓"):
     return val
 
 
+# ── ADMIN CẤP CAO ĐỘNG (lưu DB, thêm/gỡ bằng lệnh) ────────────────────
+super_admins_col = db["super_admins"]
+EXTRA_SUPER_ADMIN_IDS = set()
+
+def load_super_admins():
+    try:
+        doc = super_admins_col.find_one({"_id": "list"})
+    except Exception as e:
+        print(f"[WARN] load_super_admins error: {e}")
+        doc = None
+    if doc:
+        EXTRA_SUPER_ADMIN_IDS.update(doc.get("ids", []))
+
+load_super_admins()
+
 def is_super_admin_id(uid):
-    return uid in SUPER_ADMIN_IDS
+    return uid in OWNER_IDS or uid in SUPER_ADMIN_IDS or uid in EXTRA_SUPER_ADMIN_IDS
+
+
+@bot.command(aliases=['addadmin', 'themadmincap'])
+async def themadmin(ctx, member: discord.Member):
+    """Thêm Admin Cấp Cao mới. CHỈ Chủ Bot (OWNER_IDS) mới dùng được."""
+    if ctx.author.id not in OWNER_IDS:
+        return await ctx.reply("⛔ Chỉ **Chủ Bot** mới được thêm Admin Cấp Cao!", mention_author=False)
+
+    if member.id in OWNER_IDS or member.id in SUPER_ADMIN_IDS or member.id in EXTRA_SUPER_ADMIN_IDS:
+        return await ctx.reply(embed=discord.Embed(
+            description=f"⚠️ **{member.name}** đã là Admin Cấp Cao rồi!",
+            color=discord.Color.orange()
+        ), mention_author=False)
+
+    EXTRA_SUPER_ADMIN_IDS.add(member.id)
+    try:
+        super_admins_col.update_one({"_id": "list"}, {"$addToSet": {"ids": member.id}}, upsert=True)
+    except Exception as e:
+        print(f"[WARN] save super admin error: {e}")
+
+    await ctx.reply(embed=discord.Embed(
+        title="✅ ĐÃ THÊM ADMIN CẤP CAO",
+        description=(
+            f"**{member.name}** giờ có quyền Admin Cấp Cao:\n"
+            f"`k assets`, `k viphongthu`, và mọi lệnh dùng `is_super_admin_id()`."
+        ),
+        color=discord.Color.green()
+    ), mention_author=False)
+
+    try:
+        await member.send(embed=discord.Embed(
+            description="⭐ Bạn vừa được **Chủ Bot** cấp quyền **Admin Cấp Cao**!",
+            color=discord.Color.gold()
+        ))
+    except Exception:
+        pass
+
+
+@bot.command(aliases=['removeadmin', 'xoaadmincap'])
+async def xoaadmin(ctx, member: discord.Member):
+    """Gỡ quyền Admin Cấp Cao. CHỈ Chủ Bot (OWNER_IDS) mới dùng được."""
+    if ctx.author.id not in OWNER_IDS:
+        return await ctx.reply("⛔ Chỉ **Chủ Bot** mới được gỡ Admin Cấp Cao!", mention_author=False)
+
+    if member.id in SUPER_ADMIN_IDS or member.id in OWNER_IDS:
+        return await ctx.reply(
+            "⚠️ Không thể gỡ người này qua lệnh (họ nằm cứng trong code `OWNER_IDS`/`SUPER_ADMIN_IDS`)!",
+            mention_author=False
+        )
+
+    if member.id not in EXTRA_SUPER_ADMIN_IDS:
+        return await ctx.reply(f"⚠️ **{member.name}** không phải Admin Cấp Cao (được thêm qua lệnh)!", mention_author=False)
+
+    EXTRA_SUPER_ADMIN_IDS.discard(member.id)
+    try:
+        super_admins_col.update_one({"_id": "list"}, {"$pull": {"ids": member.id}})
+    except Exception as e:
+        print(f"[WARN] remove super admin error: {e}")
+
+    await ctx.reply(embed=discord.Embed(
+        description=f"✅ Đã gỡ quyền Admin Cấp Cao của **{member.name}**.",
+        color=discord.Color.orange()
+    ), mention_author=False)
+
+
+@bot.command(aliases=['listadmin', 'adminscap'])
+async def dsadmin(ctx):
+    """Xem danh sách Admin Cấp Cao hiện tại."""
+    if not (ctx.author.id in OWNER_IDS or is_super_admin_id(ctx.author.id)):
+        return await ctx.reply("⛔ Không có quyền xem!", mention_author=False)
+
+    lines = []
+    for uid in OWNER_IDS:
+        user = bot.get_user(uid)
+        lines.append(f"👑 **{user.name if user else uid}** — Chủ Bot")
+    for uid in SUPER_ADMIN_IDS:
+        if uid in OWNER_IDS:
+            continue
+        user = bot.get_user(uid)
+        lines.append(f"⭐ **{user.name if user else uid}** — Admin Cấp Cao (gốc trong code)")
+    for uid in EXTRA_SUPER_ADMIN_IDS:
+        user = bot.get_user(uid)
+        lines.append(f"➕ **{user.name if user else uid}** — Admin Cấp Cao (thêm qua lệnh)")
+
+    embed = discord.Embed(
+        title="👥 DANH SÁCH ADMIN CẤP CAO",
+        description="\n".join(lines) or "Trống",
+        color=discord.Color.gold()
+    )
+    embed.set_footer(text="k themadmin @user | k xoaadmin @user")
+    await ctx.reply(embed=embed, mention_author=False)
 
 
 def load_bot_assets():
