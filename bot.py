@@ -9843,6 +9843,310 @@ async def dieukhien(ctx):
         color=discord.Color.blue()
     )
     await ctx.reply(embed=embed, view=DKGuildView(ctx.author), mention_author=False)
+    # =====================================================================
+# 🛡️ TỔNG HỢP LỆNH ADMIN — TỰ ĐỘNG PHÁT HIỆN LỆNH ADMIN MỚI
+# =====================================================================
+# CÁCH CÀI ĐẶT:
+# 1) Dán TOÀN BỘ file này vào bot.py, TRƯỚC dòng keep_alive()
+#    (đặt sau phần "HỆ THỐNG QUẢN LÝ ASSET" hoặc sau "BRIDGE" đều được)
+#
+# 2) Yêu cầu đã có sẵn trong bot.py: OWNER_IDS, SUPER_ADMIN_IDS,
+#    is_super_admin_id(), BOT_FILE_PATH (đều đã tồn tại từ trước).
+#
+# 3) (TÙY CHỌN nhưng khuyên dùng) Trong hàm on_ready() hiện tại,
+#    thêm 1 dòng để bot tự báo khi phát hiện lệnh admin MỚI lúc khởi động:
+#
+#        new_admin_cmds = check_new_admin_commands_on_startup()
+#        if new_admin_cmds:
+#            print(f'>>> [ADMIN SCAN] Phát hiện {len(new_admin_cmds)} lệnh admin mới: {new_admin_cmds}')
+#
+#    Đặt dòng này gần chỗ bạn đang gọi scan_source_for_assets() là hợp lý.
+#
+# CÁCH HOẠT ĐỘNG:
+# - Không cần khai báo tay lệnh nào cả. Mỗi lần gõ `k lenhadmin`, bot tự
+#   ĐỌC LẠI chính file bot.py, tìm mọi lệnh có:
+#     • @commands.has_permissions(administrator=True)   -> "Quyền Discord"
+#     • kiểm tra OWNER_IDS trong thân hàm                -> "Chỉ Chủ Bot"
+#     • kiểm tra SUPER_ADMIN_IDS / is_super_admin_id()    -> "Admin Cấp Cao"
+#   => Thêm lệnh admin mới vào bot.py theo đúng 3 kiểu trên là NÓ TỰ HIỆN
+#      trong `k lenhadmin`, không cần sửa gì thêm ở file này.
+# =====================================================================
+
+import re
+
+admin_cmds_snapshot_col = db["admin_cmds_snapshot"]
+
+ADMIN_TYPE_LABELS = {
+    "perm_admin":  ("🛡️ Quyền Discord (Administrator)", discord.Color.blue()),
+    "owner":       ("👑 Chỉ Chủ Bot (OWNER_IDS)", discord.Color.gold()),
+    "super_admin": ("⭐ Admin Cấp Cao (SUPER_ADMIN_IDS)", discord.Color.purple()),
+}
+ADMIN_TYPE_ORDER = ["perm_admin", "owner", "super_admin"]
+
+
+def scan_admin_commands():
+    """Quét chính file bot.py để tìm mọi lệnh admin — tự động, không cần khai báo tay."""
+    try:
+        with open(BOT_FILE_PATH, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except Exception as e:
+        print(f"[ADMINSCAN] Lỗi đọc file: {e}")
+        return []
+
+    results = []
+    i, n = 0, len(lines)
+    decorator_re    = re.compile(r'^\s*@(?:bot|[\w]+)\.(?:command|group)\s*\(')
+    perm_admin_re   = re.compile(r'has_permissions\s*\([^)]*administrator\s*=\s*True')
+    func_def_re     = re.compile(r'^\s*async\s+def\s+(\w+)\s*\(')
+
+    while i < n:
+        line = lines[i]
+        if decorator_re.match(line):
+            deco_block = [line]
+            j = i + 1
+            # Gom hết decorator xếp chồng (vd @commands.has_permissions) cho tới khi gặp "async def"
+            while j < n and not func_def_re.match(lines[j]):
+                stripped = lines[j].strip()
+                if stripped.startswith('@') or stripped == "":
+                    deco_block.append(lines[j])
+                    j += 1
+                else:
+                    break
+
+            if j < n and func_def_re.match(lines[j]):
+                func_name = func_def_re.match(lines[j]).group(1)
+                deco_text = "".join(deco_block)
+
+                name_match = re.search(r'name\s*=\s*["\'](\w+)["\']', deco_text)
+                cmd_name = name_match.group(1) if name_match else func_name
+
+                alias_match = re.search(r'aliases\s*=\s*\[([^\]]*)\]', deco_text)
+                aliases = []
+                if alias_match:
+                    aliases = [a.strip().strip('"\'') for a in alias_match.group(1).split(",") if a.strip()]
+
+                cmd_type = "perm_admin" if perm_admin_re.search(deco_text) else None
+
+                # Quét thân hàm tìm OWNER_IDS / SUPER_ADMIN_IDS nếu chưa xác định qua decorator
+                body_lines = []
+                k = j + 1
+                base_indent = len(lines[j]) - len(lines[j].lstrip())
+                while k < n:
+                    l = lines[k]
+                    stripped = l.strip()
+                    if stripped == "":
+                        body_lines.append(l); k += 1; continue
+                    cur_indent = len(l) - len(l.lstrip())
+                    if cur_indent <= base_indent and (
+                        stripped.startswith('@') or stripped.startswith('def ')
+                        or stripped.startswith('async def') or stripped.startswith('class ')
+                    ):
+                        break
+                    body_lines.append(l)
+                    k += 1
+                    if len(body_lines) > 100:
+                        break
+                body_text = "".join(body_lines)
+
+                if not cmd_type:
+                    if "SUPER_ADMIN_IDS" in body_text or "is_super_admin_id(" in body_text:
+                        cmd_type = "super_admin"
+                    elif "OWNER_IDS" in body_text:
+                        cmd_type = "owner"
+
+                if cmd_type:
+                    desc = ""
+                    doc_search = re.search(r'"""(.*?)"""', body_text, re.S)
+                    if doc_search:
+                        desc = doc_search.group(1).strip().split("\n")[0].strip()
+                    results.append({
+                        "name": cmd_name,
+                        "func": func_name,
+                        "aliases": aliases,
+                        "type": cmd_type,
+                        "desc": desc,
+                    })
+                i = j
+                continue
+        i += 1
+
+    # Loại trùng theo tên lệnh, giữ bản xuất hiện đầu tiên
+    seen, unique_results = set(), []
+    for r in results:
+        if r["name"] not in seen:
+            seen.add(r["name"])
+            unique_results.append(r)
+    return unique_results
+
+
+def check_new_admin_commands_on_startup():
+    """Gọi trong on_ready() (tùy chọn) để log lệnh admin mới phát hiện lúc khởi động bot."""
+    found = scan_admin_commands()
+    new_names = {r["name"] for r in found}
+    try:
+        snap = admin_cmds_snapshot_col.find_one({"_id": "snapshot"}) or {}
+        old_names = set(snap.get("names", []))
+    except Exception:
+        old_names = set()
+    newly_added = list(new_names - old_names)
+    try:
+        admin_cmds_snapshot_col.update_one(
+            {"_id": "snapshot"},
+            {"$set": {"names": list(new_names), "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}},
+            upsert=True
+        )
+    except Exception as e:
+        print(f"[ADMINSCAN] snapshot save error: {e}")
+    return newly_added
+
+
+# =====================================================================
+# VIEW: PHÂN TRANG THEO LOẠI QUYỀN
+# =====================================================================
+class AdminCmdsPaginatorView(discord.ui.View):
+    def __init__(self, author, cmds, newly_added):
+        super().__init__(timeout=120)
+        self.author = author
+        self.newly_added = set(newly_added)
+        self.total_cmds = len(cmds)
+        self._rebuild_groups(cmds)
+        self.page = 0
+        self._update_buttons()
+
+    def _rebuild_groups(self, cmds):
+        self.groups = {}
+        for c in cmds:
+            self.groups.setdefault(c["type"], []).append(c)
+        self.page_keys = [k for k in ADMIN_TYPE_ORDER if k in self.groups]
+
+    def _update_buttons(self):
+        has_pages = bool(self.page_keys)
+        self.btn_prev.disabled = (not has_pages) or self.page <= 0
+        self.btn_next.disabled = (not has_pages) or self.page >= len(self.page_keys) - 1
+        self.btn_page.label = f"{self.page+1}/{len(self.page_keys)}" if has_pages else "0/0"
+
+    def make_embed(self):
+        if not self.page_keys:
+            return discord.Embed(
+                title="🛡️ TỔNG HỢP LỆNH ADMIN",
+                description="⚠️ Không tìm thấy lệnh admin nào (kiểm tra lại BOT_FILE_PATH có đúng file đang chạy không).",
+                color=discord.Color.red()
+            )
+        key = self.page_keys[self.page]
+        label, color = ADMIN_TYPE_LABELS[key]
+        cmds = sorted(self.groups[key], key=lambda c: c["name"])
+
+        lines = []
+        for c in cmds:
+            tag = " 🆕" if c["name"] in self.newly_added else ""
+            alias_str = f" (`{', '.join(c['aliases'])}`)" if c["aliases"] else ""
+            desc = f" — {c['desc']}" if c["desc"] else ""
+            lines.append(f"**k {c['name']}**{alias_str}{tag}{desc}")
+
+        embed = discord.Embed(
+            title=f"🛡️ LỆNH ADMIN — {label}",
+            description="\n".join(lines) or "Không có lệnh nào.",
+            color=color
+        )
+        embed.set_footer(text=f"Trang {self.page+1}/{len(self.page_keys)} | Tổng {self.total_cmds} lệnh admin | 🆕 = mới phát hiện so với lần quét trước")
+        return embed
+
+    @discord.ui.button(label="◀ Trước", style=discord.ButtonStyle.primary)
+    async def btn_prev(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        if self.page > 0:
+            self.page -= 1
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="1/1", style=discord.ButtonStyle.secondary, disabled=True)
+    async def btn_page(self, interaction, button):
+        pass
+
+    @discord.ui.button(label="Sau ▶", style=discord.ButtonStyle.primary)
+    async def btn_next(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        if self.page < len(self.page_keys) - 1:
+            self.page += 1
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="🔍 Quét Lại Ngay", style=discord.ButtonStyle.success, row=1)
+    async def btn_rescan(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        found = scan_admin_commands()
+        new_names = {r["name"] for r in found}
+        try:
+            snap = admin_cmds_snapshot_col.find_one({"_id": "snapshot"}) or {}
+            old_names = set(snap.get("names", []))
+        except Exception:
+            old_names = set()
+        self.newly_added = new_names - old_names
+        try:
+            admin_cmds_snapshot_col.update_one(
+                {"_id": "snapshot"},
+                {"$set": {"names": list(new_names), "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}},
+                upsert=True
+            )
+        except Exception:
+            pass
+        self.total_cmds = len(found)
+        self._rebuild_groups(found)
+        self.page = 0
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+
+# =====================================================================
+# LỆNH: k lenhadmin
+# =====================================================================
+@bot.command(aliases=['adminlist', 'adcmds', 'lenhad'])
+async def lenhadmin(ctx):
+    """Tổng hợp toàn bộ lệnh Admin — tự động quét & phát hiện lệnh admin mới trong bot.py."""
+    is_allowed = (
+        ctx.author.id in OWNER_IDS
+        or is_super_admin_id(ctx.author.id)
+        or ctx.author.guild_permissions.administrator
+    )
+    if not is_allowed:
+        return await ctx.reply("⛔ Bạn không có quyền xem bảng này!", mention_author=False)
+
+    found = scan_admin_commands()
+    if not found:
+        return await ctx.reply(
+            embed=discord.Embed(description="⚠️ Không quét được lệnh admin nào (hoặc lỗi đọc file).", color=discord.Color.red()),
+            mention_author=False
+        )
+
+    try:
+        snap = admin_cmds_snapshot_col.find_one({"_id": "snapshot"}) or {}
+        old_names = set(snap.get("names", []))
+    except Exception:
+        old_names = set()
+
+    new_names = {r["name"] for r in found}
+    newly_added = new_names - old_names
+
+    try:
+        admin_cmds_snapshot_col.update_one(
+            {"_id": "snapshot"},
+            {"$set": {"names": list(new_names), "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}},
+            upsert=True
+        )
+    except Exception as e:
+        print(f"[ADMINSCAN] snapshot save error: {e}")
+
+    view = AdminCmdsPaginatorView(ctx.author, found, newly_added)
+    await ctx.reply(embed=view.make_embed(), view=view, mention_author=False)
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
