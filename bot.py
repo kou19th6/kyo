@@ -385,7 +385,7 @@ async def global_check(ctx):
     # Các lệnh KHÔNG BAO GIỜ bị chặn dù đang ở tù (kể cả alias)
     JAIL_EXEMPT_COMMANDS = {
         "help", "toaan", "court", "hautoa",
-        "baolanh", "bail",
+        "bail",
         "vuotngu", "escape", "vuotnguc",
     }
     is_exempt = ctx.command and ctx.command.name in JAIL_EXEMPT_COMMANDS
@@ -404,7 +404,7 @@ async def global_check(ctx):
                             f"{ctx.author.mention} đang bóc lịch trong trại giam!\n\n"
                             f"{random.choice(JAIL_CELL_FLAVOR)}\n\n"
                             f"⏳ Mãn hạn: <t:{int(jail_end.timestamp())}:R>\n\n"
-                            f"💡 `k toaan` (hầu tòa) | `k baolanh` (bảo lãnh) | `k vuotngu` (vượt ngục)"
+                            f"💡 `k toaan` (hầu tòa) | `k baolanh` (éo bảo lãnh) | `k vuotngu` (vượt ngục)"
                         ),
                         color=discord.Color.red()
                     )
