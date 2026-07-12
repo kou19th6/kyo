@@ -46,7 +46,7 @@ async def get_ai_reply(prompt: str, username: str) -> str:
         return response.text
     except Exception as e:
         print(f"[ERROR] AI error: {e}")
-        return "⚠️ AI đang gặp sự cố, thử lại sau nhé!"
+        return ""
 # =====================================================================
 # KHO ẢNH GIF ĐỘNG
 # =====================================================================
