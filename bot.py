@@ -3839,7 +3839,7 @@ async def on_message(message):
             embed = discord.Embed(description=reply_text[:4000], color=discord.Color.blurple())
             embed.set_author(name=f"🤖 Trả lời {message.author.display_name}", icon_url=bot.user.display_avatar.url)
             try:
-                await message.reply(embed=embed, mention_author=False)
+                await message.reply(embed=embed, mention_author=True)
             except Exception as e:
                 print(f"[WARN] Không gửi được AI reply: {e}")
             return
