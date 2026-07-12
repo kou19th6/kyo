@@ -381,7 +381,8 @@ async def global_check(ctx):
     user_id = str(ctx.author.id)
     user_data = load_user(user_id)
     jail_time_str = user_data.get("jail_time")
-if jail_time_str:
+
+    if jail_time_str:          # ← thụt 4 space, cùng cấp với các dòng trên
         try:
             jail_end = datetime.strptime(jail_time_str, "%Y-%m-%d %H:%M:%S")
             if datetime.now() < jail_end:
@@ -3284,6 +3285,28 @@ async def moctui(ctx, member: discord.Member):
 
     user_data = load_user(user_id)
     target_data = load_user(target_id)
+
+   # ── KIỂM TRA VÍ CHỐNG MÓC ────────────────────────────────────────
+    shield_str = target_data.get("wallet_shield_until")
+    if shield_str:
+        try:
+            shield_end = datetime.strptime(shield_str, "%Y-%m-%d %H:%M:%S")
+            if now < shield_end:
+                return await ctx.reply(embed=discord.Embed(
+                    title="🛡️ VÍ ĐƯỢC BẢO VỆ!",
+                    description=(
+                        f"Ví của **{member.name}** được trang bị **Ví Chống Móc 🛡️**!\n"
+                        f"Tay bạn vừa chạm vào đã bị đẩy bật ra bởi lớp khiên vô hình.\n\n"
+                        f"⏳ Bảo vệ còn hiệu lực đến: <t:{int(shield_end.timestamp())}:R>"
+                    ),
+                    color=discord.Color.blue()
+                ), mention_author=False)
+            else:
+                target_data["wallet_shield_until"] = None
+                save_user(target_id)
+        except Exception:
+            target_data["wallet_shield_until"] = None
+            save_user(target_id)
 
     jail_str = user_data.get("jail_time")
     if jail_str:
@@ -9829,6 +9852,88 @@ async def assets(ctx):
 # • Nếu 1 bridge có nhiều nguồn, bắt buộc REPLY đúng tin nhắn để bot biết
 #   gửi đi đâu (tránh gửi nhầm kênh) — có cảnh báo rõ ràng khi gõ không reply.
 # =====================================================================
+
+# =====================================================================
+# VÍ CHỐNG MÓC — CHỈ ADMIN CẤP CAO CẤP/THU HỒI ĐƯỢC
+# =====================================================================
+@bot.command(aliases=['antipocket', 'viBaoVe', 'khienvi'])
+async def viphongthu(ctx, member: discord.Member, days: int = None):
+    """
+    Cấp/thu hồi Ví Chống Móc cho người chơi. CHỈ Admin Cấp Cao.
+    - k viphongthu @user <số ngày>  -> cấp bảo vệ trong N ngày
+    - k viphongthu @user 0          -> thu hồi bảo vệ ngay lập tức
+    - k viphongthu @user            -> xem trạng thái hiện tại
+    """
+    if not is_super_admin_id(ctx.author.id):
+        return await ctx.reply(embed=discord.Embed(
+            description="⛔ Chỉ **Admin Cấp Cao** mới được cấp Ví Chống Móc!",
+            color=discord.Color.red()
+        ), mention_author=False)
+
+    target_id = str(member.id)
+    target_data = load_user(target_id)
+    now = datetime.now()
+
+    # ── XEM TRẠNG THÁI (không truyền số ngày) ────────────────────────
+    if days is None:
+        shield_str = target_data.get("wallet_shield_until")
+        if shield_str:
+            try:
+                shield_end = datetime.strptime(shield_str, "%Y-%m-%d %H:%M:%S")
+                if now < shield_end:
+                    return await ctx.reply(embed=discord.Embed(
+                        title="🛡️ TRẠNG THÁI VÍ CHỐNG MÓC",
+                        description=(
+                            f"**{member.name}** đang được bảo vệ.\n"
+                            f"⏳ Hết hạn: <t:{int(shield_end.timestamp())}:R>"
+                        ),
+                        color=discord.Color.blue()
+                    ), mention_author=False)
+            except Exception:
+                pass
+        return await ctx.reply(embed=discord.Embed(
+            description=f"⚪ **{member.name}** hiện không có Ví Chống Móc.\n`k viphongthu @{member.name} <số ngày>` để cấp.",
+            color=discord.Color.light_grey()
+        ), mention_author=False)
+
+    # ── THU HỒI ───────────────────────────────────────────────────────
+    if days <= 0:
+        target_data["wallet_shield_until"] = None
+        save_user(target_id)
+        add_history(target_id, f"Bị thu hồi Ví Chống Móc bởi Admin {ctx.author.name}")
+        return await ctx.reply(embed=discord.Embed(
+            title="🗑️ ĐÃ THU HỒI",
+            description=f"Ví Chống Móc của **{member.name}** đã bị gỡ bỏ.",
+            color=discord.Color.orange()
+        ), mention_author=False)
+
+    if days > 365:
+        return await ctx.reply("⚠️ Tối đa cấp 365 ngày/lần!", mention_author=False)
+
+    # ── CẤP MỚI ───────────────────────────────────────────────────────
+    expire = now + timedelta(days=days)
+    target_data["wallet_shield_until"] = expire.strftime("%Y-%m-%d %H:%M:%S")
+    save_user(target_id)
+    add_history(target_id, f"Được cấp Ví Chống Móc {days} ngày bởi Admin {ctx.author.name}")
+
+    embed = discord.Embed(
+        title="🛡️ ĐÃ CẤP VÍ CHỐNG MÓC!",
+        description=(
+            f"**{member.name}** giờ đây miễn nhiễm với `k moctui` trong **{days} ngày**!\n"
+            f"⏳ Hết hạn: <t:{int(expire.timestamp())}:R>"
+        ),
+        color=discord.Color.green()
+    )
+    embed.set_footer(text=f"Cấp bởi Admin Cấp Cao: {ctx.author.name}")
+    await ctx.reply(embed=embed, mention_author=False)
+    try:
+        target_user = await bot.fetch_user(member.id)
+        await target_user.send(embed=discord.Embed(
+            description=f"🛡️ Bạn vừa được Admin cấp **Ví Chống Móc** trong **{days} ngày**! Không ai móc túi được bạn nữa.",
+            color=discord.Color.green()
+        ))
+    except Exception:
+        pass  # user tắt DM thì bỏ qua, không lỗi
 
 import re
 
