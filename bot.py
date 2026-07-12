@@ -374,6 +374,13 @@ def check_achievement(user_id, user_data):
 # GLOBAL CHECK
 # =====================================================================
 @bot.check
+async def global_check(ctx):
+    if ctx.author.bot:
+        return False
+
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    jail_time_str = user_data.get("jail_time")
 if jail_time_str:
         try:
             jail_end = datetime.strptime(jail_time_str, "%Y-%m-%d %H:%M:%S")
