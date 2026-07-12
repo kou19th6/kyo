@@ -378,6 +378,20 @@ async def global_check(ctx):
     if ctx.author.bot:
         return False
 
+    # Admin luôn được bypass
+    if ctx.guild and ctx.author.guild_permissions.administrator:
+        return True
+
+    # Các lệnh KHÔNG BAO GIỜ bị chặn dù đang ở tù (kể cả alias)
+    JAIL_EXEMPT_COMMANDS = {
+        "help", "toaan", "court", "hautoa",
+        "baolanh", "bail",
+        "vuotngu", "escape", "vuotnguc",
+    }
+    if ctx.command and ctx.command.name in JAIL_EXEMPT_COMMANDS:
+        pass  # không return True ngay để channel-restriction vẫn được check bên dưới
+    else:
+
     user_id = str(ctx.author.id)
     user_data = load_user(user_id)
     jail_time_str = user_data.get("jail_time")
