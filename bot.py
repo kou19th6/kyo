@@ -3803,6 +3803,9 @@ async def lyhon(ctx):
 # =====================================================================
 @bot.event
 async def on_message(message):
+       handled = await handle_bridge_relay(message)
+        if handled:
+            return
     if message.author.bot: return
 
     # ═══════════════════════════════════════════
