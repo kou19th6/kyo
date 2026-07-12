@@ -8686,7 +8686,7 @@ async def saochep(ctx, dest_guild_id: int):
 # - Dán TOÀN BỘ đoạn code dưới đây vào bất kỳ đâu TRƯỚC dòng keep_alive()
 # =====================================================================
 
-YOUTUBE_API_KEY = os.getenv("AIzaSyCREtj07yoFzF_WgNg6Swm1t3FdHkBd1TU")
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 youtube_channels_col = db["youtube_channels"]  # tạo collection mới trong Mongo
 
 
