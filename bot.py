@@ -388,36 +388,36 @@ async def global_check(ctx):
         "baolanh", "bail",
         "vuotngu", "escape", "vuotnguc",
     }
-    is_exempt = ctx.command and ctx.command.name in JAIL_EXEMPT_COMMANDS
+is_exempt = ctx.command and ctx.command.name in JAIL_EXEMPT_COMMANDS
 
     if not is_exempt:
-    user_id = str(ctx.author.id)
-    user_data = load_user(user_id)
-    jail_time_str = user_data.get("jail_time")
+        user_id = str(ctx.author.id)
+        user_data = load_user(user_id)
+        jail_time_str = user_data.get("jail_time")
 
-    if jail_time_str:          # ← thụt 4 space, cùng cấp với các dòng trên
-        try:
-            jail_end = datetime.strptime(jail_time_str, "%Y-%m-%d %H:%M:%S")
-            if datetime.now() < jail_end:
-                embed = discord.Embed(
-                    title="🚨 BÁO ĐỘNG ĐỎ!",
-                    description=(
-                        f"{ctx.author.mention} đang bóc lịch trong trại giam!\n\n"
-                        f"{random.choice(JAIL_CELL_FLAVOR)}\n\n"
-                        f"⏳ Mãn hạn: <t:{int(jail_end.timestamp())}:R>\n\n"
-                        f"💡 `k toaan` (hầu tòa) | `k baolanh` (bảo lãnh) | `k vuotngu` (vượt ngục)"
-                    ),
-                    color=discord.Color.red()
-                )
-                embed.set_thumbnail(url=GIF_LINKS["jail"])
-                await ctx.reply(embed=embed, mention_author=False)
-                return False
-            else:
+        if jail_time_str:
+            try:
+                jail_end = datetime.strptime(jail_time_str, "%Y-%m-%d %H:%M:%S")
+                if datetime.now() < jail_end:
+                    embed = discord.Embed(
+                        title="🚨 BÁO ĐỘNG ĐỎ!",
+                        description=(
+                            f"{ctx.author.mention} đang bóc lịch trong trại giam!\n\n"
+                            f"{random.choice(JAIL_CELL_FLAVOR)}\n\n"
+                            f"⏳ Mãn hạn: <t:{int(jail_end.timestamp())}:R>\n\n"
+                            f"💡 `k toaan` (hầu tòa) | `k baolanh` (bảo lãnh) | `k vuotngu` (vượt ngục)"
+                        ),
+                        color=discord.Color.red()
+                    )
+                    embed.set_thumbnail(url=GIF_LINKS["jail"])
+                    await ctx.reply(embed=embed, mention_author=False)
+                    return False
+                else:
+                    user_data["jail_time"] = None
+                    save_user(ctx.author.id)
+            except Exception:
                 user_data["jail_time"] = None
                 save_user(ctx.author.id)
-        except Exception:
-            user_data["jail_time"] = None
-            save_user(ctx.author.id)
 
     if ctx.guild:
         try:
@@ -438,7 +438,6 @@ async def global_check(ctx):
             print(f"[WARN] channel check error: {e}")
 
     return True
-
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
