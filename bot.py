@@ -388,10 +388,9 @@ async def global_check(ctx):
         "baolanh", "bail",
         "vuotngu", "escape", "vuotnguc",
     }
-    if ctx.command and ctx.command.name in JAIL_EXEMPT_COMMANDS:
-        pass  # không return True ngay để channel-restriction vẫn được check bên dưới
-    else:
+    is_exempt = ctx.command and ctx.command.name in JAIL_EXEMPT_COMMANDS
 
+    if not is_exempt:
     user_id = str(ctx.author.id)
     user_data = load_user(user_id)
     jail_time_str = user_data.get("jail_time")
