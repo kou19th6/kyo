@@ -389,7 +389,6 @@ async def global_check(ctx):
         "vuotngu", "escape", "vuotnguc",
     }
 is_exempt = ctx.command and ctx.command.name in JAIL_EXEMPT_COMMANDS
-
     if not is_exempt:
         user_id = str(ctx.author.id)
         user_data = load_user(user_id)
