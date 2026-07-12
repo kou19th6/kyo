@@ -9327,45 +9327,42 @@ async def assets(ctx):
         ), mention_author=False)
     await ctx.reply(embed=asset_stats_embed(), view=AssetMainView(ctx.author), mention_author=False)
 # =====================================================================
-# 🌐 TRUNG TÂM ĐIỀU KHIỂN ĐA SERVER (Cross-Server Control + Bridge)
+# 🌐 HỆ THỐNG BRIDGE ĐA SERVER v2 — FIX: GỘP NHIỀU KÊNH + HỦY MỌI NƠI
 # =====================================================================
+# ⚠️ FILE NÀY THAY THẾ HOÀN TOÀN "bridge_control_system.py" trước đó.
+#    Nếu đã dán bản cũ vào bot.py, hãy XÓA toàn bộ khối code cũ đó
+#    (từ dòng "HỆ THỐNG BRIDGE ĐA SERVER" tới hết các lệnh lienket/
+#    huylienket/ds_lienket cũ) rồi dán file này vào thay thế.
+#
 # CÁCH CÀI ĐẶT:
 # 1) Dán TOÀN BỘ file này vào bot.py, TRƯỚC dòng keep_alive()
-#    (đặt sau phần "TÍNH NĂNG: LƯU & XEM KÊNH YOUTUBE" là hợp lý nhất)
-#
-# 2) Yêu cầu: OWNER_IDS đã được định nghĩa sẵn trong bot.py (đã có).
-#
-# 3) QUAN TRỌNG — tích hợp vào on_message đang có:
-#    Mở hàm `async def on_message(message):` hiện tại của bạn,
-#    thêm 2 dòng NGAY DÒNG ĐẦU TIÊN (trước "if message.author.bot: return"):
+# 2) Trong on_message hiện tại, đảm bảo có 2 dòng đầu tiên (giữ nguyên
+#    như trước, không đổi gì thêm):
 #
 #        handled = await handle_bridge_relay(message)
 #        if handled:
 #            return
 #
-#    Ví dụ:
-#        @bot.event
-#        async def on_message(message):
-#            handled = await handle_bridge_relay(message)   # 👈 THÊM DÒNG NÀY
-#            if handled:                                     # 👈 VÀ DÒNG NÀY
-#                return
-#            if message.author.bot: return
-#            ... (phần code cũ giữ nguyên) ...
+# LƯU Ý DB: Dùng collection mới "bridge_links_v2" (khác tên với bản cũ
+# "bridge_links") để không bị lẫn dữ liệu cũ sai định dạng.
 #
-# Không cần sửa gì thêm. Bot cần quyền "Manage Webhooks",
-# "Manage Channels" và "Read Message History" ở các server liên quan.
+# ĐIỂM MỚI SO VỚI BẢN TRƯỚC:
+# • 1 kênh bridge giờ có thể nhận tin từ NHIỀU kênh đích khác nhau
+#   (gộp nhiều server/kênh về chung 1 chỗ để dễ theo dõi).
+# • `k huylienket` dùng được từ BẤT KỲ ĐÂU, không cần đứng trong bridge.
+# • Nếu 1 bridge có nhiều nguồn, bắt buộc REPLY đúng tin nhắn để bot biết
+#   gửi đi đâu (tránh gửi nhầm kênh) — có cảnh báo rõ ràng khi gõ không reply.
 # =====================================================================
 
 import re
 
-bridge_links_col   = db["bridge_links"]     # {_id: bridge_channel_id, target_channel_id, ...}
-bridge_msg_map_col = db["bridge_msg_map"]   # {_id: bridge_message_id, target_channel_id, target_message_id}
-bridge_webhook_cache = {}  # {channel_id: discord.Webhook}  (cache trong RAM cho nhanh)
+bridge_links_col   = db["bridge_links_v2"]   # nhiều doc có thể cùng bridge_channel_id
+bridge_msg_map_col = db["bridge_msg_map"]    # {_id: relay_message_id, bridge_channel_id, target_channel_id, target_message_id}
+bridge_webhook_cache = {}  # {channel_id: discord.Webhook}
 
 
-# ── HELPER: LẤY/TẠO WEBHOOK CHO 1 KÊNH ────────────────────────────────
+# ── HELPER: WEBHOOK ────────────────────────────────────────────────────
 async def get_or_create_webhook(channel):
-    """Lấy hoặc tạo webhook 'BridgeRelay' cho kênh, dùng để relay giữ tên/avatar gốc."""
     if channel.id in bridge_webhook_cache:
         return bridge_webhook_cache[channel.id]
     try:
@@ -9380,141 +9377,183 @@ async def get_or_create_webhook(channel):
         return None
 
 
-def get_bridge_by_channel(channel_id):
-    """Trả về ('bridge', doc) nếu channel_id là kênh cầu nối,
-    ('target', doc) nếu channel_id là kênh đích đang bị theo dõi, hoặc (None, None)."""
+# ── HELPER: TRUY VẤN LIÊN KẾT ──────────────────────────────────────────
+def get_links_for_bridge(bridge_channel_id):
+    """Trả về TẤT CẢ liên kết (có thể nhiều) đổ vào 1 kênh bridge."""
     try:
-        as_bridge = bridge_links_col.find_one({"_id": channel_id})
-        if as_bridge:
-            return "bridge", as_bridge
-        as_target = bridge_links_col.find_one({"target_channel_id": channel_id})
-        if as_target:
-            return "target", as_target
+        return list(bridge_links_col.find({"bridge_channel_id": bridge_channel_id}))
     except Exception as e:
         print(f"[BRIDGE] DB lỗi: {e}")
-    return None, None
+        return []
+
+
+def get_link_for_target(target_channel_id):
+    """1 kênh đích chỉ được thuộc về ĐÚNG 1 bridge — trả về doc hoặc None."""
+    try:
+        return bridge_links_col.find_one({"target_channel_id": target_channel_id})
+    except Exception as e:
+        print(f"[BRIDGE] DB lỗi: {e}")
+        return None
+
+
+def create_bridge_link(bridge_channel_id, target_channel, owner_id):
+    guild_name = target_channel.guild.name if target_channel.guild else "DM"
+    doc_id = f"{bridge_channel_id}_{target_channel.id}"
+    bridge_links_col.update_one(
+        {"_id": doc_id},
+        {"$set": {
+            "bridge_channel_id": bridge_channel_id,
+            "target_channel_id": target_channel.id,
+            "target_guild_id": target_channel.guild.id if target_channel.guild else None,
+            "target_guild_name": guild_name,
+            "target_channel_name": target_channel.name,
+            "owner_id": owner_id,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }},
+        upsert=True
+    )
 
 
 # ── CORE: XỬ LÝ RELAY 2 CHIỀU ─────────────────────────────────────────
 async def handle_bridge_relay(message: discord.Message) -> bool:
-    """
-    Gọi hàm này ở ĐẦU on_message.
-    Trả về True nếu tin nhắn đã được xử lý xong và on_message nên return luôn
-    (chỉ xảy ra khi tin nhắn được gõ TẠI kênh bridge).
-    Trả về False nếu không liên quan hoặc chỉ là quan sát (kênh đích) —
-    on_message vẫn nên tiếp tục xử lý XP/lệnh như bình thường.
-    """
+    """Gọi ở đầu on_message. True = đã xử lý xong, on_message nên return.
+    False = không liên quan hoặc chỉ quan sát, on_message tiếp tục bình thường."""
     if message.author.bot:
         return False
     if not message.guild:
         return False
 
-    side, link = get_bridge_by_channel(message.channel.id)
-    if not link:
-        return False
+    target_link = get_link_for_target(message.channel.id)
+    if target_link:
+        return await _relay_target_to_bridge(message, target_link)
 
-    try:
-        # ═══ TRƯỜNG HỢP 1: Tin nhắn ở KÊNH ĐÍCH -> relay vào kênh bridge ═══
-        if side == "target":
-            bridge_channel = bot.get_channel(link["_id"])
-            if not bridge_channel:
-                return False
-
-            content = message.content or ""
-            files = []
-            for att in message.attachments:
-                try:
-                    files.append(await att.to_file())
-                except Exception:
-                    content += f"\n📎 {att.url}"
-
-            reply_note = ""
-            if message.reference and message.reference.resolved:
-                ref = message.reference.resolved
-                if isinstance(ref, discord.Message):
-                    reply_note = f"↩️ *Trả lời {ref.author.display_name}: {ref.content[:50]}*\n"
-
-            wh = await get_or_create_webhook(bridge_channel)
-            sent = None
-            try:
-                if wh:
-                    sent = await wh.send(
-                        content=(reply_note + content)[:2000] or "📎 (Đính kèm)",
-                        username=f"{message.author.display_name} 📡",
-                        avatar_url=message.author.display_avatar.url,
-                        files=files,
-                        wait=True
-                    )
-                else:
-                    sent = await bridge_channel.send(f"📡 **{message.author.display_name}**: {reply_note}{content}")
-            except Exception as e:
-                print(f"[BRIDGE] Lỗi relay target->bridge: {e}")
-
-            if sent:
-                bridge_msg_map_col.update_one(
-                    {"_id": sent.id},
-                    {"$set": {
-                        "target_channel_id": message.channel.id,
-                        "target_message_id": message.id,
-                    }},
-                    upsert=True
-                )
-            return False  # Kênh gốc vẫn xử lý bình thường (XP, lệnh, v.v.)
-
-        # ═══ TRƯỜNG HỢP 2: Tin nhắn ở KÊNH BRIDGE (owner gõ) -> gửi sang đích ═══
-        elif side == "bridge":
-            target_channel = bot.get_channel(link["target_channel_id"])
-            if not target_channel:
-                await message.channel.send(
-                    embed=discord.Embed(description="⚠️ Không tìm thấy kênh đích! Bridge có thể đã hỏng.", color=discord.Color.red())
-                )
-                return True
-
-            # Nếu owner reply vào 1 tin nhắn relay -> map sang tin nhắn gốc bên kia
-            reply_to_msg_id = None
-            if message.reference and message.reference.message_id:
-                mapped = bridge_msg_map_col.find_one({"_id": message.reference.message_id})
-                if mapped:
-                    reply_to_msg_id = mapped["target_message_id"]
-
-            content = message.content or ""
-            files = []
-            for att in message.attachments:
-                try:
-                    files.append(await att.to_file())
-                except Exception:
-                    content += f"\n📎 {att.url}"
-
-            if not content and not files:
-                return True  # tin nhắn rỗng (chỉ có embed hệ thống...), bỏ qua
-
-            try:
-                if reply_to_msg_id:
-                    try:
-                        ref_msg = await target_channel.fetch_message(reply_to_msg_id)
-                        await ref_msg.reply(content or "📎 (Đính kèm)", files=files, mention_author=False)
-                    except discord.NotFound:
-                        await target_channel.send(content or "📎 (Đính kèm)", files=files)
-                else:
-                    await target_channel.send(content or "📎 (Đính kèm)", files=files)
-                await message.add_reaction("✅")
-            except discord.Forbidden:
-                await message.channel.send(embed=discord.Embed(description="⚠️ Bot không có quyền gửi tin nhắn tại kênh đích!", color=discord.Color.red()))
-            except Exception as e:
-                await message.channel.send(embed=discord.Embed(description=f"⚠️ Lỗi gửi: {e}", color=discord.Color.red()))
-            return True  # Kênh bridge -> KHÔNG cho XP/lệnh xử lý tiếp
-
-    except Exception as e:
-        print(f"[BRIDGE] relay error: {e}")
-        return False
+    bridge_links = get_links_for_bridge(message.channel.id)
+    if bridge_links:
+        return await _relay_bridge_to_target(message, bridge_links)
 
     return False
 
 
-# ── LỆNH: TẠO CẦU NỐI ──────────────────────────────────────────────────
+async def _relay_target_to_bridge(message, link):
+    """Tin nhắn ở KÊNH ĐÍCH -> đẩy vào kênh bridge (không chặn xử lý XP/lệnh gốc)."""
+    bridge_channel = bot.get_channel(link["bridge_channel_id"])
+    if not bridge_channel:
+        return False
+
+    content = message.content or ""
+    files = []
+    for att in message.attachments:
+        try:
+            files.append(await att.to_file())
+        except Exception:
+            content += f"\n📎 {att.url}"
+
+    reply_note = ""
+    if message.reference and message.reference.resolved:
+        ref = message.reference.resolved
+        if isinstance(ref, discord.Message):
+            reply_note = f"↩️ *Trả lời {ref.author.display_name}: {ref.content[:50]}*\n"
+
+    # Ghi rõ nguồn gốc trong tên hiển thị -> tránh nhầm lẫn khi nhiều kênh đổ về 1 bridge
+    username = f"{message.author.display_name} • #{message.channel.name}"[:80]
+
+    wh = await get_or_create_webhook(bridge_channel)
+    sent = None
+    try:
+        if wh:
+            sent = await wh.send(
+                content=(reply_note + content)[:2000] or "📎 (Đính kèm)",
+                username=username,
+                avatar_url=message.author.display_avatar.url,
+                files=files,
+                wait=True
+            )
+        else:
+            sent = await bridge_channel.send(f"📡 **{username}**: {reply_note}{content}")
+    except Exception as e:
+        print(f"[BRIDGE] Lỗi relay target->bridge: {e}")
+
+    if sent:
+        bridge_msg_map_col.update_one(
+            {"_id": sent.id},
+            {"$set": {
+                "bridge_channel_id": link["bridge_channel_id"],
+                "target_channel_id": message.channel.id,
+                "target_message_id": message.id,
+            }},
+            upsert=True
+        )
+    return False  # kênh gốc vẫn xử lý XP/lệnh bình thường
+
+
+async def _relay_bridge_to_target(message, bridge_links):
+    """Tin nhắn ở KÊNH BRIDGE (owner gõ) -> gửi sang đúng kênh đích."""
+    reply_to_msg_id = None
+    reply_target_channel_id = None
+    if message.reference and message.reference.message_id:
+        mapped = bridge_msg_map_col.find_one({"_id": message.reference.message_id})
+        if mapped:
+            reply_to_msg_id = mapped["target_message_id"]
+            reply_target_channel_id = mapped["target_channel_id"]
+
+    if reply_target_channel_id:
+        target_channel = bot.get_channel(reply_target_channel_id)
+    elif len(bridge_links) == 1:
+        # Bridge chỉ có 1 nguồn duy nhất -> không cần reply cũng biết gửi đi đâu
+        target_channel = bot.get_channel(bridge_links[0]["target_channel_id"])
+    else:
+        # Nhiều nguồn cùng đổ về đây mà không reply -> KHÔNG đoán bừa, cảnh báo rõ
+        names = ", ".join(f"#{l['target_channel_name']}" for l in bridge_links)
+        await message.channel.send(embed=discord.Embed(
+            description=(
+                f"⚠️ Kênh này đang gộp **{len(bridge_links)}** nguồn ({names}).\n"
+                f"👉 Hãy **Reply** vào đúng tin nhắn cần trả lời để bot biết gửi đi đâu!"
+            ),
+            color=discord.Color.orange()
+        ), delete_after=8)
+        await message.add_reaction("❓")
+        return True
+
+    if not target_channel:
+        await message.channel.send(embed=discord.Embed(description="⚠️ Không tìm thấy kênh đích! Liên kết có thể đã hỏng.", color=discord.Color.red()))
+        return True
+
+    content = message.content or ""
+    files = []
+    for att in message.attachments:
+        try:
+            files.append(await att.to_file())
+        except Exception:
+            content += f"\n📎 {att.url}"
+
+    if not content and not files:
+        return True
+
+    try:
+        if reply_to_msg_id:
+            try:
+                ref_msg = await target_channel.fetch_message(reply_to_msg_id)
+                await ref_msg.reply(content or "📎 (Đính kèm)", files=files, mention_author=False)
+            except discord.NotFound:
+                await target_channel.send(content or "📎 (Đính kèm)", files=files)
+        else:
+            await target_channel.send(content or "📎 (Đính kèm)", files=files)
+        await message.add_reaction("✅")
+    except discord.Forbidden:
+        await message.channel.send(embed=discord.Embed(description="⚠️ Bot không có quyền gửi tin nhắn tại kênh đích!", color=discord.Color.red()))
+    except Exception as e:
+        await message.channel.send(embed=discord.Embed(description=f"⚠️ Lỗi gửi: {e}", color=discord.Color.red()))
+    return True
+
+
+# ── LỆNH: TẠO / GỘP LIÊN KẾT ────────────────────────────────────────────
 @bot.command(aliases=['bridge', 'ketnoi'])
-async def lienket(ctx, channel_id: int):
-    """Tạo kênh cầu nối 2 chiều với 1 kênh bất kỳ (kể cả server khác). Chỉ Owner."""
+async def lienket(ctx, channel_id: int, bridge_channel_id: int = None):
+    """
+    Liên kết 1 kênh vào hệ thống bridge. Chỉ Owner.
+    - k lienket <channel_id>                    -> tạo kênh bridge MỚI
+    - k lienket <channel_id> <bridge_channel_id> -> GỘP vào 1 bridge đã có sẵn
+    """
     if ctx.author.id not in OWNER_IDS:
         return await ctx.reply("⛔ Bạn không có quyền dùng lệnh này!", mention_author=False)
 
@@ -9525,73 +9564,145 @@ async def lienket(ctx, channel_id: int):
             color=discord.Color.red()
         ), mention_author=False)
 
-    existing = bridge_links_col.find_one({"target_channel_id": channel_id})
+    existing = get_link_for_target(channel_id)
     if existing:
-        old_bridge = bot.get_channel(existing["_id"])
+        old_bridge = bot.get_channel(existing["bridge_channel_id"])
         return await ctx.reply(embed=discord.Embed(
-            description=f"⚠️ Kênh này đã có bridge tại {old_bridge.mention if old_bridge else '(kênh bridge đã bị xóa, dùng `k huylienket` dọn lại)'}!",
+            description=(
+                f"⚠️ Kênh này đã liên kết tại {old_bridge.mention if old_bridge else '(kênh bridge đã bị xóa)'}!\n"
+                f"Dùng `k huylienket {channel_id}` để gỡ trước nếu muốn liên kết lại."
+            ),
             color=discord.Color.orange()
         ), mention_author=False)
 
-    category = discord.utils.get(ctx.guild.categories, name="📡 BRIDGE")
-    if not category:
+    if bridge_channel_id:
+        bridge_channel = bot.get_channel(bridge_channel_id)
+        if not bridge_channel or bridge_channel.guild.id != ctx.guild.id:
+            return await ctx.reply(embed=discord.Embed(description="⚠️ Không tìm thấy kênh bridge đó trong server này!", color=discord.Color.red()), mention_author=False)
+    else:
+        category = discord.utils.get(ctx.guild.categories, name="📡 BRIDGE")
+        if not category:
+            try:
+                category = await ctx.guild.create_category("📡 BRIDGE")
+            except discord.Forbidden:
+                return await ctx.reply("⚠️ Bot thiếu quyền tạo category ở server này!", mention_author=False)
+
+        guild_name = target_channel.guild.name if target_channel.guild else "DM"
+        safe_name  = re.sub(r'[^a-zA-Z0-9\-]', '-', f"{guild_name}-{target_channel.name}")[:90].lower().strip('-') or "bridge"
+
         try:
-            category = await ctx.guild.create_category("📡 BRIDGE")
+            bridge_channel = await ctx.guild.create_text_channel(
+                name=safe_name, category=category, topic="🔗 Kênh cầu nối đa nguồn"
+            )
         except discord.Forbidden:
-            return await ctx.reply("⚠️ Bot thiếu quyền tạo category ở server này!", mention_author=False)
+            return await ctx.reply("⚠️ Bot thiếu quyền tạo kênh ở server này!", mention_author=False)
 
-    guild_name = target_channel.guild.name if target_channel.guild else "DM"
-    safe_name  = re.sub(r'[^a-zA-Z0-9\-]', '-', f"{guild_name}-{target_channel.name}")[:90].lower().strip('-') or "bridge"
+    create_bridge_link(bridge_channel.id, target_channel, ctx.author.id)
+    total_links = len(get_links_for_bridge(bridge_channel.id))
+    guild_name  = target_channel.guild.name if target_channel.guild else "DM"
 
-    try:
-        bridge_channel = await ctx.guild.create_text_channel(
-            name=safe_name,
-            category=category,
-            topic=f"🔗 Bridge → #{target_channel.name} ({guild_name}) | ID:{target_channel.id}"
-        )
-    except discord.Forbidden:
-        return await ctx.reply("⚠️ Bot thiếu quyền tạo kênh ở server này!", mention_author=False)
-
-    bridge_links_col.insert_one({
-        "_id": bridge_channel.id,
-        "target_channel_id": target_channel.id,
-        "target_guild_id": target_channel.guild.id if target_channel.guild else None,
-        "target_guild_name": guild_name,
-        "target_channel_name": target_channel.name,
-        "owner_id": ctx.author.id,
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    })
+    note = (
+        "💬 Chỉ có 1 nguồn duy nhất → gõ chat bình thường tại bridge là gửi thẳng sang.\n"
+        if total_links == 1 else
+        f"⚠️ Bridge này hiện có **{total_links} nguồn** → PHẢI **Reply** vào đúng tin nhắn "
+        "cần trả lời, nếu không bot sẽ không biết gửi đi đâu!\n"
+    )
 
     embed = discord.Embed(
-        title="✅ ĐÃ TẠO CẦU NỐI!",
+        title="✅ ĐÃ LIÊN KẾT!",
         description=(
             f"📡 Kênh bridge: {bridge_channel.mention}\n"
-            f"🎯 Kênh đích: **#{target_channel.name}** ({guild_name})\n\n"
-            f"💬 Gõ tin nhắn tại {bridge_channel.mention} → tự động gửi sang kênh đích.\n"
-            f"↩️ **Reply** vào 1 tin nhắn relay để trả lời **đúng người đó** (reply thật trên Discord)!\n"
-            f"📥 Tin nhắn mới bên kênh đích cũng tự hiện vào đây (kèm tên/avatar người gửi).\n"
-            f"🗑️ Gõ `k huylienket` NGAY TẠI kênh bridge để hủy."
+            f"🎯 Kênh đích mới: **#{target_channel.name}** ({guild_name})\n"
+            f"🔗 Tổng số nguồn đang gộp vào bridge này: **{total_links}**\n\n"
+            f"{note}"
+            f"🗑️ Gỡ liên kết này (từ bất kỳ đâu): `k huylienket {target_channel.id}`"
         ),
         color=discord.Color.green()
     )
     await ctx.reply(embed=embed, mention_author=False)
 
 
-@bot.command(aliases=['unbridge'])
-async def huylienket(ctx):
-    """Hủy bridge — dùng ngay trong kênh bridge cần hủy. Chỉ Owner."""
+# ── LỆNH: HỦY LIÊN KẾT (DÙNG ĐƯỢC TỪ BẤT KỲ ĐÂU) ───────────────────────
+@bot.command(aliases=['unbridge', 'gohlienket'])
+async def huylienket(ctx, channel_id: int = None, mode: str = None):
+    """
+    Hủy liên kết — dùng được từ BẤT KỲ ĐÂU, không cần đứng trong kênh bridge. Chỉ Owner.
+    - k huylienket                     -> hủy liên kết tại kênh đang đứng
+    - k huylienket <id>                -> hủy liên kết của kênh đích/bridge đó
+    - k huylienket <bridge_id> all     -> hủy TOÀN BỘ liên kết đổ vào bridge đó
+    """
     if ctx.author.id not in OWNER_IDS:
         return await ctx.reply("⛔ Không có quyền!", mention_author=False)
 
-    link = bridge_links_col.find_one({"_id": ctx.channel.id})
-    if not link:
-        return await ctx.reply("⚠️ Kênh này không phải là kênh bridge!", mention_author=False)
+    cid = channel_id if channel_id is not None else ctx.channel.id
 
-    bridge_links_col.delete_one({"_id": ctx.channel.id})
-    bridge_msg_map_col.delete_many({"target_channel_id": link["target_channel_id"]})
+    # ── Hủy TOÀN BỘ liên kết của 1 bridge ──
+    if mode and mode.lower() == "all":
+        links = get_links_for_bridge(cid)
+        if not links:
+            return await ctx.reply("⚠️ Không có liên kết nào tại kênh bridge này!", mention_author=False)
+        for l in links:
+            bridge_msg_map_col.delete_many({"target_channel_id": l["target_channel_id"]})
+        bridge_links_col.delete_many({"bridge_channel_id": cid})
+        bridge_webhook_cache.pop(cid, None)
+        return await ctx.reply(embed=discord.Embed(
+            description=f"✅ Đã hủy toàn bộ **{len(links)}** liên kết đổ vào <#{cid}>.",
+            color=discord.Color.orange()
+        ), mention_author=False)
+
+    # ── Nếu cid là 1 kênh ĐÍCH đang được liên kết -> gỡ đúng liên kết đó ──
+    target_link = get_link_for_target(cid)
+    if target_link:
+        bridge_links_col.delete_one({"_id": target_link["_id"]})
+        bridge_msg_map_col.delete_many({"target_channel_id": cid})
+        return await ctx.reply(embed=discord.Embed(
+            description=f"✅ Đã gỡ liên kết **#{target_link['target_channel_name']}** khỏi <#{target_link['bridge_channel_id']}>.",
+            color=discord.Color.green()
+        ), mention_author=False)
+
+    # ── Nếu cid là kênh BRIDGE ──
+    bridge_links = get_links_for_bridge(cid)
+    if bridge_links:
+        if len(bridge_links) == 1:
+            l = bridge_links[0]
+            bridge_links_col.delete_one({"_id": l["_id"]})
+            bridge_msg_map_col.delete_many({"target_channel_id": l["target_channel_id"]})
+            return await ctx.reply(embed=discord.Embed(
+                description=f"✅ Đã gỡ liên kết duy nhất (**#{l['target_channel_name']}**) khỏi <#{cid}>.",
+                color=discord.Color.green()
+            ), mention_author=False)
+        else:
+            names = "\n".join(f"• **#{l['target_channel_name']}** — ID: `{l['target_channel_id']}`" for l in bridge_links)
+            return await ctx.reply(embed=discord.Embed(
+                title=f"⚠️ Kênh này có {len(bridge_links)} liên kết",
+                description=(
+                    f"{names}\n\n"
+                    f"👉 Gỡ 1 kênh cụ thể: `k huylienket <ID kênh đó>`\n"
+                    f"👉 Gỡ TẤT CẢ: `k huylienket {cid} all`"
+                ),
+                color=discord.Color.orange()
+            ), mention_author=False)
+
+    return await ctx.reply(embed=discord.Embed(description="⚠️ Không tìm thấy liên kết nào tại đây!", color=discord.Color.red()), mention_author=False)
+
+
+# ── LỆNH: XÓA HẲN KÊNH BRIDGE (destructive, dùng ngay trong kênh đó) ───
+@bot.command(aliases=['delbridgechannel', 'xoabridge'])
+async def xoakenhbridge(ctx):
+    """Xóa hẳn kênh bridge hiện tại (gỡ toàn bộ liên kết + xóa luôn kênh). Chỉ Owner."""
+    if ctx.author.id not in OWNER_IDS:
+        return await ctx.reply("⛔ Không có quyền!", mention_author=False)
+
+    links = get_links_for_bridge(ctx.channel.id)
+    if not links:
+        return await ctx.reply("⚠️ Kênh này không phải kênh bridge!", mention_author=False)
+
+    for l in links:
+        bridge_msg_map_col.delete_many({"target_channel_id": l["target_channel_id"]})
+    bridge_links_col.delete_many({"bridge_channel_id": ctx.channel.id})
     bridge_webhook_cache.pop(ctx.channel.id, None)
 
-    await ctx.send(embed=discord.Embed(description="✅ Đã hủy bridge. Kênh này sẽ tự xóa sau 5 giây.", color=discord.Color.orange()))
+    await ctx.send(embed=discord.Embed(description=f"✅ Đã hủy {len(links)} liên kết. Kênh này sẽ tự xóa sau 5 giây.", color=discord.Color.orange()))
     await asyncio.sleep(5)
     try:
         await ctx.channel.delete()
@@ -9599,9 +9710,10 @@ async def huylienket(ctx):
         pass
 
 
+# ── LỆNH: DANH SÁCH LIÊN KẾT (nhóm theo từng bridge) ───────────────────
 @bot.command(aliases=['dslienket', 'listbridge'])
 async def ds_lienket(ctx):
-    """Xem danh sách toàn bộ bridge đang hoạt động. Chỉ Owner."""
+    """Xem toàn bộ liên kết đang hoạt động, nhóm theo từng kênh bridge. Chỉ Owner."""
     if ctx.author.id not in OWNER_IDS:
         return await ctx.reply("⛔ Không có quyền!", mention_author=False)
 
@@ -9611,238 +9723,29 @@ async def ds_lienket(ctx):
         links = []
 
     if not links:
-        return await ctx.reply(embed=discord.Embed(description="📡 Chưa có bridge nào đang hoạt động.\nDùng `k lienket <channel_id>` để tạo!", color=discord.Color.light_grey()), mention_author=False)
+        return await ctx.reply(embed=discord.Embed(
+            description="📡 Chưa có liên kết nào đang hoạt động.\nDùng `k lienket <channel_id>` để tạo!",
+            color=discord.Color.light_grey()
+        ), mention_author=False)
 
-    lines = []
+    grouped = {}
     for l in links:
-        bch = bot.get_channel(l["_id"])
-        lines.append(f"• {bch.mention if bch else '⚠️(kênh bridge đã xóa)'} → **#{l['target_channel_name']}** ({l['target_guild_name']})")
-
-    embed = discord.Embed(title="📡 DANH SÁCH BRIDGE ĐANG HOẠT ĐỘNG", description="\n".join(lines), color=discord.Color.blue())
-    embed.set_footer(text=f"Tổng: {len(links)} bridge")
-    await ctx.reply(embed=embed, mention_author=False)
-
-
-# =====================================================================
-# 🖥️ BẢNG ĐIỀU KHIỂN (duyệt Server → Kênh → xem & gửi/trả lời nhanh)
-# =====================================================================
-
-class DKGuildSelect(discord.ui.Select):
-    def __init__(self, author, page=0):
-        self.author = author
-        guilds = sorted(bot.guilds, key=lambda g: g.name.lower())
-        chunk  = guilds[page*25:(page+1)*25]
-        options = [
-            discord.SelectOption(label=g.name[:100], description=f"{g.member_count} thành viên | ID:{g.id}"[:100], value=str(g.id))
-            for g in chunk
-        ] or [discord.SelectOption(label="Không có server", value="none")]
-        super().__init__(placeholder="Chọn server...", options=options)
-
-    async def callback(self, interaction):
-        if interaction.user.id != self.author.id:
-            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-        if self.values[0] == "none":
-            return await interaction.response.send_message("Không có gì.", ephemeral=True)
-        guild = bot.get_guild(int(self.values[0]))
-        embed = discord.Embed(
-            title=f"🌐 {guild.name}",
-            description=f"👥 {guild.member_count} thành viên | 📁 {len(guild.text_channels)} kênh chữ\nChọn kênh bên dưới:",
-            color=discord.Color.blue()
-        )
-        if guild.icon:
-            embed.set_thumbnail(url=guild.icon.url)
-        await interaction.response.edit_message(embed=embed, view=DKChannelView(self.author, guild))
-
-
-class DKGuildView(discord.ui.View):
-    def __init__(self, author):
-        super().__init__(timeout=180)
-        self.author = author
-        self.add_item(DKGuildSelect(author))
-
-    async def interaction_check(self, interaction):
-        if interaction.user.id != self.author.id:
-            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-            return False
-        return True
-
-
-class DKChannelSelect(discord.ui.Select):
-    def __init__(self, author, guild, page=0):
-        self.author = author
-        channels = sorted(guild.text_channels, key=lambda c: c.position)
-        chunk    = channels[page*25:(page+1)*25]
-        options = [
-            discord.SelectOption(label=f"#{c.name}"[:100], description=(c.topic or "")[:100] or None, value=str(c.id))
-            for c in chunk
-        ] or [discord.SelectOption(label="Không có kênh", value="none")]
-        super().__init__(placeholder="Chọn kênh...", options=options)
-
-    async def callback(self, interaction):
-        if interaction.user.id != self.author.id:
-            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-        if self.values[0] == "none":
-            return await interaction.response.send_message("Không có gì.", ephemeral=True)
-        channel = bot.get_channel(int(self.values[0]))
-        await show_dk_channel(interaction, self.author, channel)
-
-
-class DKChannelView(discord.ui.View):
-    def __init__(self, author, guild):
-        super().__init__(timeout=180)
-        self.author = author
-        self.add_item(DKChannelSelect(author, guild))
-
-    @discord.ui.button(label="◀ Danh Sách Server", style=discord.ButtonStyle.secondary, row=1)
-    async def back(self, interaction, button):
-        if interaction.user.id != self.author.id:
-            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-        await interaction.response.edit_message(embed=discord.Embed(title="🌐 CHỌN SERVER", color=discord.Color.blue()), view=DKGuildView(self.author))
-
-    async def interaction_check(self, interaction):
-        if interaction.user.id != self.author.id:
-            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-            return False
-        return True
-
-
-class DKReplyModal(discord.ui.Modal, title="Gửi tin nhắn"):
-    def __init__(self, channel, reply_to_msg=None):
-        super().__init__()
-        self.channel = channel
-        self.reply_to_msg = reply_to_msg
-        self.content_input = discord.ui.TextInput(
-            label="Nội dung tin nhắn",
-            style=discord.TextStyle.paragraph,
-            placeholder="Nhập tin nhắn để gửi...",
-            required=True,
-            max_length=2000,
-        )
-        self.add_item(self.content_input)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        try:
-            if self.reply_to_msg:
-                await self.reply_to_msg.reply(self.content_input.value, mention_author=False)
-            else:
-                await self.channel.send(self.content_input.value)
-            await interaction.response.send_message(f"✅ Đã gửi đến #{self.channel.name}!", ephemeral=True)
-        except discord.Forbidden:
-            await interaction.response.send_message("⚠️ Bot không có quyền gửi ở kênh đó!", ephemeral=True)
-        except Exception as e:
-            await interaction.response.send_message(f"⚠️ Lỗi: {e}", ephemeral=True)
-
-
-class DKMessageView(discord.ui.View):
-    def __init__(self, author, channel, last_messages):
-        super().__init__(timeout=180)
-        self.author = author
-        self.channel = channel
-        self.last_messages = last_messages  # mới nhất trước
-
-        if last_messages:
-            options = [
-                discord.SelectOption(
-                    label=f"{m.author.display_name}: {(m.content or '[đính kèm]')[:60]}"[:100],
-                    value=str(m.id)
-                ) for m in last_messages[:25]
-            ]
-            select = discord.ui.Select(placeholder="Chọn tin nhắn để trả lời (tùy chọn)...", options=options)
-            select.callback = self._reply_select
-            self.add_item(select)
-
-    async def _reply_select(self, interaction):
-        if interaction.user.id != self.author.id:
-            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-        msg_id = int(interaction.data["values"][0])
-        target_msg = discord.utils.get(self.last_messages, id=msg_id)
-        await interaction.response.send_modal(DKReplyModal(self.channel, reply_to_msg=target_msg))
-
-    @discord.ui.button(label="✏️ Gửi Tin Mới", style=discord.ButtonStyle.success, row=1)
-    async def new_msg(self, interaction, button):
-        if interaction.user.id != self.author.id:
-            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-        await interaction.response.send_modal(DKReplyModal(self.channel))
-
-    @discord.ui.button(label="🔗 Bắc Cầu Nối", style=discord.ButtonStyle.primary, row=1)
-    async def make_bridge(self, interaction, button):
-        if interaction.user.id != self.author.id:
-            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-        await interaction.response.send_message(
-            f"💡 Gõ lệnh sau ở server bạn muốn đặt bridge:\n```k lienket {self.channel.id}```",
-            ephemeral=True
-        )
-
-    @discord.ui.button(label="🔄 Làm Mới", style=discord.ButtonStyle.secondary, row=1)
-    async def refresh(self, interaction, button):
-        if interaction.user.id != self.author.id:
-            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-        await show_dk_channel(interaction, self.author, self.channel)
-
-    @discord.ui.button(label="◀ Kênh Khác", style=discord.ButtonStyle.secondary, row=1)
-    async def back(self, interaction, button):
-        if interaction.user.id != self.author.id:
-            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-        await interaction.response.edit_message(
-            embed=discord.Embed(title=f"🌐 {self.channel.guild.name}", color=discord.Color.blue()),
-            view=DKChannelView(self.author, self.channel.guild)
-        )
-
-    async def interaction_check(self, interaction):
-        if interaction.user.id != self.author.id:
-            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-            return False
-        return True
-
-
-async def show_dk_channel(interaction, author, channel):
-    try:
-        messages = [m async for m in channel.history(limit=10)]
-    except discord.Forbidden:
-        return await interaction.response.edit_message(
-            embed=discord.Embed(description="⚠️ Bot không có quyền đọc kênh này!", color=discord.Color.red()),
-            view=None
-        )
-    except Exception as e:
-        return await interaction.response.edit_message(
-            embed=discord.Embed(description=f"⚠️ Lỗi: {e}", color=discord.Color.red()),
-            view=None
-        )
+        grouped.setdefault(l["bridge_channel_id"], []).append(l)
 
     lines = []
-    for m in reversed(messages):
-        content = m.content or "[đính kèm/embed]"
-        lines.append(f"**{m.author.display_name}**: {content[:150]}")
+    for bridge_id, targets in grouped.items():
+        bch = bot.get_channel(bridge_id)
+        lines.append(f"**{bch.mention if bch else f'⚠️(kênh {bridge_id} đã xóa)'}** — {len(targets)} nguồn:")
+        for t in targets:
+            lines.append(f"   • #{t['target_channel_name']} ({t['target_guild_name']}) — `{t['target_channel_id']}`")
 
     embed = discord.Embed(
-        title=f"💬 #{channel.name} — {channel.guild.name}",
-        description="\n".join(lines) or "Chưa có tin nhắn nào.",
+        title="📡 DANH SÁCH LIÊN KẾT ĐANG HOẠT ĐỘNG",
+        description="\n".join(lines)[:4000],
         color=discord.Color.blue()
     )
-    embed.set_footer(text=f"ID kênh: {channel.id} | 10 tin nhắn gần nhất")
-
-    view = DKMessageView(author, channel, messages)
-    await interaction.response.edit_message(embed=embed, view=view)
-
-
-@bot.command(aliases=['dk', 'control', 'panel'])
-async def dieukhien(ctx):
-    """Mở Bảng Điều Khiển Đa Server — duyệt & nhắn tin đến bất kỳ kênh nào bot có mặt. Chỉ Owner."""
-    if ctx.author.id not in OWNER_IDS:
-        return await ctx.reply("⛔ Bạn không có quyền dùng lệnh này!", mention_author=False)
-
-    embed = discord.Embed(
-        title="🌐 BẢNG ĐIỀU KHIỂN ĐA SERVER",
-        description=(
-            f"Bot đang có mặt tại **{len(bot.guilds)}** server.\n"
-            "Chọn server → chọn kênh → xem tin nhắn gần nhất → trả lời / gửi mới.\n\n"
-            "💡 Muốn tiện & nhanh hơn cho việc chat qua lại liên tục? Dùng:\n"
-            "`k lienket <channel_id>` để tạo **cầu nối 2 chiều** — gõ chat bình thường là gửi luôn, "
-            "**reply** đúng tin là trả lời đúng người bên kia!"
-        ),
-        color=discord.Color.blue()
-    )
-    await ctx.reply(embed=embed, view=DKGuildView(ctx.author), mention_author=False)
+    embed.set_footer(text=f"Tổng: {len(links)} liên kết trên {len(grouped)} kênh bridge")
+    await ctx.reply(embed=embed, mention_author=False)
     # =====================================================================
 # 🛡️ TỔNG HỢP LỆNH ADMIN — TỰ ĐỘNG PHÁT HIỆN LỆNH ADMIN MỚI
 # =====================================================================
