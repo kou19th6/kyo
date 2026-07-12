@@ -1748,7 +1748,45 @@ class BlackjackView(discord.ui.View):
             self.user_data["money"] += self.bet
             save_user(str(self.player.id))
 
+@bot.command(name="h", aliases=["hoi", "ai", "hoiai"])
+async def kh_hoi(ctx, *, question: str = None):
+    """Hỏi AI. Cách dùng: k kh <câu hỏi>"""
+    if not question:
+        return await ctx.reply(
+            embed=discord.Embed(
+                description="⚠️ Nhập câu hỏi! VD: `k kh thủ đô nước Pháp là gì`",
+                color=discord.Color.orange()
+            ),
+            mention_author=False
+        )
 
+    uid = str(ctx.author.id)
+    now = datetime.now()
+    if uid in ai_cooldowns:
+        diff = (now - ai_cooldowns[uid]).total_seconds()
+        if diff < AI_COOLDOWN_SECONDS:
+            return await ctx.reply(
+                embed=discord.Embed(
+                    description=f"⏳ Đợi {int(AI_COOLDOWN_SECONDS - diff)}s nữa rồi hỏi tiếp nhé!",
+                    color=discord.Color.orange()
+                ),
+                mention_author=False
+            )
+
+    ai_cooldowns[uid] = now
+    async with ctx.channel.typing():
+        reply_text = await get_ai_reply(question, ctx.author.display_name)
+
+    if not reply_text:
+        return await ctx.reply(
+            embed=discord.Embed(description="⚠️ AI không phản hồi được, thử lại sau!", color=discord.Color.red()),
+            mention_author=False
+        )
+
+    embed = discord.Embed(description=reply_text[:4000], color=discord.Color.blurple())
+    embed.set_author(name=f"🤖 Trả lời {ctx.author.display_name}", icon_url=bot.user.display_avatar.url)
+    embed.set_footer(text=f"Hỏi: {question[:100]}")
+    await ctx.reply(embed=embed, mention_author=False)
 
 @bot.command(aliases=['bj', '21'])
 async def blackjack(ctx, amount: str):
@@ -4319,40 +4357,7 @@ async def on_message(message):
     if message.author.bot: return
 
     # ═══════════════════════════════════════════
-    # AI TRẢ LỜI KHI BỊ TAG
-    # ═══════════════════════════════════════════
-    explicit_tag = re.search(rf"<@!?{bot.user.id}>", message.content) is not None
-    if explicit_tag and not message.mention_everyone:
-        question = message.content
-        question = question.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "")
-        question = question.strip()
 
-        if question:
-            uid_check = str(message.author.id)
-            now_check = datetime.now()
-            if uid_check in ai_cooldowns:
-                diff = (now_check - ai_cooldowns[uid_check]).total_seconds()
-                if diff < AI_COOLDOWN_SECONDS:
-                    await message.reply(
-                        embed=discord.Embed(
-                            description=f"⏳ Đợi {int(AI_COOLDOWN_SECONDS - diff)}s nữa rồi hỏi tiếp nhé!",
-                            color=discord.Color.orange()
-                        ),
-                        mention_author=False
-                    )
-                    return
-
-            ai_cooldowns[uid_check] = now_check
-            async with message.channel.typing():
-                reply_text = await get_ai_reply(question, message.author.display_name)
-
-            embed = discord.Embed(description=reply_text[:4000], color=discord.Color.blurple())
-            embed.set_author(name=f"🤖 Trả lời {message.author.display_name}", icon_url=bot.user.display_avatar.url)
-            try:
-                await message.reply(embed=embed, mention_author=True)
-            except Exception as e:
-                print(f"[WARN] Không gửi được AI reply: {e}")
-            return
 
     user_id = str(message.author.id)
     
