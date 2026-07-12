@@ -3811,10 +3811,10 @@ async def on_message(message):
     # ═══════════════════════════════════════════
     # AI TRẢ LỜI KHI BỊ TAG
     # ═══════════════════════════════════════════
-    if bot.user in message.mentions and not message.mention_everyone:
+    explicit_tag = re.search(rf"<@!?{bot.user.id}>", message.content) is not None
+    if explicit_tag and not message.mention_everyone:
         question = message.content
-        for mention in message.mentions:
-            question = question.replace(f"<@{mention.id}>", "").replace(f"<@!{mention.id}>", "")
+        question = question.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "")
         question = question.strip()
 
         if question:
