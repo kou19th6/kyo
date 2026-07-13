@@ -585,6 +585,20 @@ def build_embed_from_data(data: dict) -> discord.Embed:
 # GIAO DIỆN TRỢ GIÚP DẠNG DROPDOWN (MỚI — dễ dùng hơn 1 embed dài)
 # =====================================================================
 HELP_CATEGORIES = [
+    ("overview", "🏠 Tổng quan", "Chọn 1 mục ở menu bên dưới để xem chi tiết cú pháp. Danh sách nhanh:\n\n"
+                                  "🏷️ `/tag` — lệnh tùy chỉnh\n"
+                                  "🔢 `/var` — biến dùng trong tag\n"
+                                  "🎨 `/embed` — embed tuỳ chỉnh\n"
+                                  "🔔 `/trigger` — auto-reply từ khóa\n"
+                                  "🎭 `/reactrole` — role theo emoji\n"
+                                  "🖱️ `/button` — nút chạy tag (+ xem ai bấm)\n"
+                                  "📊 `/poll` — khảo sát (+ xem ai vote)\n"
+                                  "🎉 `/giveaway` — tổ chức giveaway\n"
+                                  "💡 `/suggestion` — hộp góp ý\n"
+                                  "👋 `/welcome` — chào mừng + auto-role\n"
+                                  "💤 `/afk` — trạng thái vắng mặt\n"
+                                  "🧭 `/menu` — tạo nhanh bằng nút + form\n"
+                                  "🧩 Cú pháp biến — xem mục cuối"),
     ("tag", "🏷️ Tag", "**/tag create** name content [cooldown] [role_required]\n"
                         "**/tag run** name [args]\n"
                         "**/tag edit / delete / list / info**\n"
@@ -1238,6 +1252,14 @@ def setup_custom_commands(bot: commands.Bot, db):
     @bot.tree.command(name="tools", description="Xem hướng dẫn toàn bộ công cụ tự tạo tính năng")
     async def tools_cmd(interaction: discord.Interaction):
         embed, view = build_help(0)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    # ══════════════════════════════════════════════════════════════
+    # /help — MỚI: lệnh trợ giúp nhanh, mở thẳng màn hình Tổng quan
+    # ══════════════════════════════════════════════════════════════
+    @bot.tree.command(name="help", description="Xem tổng quan tất cả lệnh của bot + hướng dẫn dùng nhanh")
+    async def help_cmd(interaction: discord.Interaction):
+        embed, view = build_help(0)  # index 0 = mục "🏠 Tổng quan"
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     # ══════════════════════════════════════════════════════════════
