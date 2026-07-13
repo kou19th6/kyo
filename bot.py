@@ -10110,6 +10110,22 @@ class EmojiValueModal(discord.ui.Modal, title="Chỉnh sửa Emoji"):
         )
         await interaction.response.edit_message(embed=embed, view=self.parent_view)
 
+class TimeoutSafeView(discord.ui.View):        # ← ĐANG Ở SAI CHỖ
+    """View tự vô hiệu hóa nút..."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.message = None
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                embed = self.message.embeds[0] if self.message.embeds else discord.Embed()
+                embed.set_footer(text="⏳ Bảng điều khiển đã hết hạn — gõ lại `k assets` để mở lại.")
+                await self.message.edit(embed=embed, view=self)
+            except Exception:
+                pass
 
 # ── SUB-PANEL: QUẢN LÝ GIF ──────────────────────────────────────────
 class EmojiSelect(discord.ui.Select):
