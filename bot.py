@@ -1868,7 +1868,7 @@ async def vongquay(ctx):
         save_user(user_id)
     elif "mult" in prize:
         change = int(user_data.get("money", 0) * prize["mult"])
-        user_data["money"] = max(0, user_data["money"] + change)
+        user_data["money"] = user_data["money"] + change
         result_text = f"**{prize['name']}**\n{'Mất' if change < 0 else 'Nhận'} **{abs(change):,} 💰**."
         save_user(user_id)
     elif prize.get("pet"):
@@ -3224,7 +3224,8 @@ async def cauca(ctx):
     user_data["fish_count"] = user_data.get("fish_count", 0) + 1
     labels = {"common": ("🟤 PHỔ THÔNG", discord.Color.light_grey()), "rare": ("🔵 HIẾM", discord.Color.blue()), "epic": ("🟣 SỬ THI", discord.Color.purple()), "legendary": ("🟡 HUYỀN THOẠI", discord.Color.gold()), "trash": ("🗑️ RÁC", discord.Color.dark_grey())}
     label, color = labels.get(rarity, ("🟤", discord.Color.light_grey()))
-    user_data["money"] = max(0, user_data.get("money", 0) + fish_value); save_user(user_id)
+    user_data["money"] = user_data.get("money", 0) + fish_value
+save_user(user_id)
     add_history(user_id, f"Câu {fish_name} ({'+' if fish_value>=0 else ''}{fish_value:,})")
     qm = update_quest_progress(user_id, "fish"); na = check_achievement(user_id, user_data)
     result = f"🎣 **{fish_name}** [{label}]\n{'Bán' if fish_value>=0 else 'Chi phí'}: **{fish_value:,} 💰**"
