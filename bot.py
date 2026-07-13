@@ -10166,64 +10166,6 @@ class EmojiManageView(TimeoutSafeView):
             await interaction.response.send_message("Không phải bạn!", ephemeral=True)
             return False
         return True
-
-
-# ── SUB-PANEL: QUẢN LÝ EMOJI ────────────────────────────────────────
-class EmojiSelect(discord.ui.Select):
-    def __init__(self, page=0):
-        keys = sorted(CUSTOM_EMOJIS.keys())
-        chunk = keys[page*25:(page+1)*25]
-        options = []
-        for k in chunk:
-            tag = " 🔧" if CUSTOM_EMOJIS[k] != DEFAULT_EMOJIS.get(k) else ""
-            options.append(discord.SelectOption(label=f"{k}{tag}"[:100], description=str(CUSTOM_EMOJIS[k])[:100], value=k))
-        if not options:
-            options = [discord.SelectOption(label="Không có Emoji nào", value="none")]
-        super().__init__(placeholder="Chọn Emoji để chỉnh sửa...", options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        if self.values[0] == "none":
-            return await interaction.response.send_message("⚠️ Không có gì để chọn.", ephemeral=True)
-        key = self.values[0]
-        parent = self.view.back_view()
-        parent.message = interaction.message
-        await interaction.response.send_modal(EmojiValueModal(key, parent))
-
-
-class EmojiManageView(TimeoutSafeView):
-    def __init__(self, author):
-        super().__init__(timeout=600)
-        self.author = author
-        self.add_item(EmojiSelect())
-
-    def back_view(self):
-        return AssetMainView(self.author)
-
-    @discord.ui.button(label="🔄 Reset tất cả Emoji", style=discord.ButtonStyle.danger, row=1)
-    async def reset_all_emoji(self, interaction, button):
-        if interaction.user.id != self.author.id:
-            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-        CUSTOM_EMOJIS.clear(); CUSTOM_EMOJIS.update(DEFAULT_EMOJIS)
-        try: bot_assets_col.update_one({"_id": "config"}, {"$set": {"emojis": {}}}, upsert=True)
-        except Exception: pass
-        view = self.back_view()
-        view.message = interaction.message
-        await interaction.response.edit_message(embed=asset_stats_embed(), view=view)
-
-    @discord.ui.button(label="◀ Quay lại", style=discord.ButtonStyle.secondary, row=1)
-    async def back(self, interaction, button):
-        if interaction.user.id != self.author.id:
-            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-        view = self.back_view()
-        view.message = interaction.message
-        await interaction.response.edit_message(embed=asset_stats_embed(), view=view)
-
-    async def interaction_check(self, interaction):
-        if interaction.user.id != self.author.id:
-            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
-            return False
-        return True
-
 class TimeoutSafeView(discord.ui.View):
     """View tự vô hiệu hóa nút + báo hết hạn thay vì im lặng ngừng hoạt động."""
     def __init__(self, *args, **kwargs):
