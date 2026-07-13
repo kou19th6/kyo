@@ -10166,23 +10166,6 @@ class EmojiManageView(TimeoutSafeView):
             await interaction.response.send_message("Không phải bạn!", ephemeral=True)
             return False
         return True
-class TimeoutSafeView(discord.ui.View):
-    """View tự vô hiệu hóa nút + báo hết hạn thay vì im lặng ngừng hoạt động."""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.message = None
-
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-        if self.message:
-            try:
-                embed = self.message.embeds[0] if self.message.embeds else discord.Embed()
-                embed.set_footer(text="⏳ Bảng điều khiển đã hết hạn — gõ lại `k assets` để mở lại.")
-                await self.message.edit(embed=embed, view=self)
-            except Exception:
-                pass
-
 # ── PANEL CHÍNH ──────────────────────────────────────────────────────
 class AssetMainView(TimeoutSafeView):
     def __init__(self, author):
