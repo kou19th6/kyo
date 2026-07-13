@@ -3651,158 +3651,207 @@ def get_jail_end(user_data):
 
 
 # ═══════════════════════════════════════════════════════════
-# TÒA ÁN v2 — NHIỀU GIAI ĐOẠN, CÔNG TỐ VIÊN NGẪU NHIÊN, BIỆN HỘ
+# TÒA ÁN v3 — MỌI LỰA CHỌN ĐỀU CÓ RỦI RO THẤT BẠI RIÊNG
 # ═══════════════════════════════════════════════════════════
 
 COURT_PROSECUTORS = [
-    {"name": "Công Tố Viên Trẻ Tuổi 😊", "mult": 0.85, "fine_mult": 0.85,
-     "flavor": "Còn non kinh nghiệm, đôi lúc bị bạn xoay chuyển tình thế."},
-    {"name": "Công Tố Viên Kỳ Cựu 😐", "mult": 1.0, "fine_mult": 1.0,
-     "flavor": "Công tâm, xử lý vụ án theo đúng quy trình chuẩn mực."},
-    {"name": "Công Tố Viên Sắc Sảo 😠", "mult": 1.2, "fine_mult": 1.15,
-     "flavor": "Từng chỉ ra sơ hở trong hàng trăm vụ án, không dễ bị thuyết phục."},
-    {"name": "Công Tố Viên Thép 🥶", "mult": 1.4, "fine_mult": 1.3,
-     "flavor": "Huyền thoại của tòa án — chưa từng để lọt một bị cáo nào."},
+    {"name": "Công Tố Viên Trẻ Tuổi 😊", "penalty": 5,  "fine_mult": 0.9,
+     "flavor": "Còn non kinh nghiệm, nhưng đừng chủ quan — sơ hở vẫn có thể bị bắt bài."},
+    {"name": "Công Tố Viên Kỳ Cựu 😐", "penalty": 15, "fine_mult": 1.05,
+     "flavor": "Công tâm nhưng cực kỳ tỉ mỉ, mọi câu trả lời đều bị soi kỹ."},
+    {"name": "Công Tố Viên Sắc Sảo 😠", "penalty": 25, "fine_mult": 1.2,
+     "flavor": "Từng lật ngược hàng trăm vụ án tưởng chừng chắc thắng."},
+    {"name": "Công Tố Viên Thép 🥶", "penalty": 35, "fine_mult": 1.4,
+     "flavor": "Huyền thoại tòa án — ngay cả lựa chọn tốt nhất cũng khó qua mặt được."},
 ]
 
 PLEA_OPTIONS = [
-    {"key": "guilty", "label": "⚖️ Nhận Tội Hoàn Toàn", "base_score": 2, "lock_acquit": True,
-     "flavor": "Bạn cúi đầu nhận hết trách nhiệm ngay từ đầu. Tòa ghi nhận thái độ hợp tác, nhưng cơ hội trắng án gần như bằng 0."},
-    {"key": "not_guilty", "label": "🙅 Không Nhận Tội", "base_score": -1, "lock_acquit": False,
-     "flavor": "Bạn khẳng định vô tội. Công tố viên nheo mắt — đây sẽ là một trận chiến pháp lý thực sự."},
-    {"key": "no_contest", "label": "🤝 Biện Hộ Có Điều Kiện", "base_score": 0, "lock_acquit": False,
-     "flavor": "Bạn không phủ nhận cũng không thừa nhận toàn bộ, chọn con đường an toàn ở giữa."},
+    {"key": "guilty", "label": "⚖️ Nhận Tội Hoàn Toàn", "base_score": 1, "chance_bonus": 10, "lock_acquit": True,
+     "flavor": "Nhận tội giúp giảm rủi ro mỗi giai đoạn, nhưng khóa luôn cơ hội trắng án."},
+    {"key": "not_guilty", "label": "🙅 Không Nhận Tội", "base_score": -2, "chance_bonus": -10, "lock_acquit": False,
+     "flavor": "Rủi ro cao hơn hẳn ở mọi giai đoạn, nhưng vẫn còn cơ hội trắng án nếu qua trót lọt."},
+    {"key": "no_contest", "label": "🤝 Biện Hộ Có Điều Kiện", "base_score": -1, "chance_bonus": 0, "lock_acquit": False,
+     "flavor": "Con đường an toàn ở giữa, không cộng cũng không trừ rủi ro."},
 ]
 
+# Mỗi option: chance = % THÀNH CÔNG cơ bản (đã thấp sẵn, không có lựa chọn nào ăn chắc)
 TRIAL_STAGE_POOL = [
-    # GIAI ĐOẠN 1
     [{
         "stage_title": "📜 GIAI ĐOẠN 1: THẨM VẤN SƠ BỘ",
-        "question": (
-            "Chủ tọa gõ búa, ánh mắt sắc lạnh nhìn xuống bị cáo:\n"
-            "*\"Hãy trình bày lại toàn bộ sự việc theo lời khai của ngươi.\"*"
-        ),
+        "question": "Chủ tọa gõ búa: *\"Hãy trình bày lại toàn bộ sự việc theo lời khai của ngươi.\"*",
         "options": [
-            {"label": "🙏 Thành khẩn kể chi tiết, kể cả phần bất lợi", "score": 3,
-             "flavor": "Bị cáo trình bày rành mạch, không né tránh. Bồi thẩm đoàn có thiện cảm."},
-            {"label": "🗣️ Kể một phần, giấu bớt chi tiết nhạy cảm", "score": 0,
-             "flavor": "Lời khai có phần thiếu nhất quán, thẩm phán ghi chú lại."},
-            {"label": "🤥 Nói dối trắng trợn để chối tội", "score": -3,
-             "flavor": "Lời nói dối lộ rõ sơ hở. Công tố viên lập tức ghi lại để phản bác sau."},
-            {"label": "😤 Từ chối trả lời, im lặng tuyệt đối", "score": -1,
-             "flavor": "Sự im lặng khiến cả phòng xử án cho rằng bị cáo đang giấu điều gì."},
+            {"label": "🙏 Thành khẩn kể chi tiết, kể cả phần bất lợi", "chance": 68,
+             "succ_score": 3, "fail_score": -1,
+             "succ_flavor": "Lời khai rành mạch thuyết phục được bồi thẩm đoàn.",
+             "fail_flavor": "Dù thành khẩn nhưng có chi tiết mâu thuẫn nhỏ bị công tố viên chộp lấy."},
+            {"label": "🗣️ Kể một phần, giấu bớt chi tiết nhạy cảm", "chance": 45,
+             "succ_score": 1, "fail_score": -2,
+             "succ_flavor": "May mắn không ai phát hiện phần bị giấu.",
+             "fail_flavor": "Phần giấu giếm bị lộ, uy tín sụt giảm nghiêm trọng."},
+            {"label": "🤥 Nói dối trắng trợn để chối tội", "chance": 20,
+             "succ_score": 2, "fail_score": -4,
+             "succ_flavor": "Lời nói dối trót lọt một cách khó tin.",
+             "fail_flavor": "Lời nói dối bị vạch trần ngay tại chỗ, mất hoàn toàn niềm tin của tòa."},
+            {"label": "😤 Từ chối trả lời, im lặng tuyệt đối", "chance": 40,
+             "succ_score": 0, "fail_score": -2,
+             "succ_flavor": "Sự im lặng được tòa tôn trọng như quyền hợp pháp.",
+             "fail_flavor": "Sự im lặng bị hiểu là đang che giấu tội lỗi."},
         ],
     }],
-    # GIAI ĐOẠN 2 (MỚI)
     [{
         "stage_title": "📜 GIAI ĐOẠN 2: THẨM VẤN CHÉO CỦA CÔNG TỐ VIÊN",
-        "question": (
-            "Công tố viên đứng dậy, giọng sắc như dao:\n"
-            "*\"Ngươi giải thích thế nào về động cơ và những mâu thuẫn trong lời khai?\"*"
-        ),
+        "question": "Công tố viên đứng dậy, giọng sắc như dao: *\"Ngươi giải thích thế nào về động cơ và mâu thuẫn trong lời khai?\"*",
         "options": [
-            {"label": "🧭 Trả lời rành mạch, logic, không mâu thuẫn", "score": 3,
-             "flavor": "Câu trả lời chặt chẽ khiến công tố viên không tìm được kẽ hở."},
-            {"label": "🌀 Trả lời vòng vo, né tránh câu hỏi", "score": -1,
-             "flavor": "Sự lảng tránh càng khiến công tố viên nghi ngờ nhiều hơn."},
-            {"label": "💥 Phản bác gay gắt, tố công tố viên chơi xấu", "score": -3,
-             "flavor": "Thái độ hung hăng khiến thẩm phán phải nhắc nhở giữ trật tự."},
-            {"label": "🤐 Viện quyền im lặng (không tự buộc tội)", "score": 1,
-             "flavor": "Một lựa chọn an toàn về mặt pháp lý, tuy không gây ấn tượng mạnh."},
+            {"label": "🧭 Trả lời rành mạch, logic, không mâu thuẫn", "chance": 60,
+             "succ_score": 3, "fail_score": -2,
+             "succ_flavor": "Câu trả lời chặt chẽ khiến công tố viên không tìm được kẽ hở.",
+             "fail_flavor": "Một chi tiết nhỏ vô tình mâu thuẫn với lời khai trước đó."},
+            {"label": "🌀 Trả lời vòng vo, né tránh câu hỏi", "chance": 30,
+             "succ_score": 1, "fail_score": -3,
+             "succ_flavor": "Sự vòng vo tình cờ đánh lạc hướng công tố viên.",
+             "fail_flavor": "Sự lảng tránh càng khiến nghi ngờ tăng cao."},
+            {"label": "💥 Phản bác gay gắt, tố công tố viên chơi xấu", "chance": 18,
+             "succ_score": 2, "fail_score": -5,
+             "succ_flavor": "Phản đòn bất ngờ khiến công tố viên lúng túng.",
+             "fail_flavor": "Thái độ hung hăng khiến thẩm phán phải nhắc nhở giữ trật tự."},
+            {"label": "🤐 Viện quyền im lặng (không tự buộc tội)", "chance": 55,
+             "succ_score": 1, "fail_score": -1,
+             "succ_flavor": "Một lựa chọn an toàn về mặt pháp lý được chấp thuận.",
+             "fail_flavor": "Công tố viên vẫn tìm được cách khai thác điểm yếu dù bạn im lặng."},
         ],
     }],
-    # GIAI ĐOẠN 3
     [{
         "stage_title": "📜 GIAI ĐOẠN 3: NHÂN CHỨNG & BẰNG CHỨNG",
-        "question": (
-            "Bên nguyên đưa ra một đoạn camera an ninh mờ nhạt. "
-            "Luật sư bên bị cáo đứng bật dậy:\n"
-            "*\"Thân chủ tôi có quyền phản biện. Chiến lược của chúng ta là gì?\"*"
-        ),
+        "question": "Bên nguyên đưa ra một đoạn camera an ninh mờ nhạt. Luật sư đứng bật dậy: *\"Chiến lược của chúng ta là gì?\"*",
         "options": [
-            {"label": "⚖️ Yêu cầu giám định lại bằng chứng công tâm", "score": 2,
-             "flavor": "Yêu cầu hợp lý, tòa tạm hoãn để xem xét kỹ hơn."},
-            {"label": "😢 Kể chuyện đời tư đầy nước mắt", "score": 1,
-             "flavor": "Câu chuyện cảm động khiến vài bồi thẩm rơi nước mắt, nhưng không đổi bản chất vụ án."},
-            {"label": "🗣️ Tấn công ngược lại nhân chứng", "score": -2,
-             "flavor": "Nhân chứng bật khóc tức giận. Thẩm phán cảnh cáo bị cáo vì thái độ hung hăng."},
-            {"label": "🤫 Im lặng tuyệt đối", "score": -1,
-             "flavor": "Sự im lặng bị hiểu là né tránh."},
+            {"label": "⚖️ Yêu cầu giám định lại bằng chứng công tâm", "chance": 55,
+             "succ_score": 2, "fail_score": -2,
+             "succ_flavor": "Yêu cầu được chấp thuận, bằng chứng bị nghi ngờ độ tin cậy.",
+             "fail_flavor": "Giám định lại chỉ càng khẳng định bằng chứng bất lợi."},
+            {"label": "😢 Kể chuyện đời tư đầy nước mắt", "chance": 35,
+             "succ_score": 1, "fail_score": -1,
+             "succ_flavor": "Vài bồi thẩm viên thực sự xúc động.",
+             "fail_flavor": "Câu chuyện bị cho là diễn kịch để câu giờ."},
+            {"label": "🗣️ Tấn công ngược lại nhân chứng", "chance": 20,
+             "succ_score": 2, "fail_score": -4,
+             "succ_flavor": "Nhân chứng bối rối, lời khai mất giá trị.",
+             "fail_flavor": "Nhân chứng bật khóc, thẩm phán cảnh cáo thái độ hung hăng."},
+            {"label": "🤫 Im lặng tuyệt đối", "chance": 25,
+             "succ_score": 0, "fail_score": -2,
+             "succ_flavor": "Sự im lặng không gây hại thêm.",
+             "fail_flavor": "Sự im lặng bị hiểu là né tránh."},
         ],
     }],
-    # GIAI ĐOẠN 4 — BIẾN CỐ BẤT NGỜ (chọn ngẫu nhiên 1 trong 3)
     [
         {
             "stage_title": "📜 GIAI ĐOẠN 4: NHÂN CHỨNG BẤT NGỜ XUẤT HIỆN",
-            "question": "Một nhân chứng giấu mặt được tòa triệu tập khẩn cấp, lời khai của họ có thể lật ngược tình thế!",
+            "question": "Một nhân chứng giấu mặt được triệu tập khẩn cấp — lời khai có thể lật ngược tình thế!",
             "options": [
-                {"label": "🧐 Bình tĩnh yêu cầu đối chất trực tiếp", "score": 3,
-                 "flavor": "Sự tự tin khiến nhân chứng lúng túng trước câu hỏi ngược."},
-                {"label": "😨 Hoảng loạn tố nhân chứng là giả mạo", "score": -2,
-                 "flavor": "Phản ứng thái quá khiến bồi thẩm đoàn nghi ngờ ngược lại bị cáo."},
-                {"label": "🤝 Đề nghị hòa giải ngoài tòa với nhân chứng", "score": 1,
-                 "flavor": "Một nước đi mạo hiểm nhưng tạm ổn thỏa."},
-                {"label": "🔍 Yêu cầu luật sư điều tra lý lịch nhân chứng", "score": 2,
-                 "flavor": "Phát hiện vài điểm đáng ngờ trong lời khai nhân chứng."},
+                {"label": "🧐 Bình tĩnh yêu cầu đối chất trực tiếp", "chance": 50,
+                 "succ_score": 3, "fail_score": -3,
+                 "succ_flavor": "Nhân chứng lúng túng trước câu hỏi ngược.",
+                 "fail_flavor": "Nhân chứng phản bác thuyết phục hơn dự kiến."},
+                {"label": "😨 Hoảng loạn tố nhân chứng là giả mạo", "chance": 15,
+                 "succ_score": 2, "fail_score": -5,
+                 "succ_flavor": "Hóa ra nhân chứng thực sự có vấn đề về độ tin cậy.",
+                 "fail_flavor": "Phản ứng thái quá khiến bồi thẩm đoàn nghi ngờ ngược lại bạn."},
+                {"label": "🤝 Đề nghị hòa giải ngoài tòa với nhân chứng", "chance": 40,
+                 "succ_score": 1, "fail_score": -2,
+                 "succ_flavor": "Nhân chứng đồng ý làm dịu lời khai.",
+                 "fail_flavor": "Đề nghị bị từ chối và bị ghi nhận là hành vi mua chuộc."},
+                {"label": "🔍 Yêu cầu luật sư điều tra lý lịch nhân chứng", "chance": 45,
+                 "succ_score": 2, "fail_score": -2,
+                 "succ_flavor": "Phát hiện điểm đáng ngờ trong lời khai nhân chứng.",
+                 "fail_flavor": "Không tìm ra gì, mất thời gian quý báu của phiên tòa."},
             ],
         },
         {
             "stage_title": "📜 GIAI ĐOẠN 4: BẰNG CHỨNG MỚI BỊ CÔNG BỐ",
             "question": "Công tố viên bất ngờ trình ra một tài liệu chưa từng được nhắc tới!",
             "options": [
-                {"label": "📂 Chấp nhận, giải thích hợp lý cho tài liệu", "score": 2,
-                 "flavor": "Lời giải thích khiến tài liệu bớt phần bất lợi."},
-                {"label": "🙅 Phủ nhận hoàn toàn dù bằng chứng rõ ràng", "score": -4,
-                 "flavor": "Sự chối bỏ trắng trợn làm mất uy tín trước tòa."},
-                {"label": "⏸️ Xin hoãn phiên tòa để xem xét lại", "score": 1,
-                 "flavor": "Tòa chấp thuận hoãn ngắn, tình hình tạm ổn."},
-                {"label": "👉 Đổ lỗi hoàn toàn cho người khác", "score": -2,
-                 "flavor": "Cách đổ lỗi thiếu thuyết phục, gây phản cảm."},
+                {"label": "📂 Chấp nhận, giải thích hợp lý cho tài liệu", "chance": 48,
+                 "succ_score": 2, "fail_score": -2,
+                 "succ_flavor": "Lời giải thích khiến tài liệu bớt phần bất lợi.",
+                 "fail_flavor": "Lời giải thích không đủ thuyết phục."},
+                {"label": "🙅 Phủ nhận hoàn toàn dù bằng chứng rõ ràng", "chance": 10,
+                 "succ_score": 3, "fail_score": -6,
+                 "succ_flavor": "Kỳ tích! Không hiểu sao tòa vẫn tạm chấp nhận lời phủ nhận.",
+                 "fail_flavor": "Sự chối bỏ trắng trợn làm mất uy tín nghiêm trọng."},
+                {"label": "⏸️ Xin hoãn phiên tòa để xem xét lại", "chance": 55,
+                 "succ_score": 1, "fail_score": -1,
+                 "succ_flavor": "Tòa chấp thuận hoãn ngắn, tình hình tạm ổn.",
+                 "fail_flavor": "Yêu cầu hoãn bị bác bỏ, mất điểm thiện cảm."},
+                {"label": "👉 Đổ lỗi hoàn toàn cho người khác", "chance": 22,
+                 "succ_score": 1, "fail_score": -3,
+                 "succ_flavor": "Có vẻ như lời đổ lỗi có phần đúng sự thật.",
+                 "fail_flavor": "Cách đổ lỗi thiếu thuyết phục, gây phản cảm."},
             ],
         },
         {
             "stage_title": "📜 GIAI ĐOẠN 4: TRUYỀN THÔNG GÂY ÁP LỰC DƯ LUẬN",
-            "question": "Vụ án lên báo, dư luận sục sôi. Phóng viên vây kín cửa tòa chờ phản ứng của bị cáo.",
+            "question": "Vụ án lên báo, dư luận sục sôi. Phóng viên vây kín cửa tòa.",
             "options": [
-                {"label": "😌 Giữ im lặng, tập trung vào phiên tòa", "score": 2,
-                 "flavor": "Sự điềm tĩnh giúp tránh scandal không đáng có."},
-                {"label": "📢 Họp báo phản pháo dư luận", "score": -1,
-                 "flavor": "Phát ngôn gây tranh cãi thêm trên mạng xã hội."},
-                {"label": "🙇 Xin lỗi công khai trước truyền thông", "score": 1,
-                 "flavor": "Thái độ cầu thị phần nào xoa dịu dư luận."},
-                {"label": "🤬 Chửi bới phóng viên ngay tại tòa", "score": -5,
-                 "flavor": "HÀNH VI COI THƯỜNG TÒA ÁN! Cảnh sát phải can thiệp ngay lập tức."},
+                {"label": "😌 Giữ im lặng, tập trung vào phiên tòa", "chance": 60,
+                 "succ_score": 2, "fail_score": -1,
+                 "succ_flavor": "Sự điềm tĩnh giúp tránh scandal không đáng có.",
+                 "fail_flavor": "Dù im lặng nhưng báo chí vẫn suy diễn tiêu cực."},
+                {"label": "📢 Họp báo phản pháo dư luận", "chance": 25,
+                 "succ_score": 2, "fail_score": -3,
+                 "succ_flavor": "Phát ngôn khéo léo xoay chuyển dư luận.",
+                 "fail_flavor": "Phát ngôn gây tranh cãi thêm trên mạng xã hội."},
+                {"label": "🙇 Xin lỗi công khai trước truyền thông", "chance": 45,
+                 "succ_score": 1, "fail_score": -1,
+                 "succ_flavor": "Thái độ cầu thị xoa dịu dư luận hiệu quả.",
+                 "fail_flavor": "Lời xin lỗi bị cho là giả tạo."},
+                {"label": "🤬 Chửi bới phóng viên ngay tại tòa", "chance": 5,
+                 "succ_score": 1, "fail_score": -7,
+                 "succ_flavor": "Kỳ lạ thay, hành động này lại gây được chú ý tích cực.",
+                 "fail_flavor": "HÀNH VI COI THƯỜNG TÒA ÁN! Cảnh sát phải can thiệp ngay lập tức."},
             ],
         },
     ],
-    # GIAI ĐOẠN 5 (MỚI) — TRANH LUẬN BÀO CHỮA
     [{
         "stage_title": "📜 GIAI ĐOẠN 5: TRANH LUẬN BÀO CHỮA CUỐI CÙNG",
-        "question": "Luật sư quay sang bị cáo: *\"Đây là cơ hội cuối để chúng ta thuyết phục bồi thẩm đoàn. Chiến lược nào?\"*",
+        "question": "Luật sư quay sang bị cáo: *\"Đây là cơ hội cuối để thuyết phục bồi thẩm đoàn. Chiến lược nào?\"*",
         "options": [
-            {"label": "⚖️ Lập luận pháp lý chặt chẽ, có căn cứ rõ ràng", "score": 4,
-             "flavor": "Lập luận sắc bén khiến ngay cả công tố viên cũng phải gật đầu công nhận."},
-            {"label": "😢 Đánh vào cảm xúc của bồi thẩm đoàn", "score": 1,
-             "flavor": "Một vài bồi thẩm viên xúc động, nhưng hiệu quả không lớn."},
-            {"label": "🎭 Diễn kịch tính, phóng đại sự việc", "score": -2,
-             "flavor": "Màn kịch lộ liễu khiến bồi thẩm đoàn khó chịu."},
-            {"label": "💰 Ngầm gợi ý 'quà cảm ơn' cho bồi thẩm đoàn", "score": -6,
-             "flavor": "MƯU ĐỒ HỐI LỘ BỒI THẨM ĐOÀN BỊ PHÁT HIỆN! Đây là tội nghiêm trọng bổ sung."},
+            {"label": "⚖️ Lập luận pháp lý chặt chẽ, có căn cứ rõ ràng", "chance": 50,
+             "succ_score": 4, "fail_score": -3,
+             "succ_flavor": "Lập luận sắc bén khiến công tố viên phải công nhận.",
+             "fail_flavor": "Lập luận có lỗ hổng bị công tố viên khai thác ngay."},
+            {"label": "😢 Đánh vào cảm xúc của bồi thẩm đoàn", "chance": 30,
+             "succ_score": 2, "fail_score": -2,
+             "succ_flavor": "Một vài bồi thẩm viên thực sự xúc động.",
+             "fail_flavor": "Cảm xúc không đủ để lay chuyển bồi thẩm đoàn."},
+            {"label": "🎭 Diễn kịch tính, phóng đại sự việc", "chance": 12,
+             "succ_score": 2, "fail_score": -4,
+             "succ_flavor": "Bất ngờ màn kịch lại hiệu quả với vài bồi thẩm viên.",
+             "fail_flavor": "Màn kịch lộ liễu khiến bồi thẩm đoàn khó chịu."},
+            {"label": "💰 Ngầm gợi ý 'quà cảm ơn' cho bồi thẩm đoàn", "chance": 6,
+             "succ_score": 3, "fail_score": -8,
+             "succ_flavor": "Không ai phát hiện ra hành vi này...",
+             "fail_flavor": "MƯU ĐỒ HỐI LỘ BỒI THẨM ĐOÀN BỊ PHÁT HIỆN! Tội nghiêm trọng bổ sung."},
         ],
     }],
-    # GIAI ĐOẠN 6 — LỜI CUỐI CÙNG
     [{
         "stage_title": "📜 GIAI ĐOẠN 6: LỜI TUYÊN THỆ CUỐI CÙNG",
-        "question": "Trước khi nghị án, thẩm phán trao cho bị cáo cơ hội cuối cùng: *\"Ngươi có gì muốn nói không?\"*",
+        "question": "Trước khi nghị án, thẩm phán trao cho bị cáo cơ hội cuối: *\"Ngươi có gì muốn nói không?\"*",
         "options": [
-            {"label": "🕊️ Hứa sẽ hoàn lương, bù đắp lỗi lầm", "score": 3,
-             "flavor": "Lời hứa chân thành khiến bồi thẩm đoàn nghị án nhẹ nhàng hơn."},
-            {"label": "📖 Trích dẫn luật pháp bảo vệ bản thân", "score": 1,
-             "flavor": "Hiểu biết pháp luật gây ấn tượng, nhưng không đổi được tình tiết vụ án."},
-            {"label": "😭 Van xin tha thứ, kể khổ liên tục", "score": 0,
-             "flavor": "Màn kịch nước mắt không thuyết phục được ai có kinh nghiệm."},
-            {"label": "🔥 Tuyên bố sẽ 'trả thù' hệ thống tư pháp", "score": -6,
-             "flavor": "LỜI ĐE DỌA CÔNG KHAI TẠI TÒA! Cảnh sát tòa án phải ghì bị cáo xuống ghế."},
+            {"label": "🕊️ Hứa sẽ hoàn lương, bù đắp lỗi lầm", "chance": 55,
+             "succ_score": 3, "fail_score": -1,
+             "succ_flavor": "Lời hứa chân thành khiến bồi thẩm đoàn nghị án nhẹ nhàng hơn.",
+             "fail_flavor": "Lời hứa nghe qua loa, không tạo được ấn tượng."},
+            {"label": "📖 Trích dẫn luật pháp bảo vệ bản thân", "chance": 40,
+             "succ_score": 1, "fail_score": -1,
+             "succ_flavor": "Hiểu biết pháp luật gây ấn tượng tốt.",
+             "fail_flavor": "Trích dẫn sai ngữ cảnh, phản tác dụng."},
+            {"label": "😭 Van xin tha thứ, kể khổ liên tục", "chance": 25,
+             "succ_score": 0, "fail_score": -2,
+             "succ_flavor": "Một vài người mềm lòng trước lời van xin.",
+             "fail_flavor": "Màn kịch nước mắt không thuyết phục được ai có kinh nghiệm."},
+            {"label": "🔥 Tuyên bố sẽ 'trả thù' hệ thống tư pháp", "chance": 3,
+             "succ_score": 2, "fail_score": -8,
+             "succ_flavor": "Lời tuyên bố kỳ lạ thay lại không bị để ý nhiều.",
+             "fail_flavor": "LỜI ĐE DỌA CÔNG KHAI TẠI TÒA! Cảnh sát tòa án phải ghì bị cáo xuống ghế."},
         ],
     }],
 ]
@@ -3820,12 +3869,17 @@ class BigCourtTrialView(discord.ui.View):
         self.current_stage = random.choice(TRIAL_STAGE_POOL[self.stage_index])
         self._build_buttons()
 
+    def _effective_chance(self, base_chance):
+        chance = base_chance - self.prosecutor["penalty"] + self.plea.get("chance_bonus", 0)
+        return max(5, min(90, chance))  # LUÔN có rủi ro, kể cả lựa chọn tốt nhất tối đa 90%
+
     def _build_buttons(self):
         self.clear_items()
         opts = self.current_stage["options"]
         styles = [discord.ButtonStyle.success, discord.ButtonStyle.primary, discord.ButtonStyle.secondary, discord.ButtonStyle.danger]
         for idx, opt in enumerate(opts):
-            btn = discord.ui.Button(label=opt["label"][:80], style=styles[idx % len(styles)])
+            eff = self._effective_chance(opt["chance"])
+            btn = discord.ui.Button(label=f"{opt['label'][:65]} ({eff}%)", style=styles[idx % len(styles)])
             btn.callback = self._make_callback(idx)
             self.add_item(btn)
 
@@ -3845,8 +3899,15 @@ class BigCourtTrialView(discord.ui.View):
                 )
 
             opt = self.current_stage["options"][idx]
-            self.total_score += opt["score"]
-            self.log.append(f"**{self.current_stage['stage_title']}**\n> {opt['flavor']}")
+            eff_chance = self._effective_chance(opt["chance"])
+            roll = random.uniform(0, 100)
+            success = roll <= eff_chance
+
+            score_gain = opt["succ_score"] if success else opt["fail_score"]
+            flavor = opt["succ_flavor"] if success else opt["fail_flavor"]
+            self.total_score += score_gain
+            status = "✅ THÀNH CÔNG" if success else "❌ THẤT BẠI"
+            self.log.append(f"**{self.current_stage['stage_title']}** ({eff_chance}% — {status})\n> {flavor}")
 
             if self.stage_index + 1 < len(TRIAL_STAGE_POOL):
                 self.stage_index += 1
@@ -3860,7 +3921,7 @@ class BigCourtTrialView(discord.ui.View):
                     ),
                     color=discord.Color.blue()
                 )
-                embed.set_footer(text=f"Công tố viên: {self.prosecutor['name']} | Biện hộ: {self.plea['label']}")
+                embed.set_footer(text=f"Công tố viên: {self.prosecutor['name']} | Biện hộ: {self.plea['label']} | % ở nút = tỉ lệ thành công")
                 await interaction.response.edit_message(embed=embed, view=self)
             else:
                 await self._finalize(interaction, uid, user_data, end)
@@ -3876,67 +3937,72 @@ class BigCourtTrialView(discord.ui.View):
         prison_data, prison_lvl = get_prison_data(interaction.guild.id)
         prosecutor = self.prosecutor
         plea = self.plea
-
-        difficulty_penalty = round((prosecutor["mult"] - 1) * 5)
-        adjusted_score = self.total_score - difficulty_penalty
         fine_mult = prison_data["court_fine_mult"] * prosecutor["fine_mult"]
         fine = max(3000, int(remain * fine_mult))
         can_acquit = not plea.get("lock_acquit", False)
 
-        if can_acquit and adjusted_score >= 15 and random.randint(1, 100) <= 15:
-            user_data["jail_time"] = None
-            save_user(uid)
-            verdict_title = "🕊️ TRẮNG ÁN HOÀN TOÀN!"
-            verdict_desc = f"Bồi thẩm đoàn tuyên bố **THA BỔNG** ngay tại tòa trước sự ngỡ ngàng của {prosecutor['name']}!"
-            color = discord.Color.gold()
-        else:
-            if adjusted_score >= 15:
-                reduce_pct, outcome = 0.9, "gần như trắng án — giảm 90% án tù"
-            elif adjusted_score >= 10:
-                reduce_pct, outcome = 0.7, "giảm 70% án tù"
-            elif adjusted_score >= 6:
-                reduce_pct, outcome = 0.5, "giảm 50% án tù"
-            elif adjusted_score >= 2:
-                reduce_pct, outcome = 0.3, "giảm 30% án tù"
-            elif adjusted_score >= -3:
-                reduce_pct, outcome = 0.0, "giữ nguyên án tù"
-            elif adjusted_score >= -8:
-                reduce_pct, outcome = -0.4, "TĂNG 40% án tù vì thái độ bất hợp tác"
-            else:
-                reduce_pct, outcome = -0.8, "TĂNG 80% án tù vì coi thường tòa án"
-
-            if plea["key"] == "guilty" and reduce_pct < 0.2:
-                reduce_pct = 0.2
-                outcome += " (được cộng thêm khoan hồng nhờ thành khẩn nhận tội từ đầu)"
-
-            total_money = user_data.get("money", 0) + user_data.get("bank", 0)
-            if total_money < fine:
-                verdict_title = "⚖️ THIẾU TIỀN NỘP PHẠT"
-                verdict_desc = f"Bạn cần **{fine:,} 💰** để hoàn tất phiên xử nhưng không đủ. Án tù **GIỮ NGUYÊN**."
-                color = discord.Color.red()
-            else:
-                pay_cash = min(user_data.get("money", 0), fine)
-                pay_bank = fine - pay_cash
-                user_data["money"] -= pay_cash
-                user_data["bank"] -= pay_bank
-
-                new_remain = max(0, int(remain * (1 - reduce_pct)))
-                new_end = datetime.now() + timedelta(seconds=new_remain)
-                user_data["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S") if new_remain > 0 else None
+        # Trắng án giờ CỰC HIẾM và còn phải roll thêm 1 lần nữa
+        if can_acquit and self.total_score >= 16:
+            jury_roll = random.uniform(0, 100)
+            if jury_roll <= 8:
+                user_data["jail_time"] = None
                 save_user(uid)
+                verdict_title = "🕊️ TRẮNG ÁN HOÀN TOÀN!"
+                verdict_desc = f"Bồi thẩm đoàn tuyên bố **THA BỔNG** trước sự ngỡ ngàng của {prosecutor['name']}!"
+                color = discord.Color.gold()
+                embed = discord.Embed(
+                    title=verdict_title,
+                    description="\n\n".join(self.log) + f"\n\n{'─'*24}\n{verdict_desc}",
+                    color=color
+                )
+                embed.set_footer(text=f"Công tố viên: {prosecutor['name']} | Biện hộ: {plea['label']}")
+                return await interaction.response.edit_message(embed=embed, view=self)
 
-                verdict_title = f"⚖️ TÒA TUYÊN ÁN — Điểm: {self.total_score} (điều chỉnh: {adjusted_score})"
-                if new_remain > 0:
-                    verdict_desc = (
-                        f"💰 Nộp phạt: **{fine:,} 💰** (hệ số x{fine_mult:.2f})\n"
-                        f"📊 Kết quả: **{outcome}**\n"
-                        f"⏳ Án tù còn lại: <t:{int(new_end.timestamp())}:R>"
-                    )
-                else:
-                    verdict_desc = f"💰 Nộp phạt: **{fine:,} 💰**\n🎉 Án tù đã hết ngay sau khi tuyên!"
-                color = discord.Color.gold() if reduce_pct > 0 else discord.Color.red()
+        if self.total_score >= 12:
+            reduce_pct, outcome = 0.55, "giảm 55% án tù"
+        elif self.total_score >= 7:
+            reduce_pct, outcome = 0.35, "giảm 35% án tù"
+        elif self.total_score >= 3:
+            reduce_pct, outcome = 0.2, "giảm 20% án tù"
+        elif self.total_score >= -2:
+            reduce_pct, outcome = 0.0, "giữ nguyên án tù"
+        elif self.total_score >= -8:
+            reduce_pct, outcome = -0.4, "TĂNG 40% án tù vì thái độ bất hợp tác"
+        else:
+            reduce_pct, outcome = -0.8, "TĂNG 80% án tù vì coi thường tòa án"
 
-            add_history(uid, f"Hầu tòa ({plea['label']}, điểm {self.total_score}) — {outcome}")
+        if plea["key"] == "guilty" and reduce_pct < 0.1:
+            reduce_pct = 0.1
+            outcome += " (được cộng thêm khoan hồng nhờ thành khẩn nhận tội từ đầu)"
+
+        total_money = user_data.get("money", 0) + user_data.get("bank", 0)
+        if total_money < fine:
+            verdict_title = "⚖️ THIẾU TIỀN NỘP PHẠT"
+            verdict_desc = f"Bạn cần **{fine:,} 💰** để hoàn tất phiên xử nhưng không đủ. Án tù **GIỮ NGUYÊN**."
+            color = discord.Color.red()
+        else:
+            pay_cash = min(user_data.get("money", 0), fine)
+            pay_bank = fine - pay_cash
+            user_data["money"] -= pay_cash
+            user_data["bank"] -= pay_bank
+
+            new_remain = max(0, int(remain * (1 - reduce_pct)))
+            new_end = datetime.now() + timedelta(seconds=new_remain)
+            user_data["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S") if new_remain > 0 else None
+            save_user(uid)
+
+            verdict_title = f"⚖️ TÒA TUYÊN ÁN — Điểm cuối: {self.total_score}"
+            if new_remain > 0:
+                verdict_desc = (
+                    f"💰 Nộp phạt: **{fine:,} 💰** (hệ số x{fine_mult:.2f})\n"
+                    f"📊 Kết quả: **{outcome}**\n"
+                    f"⏳ Án tù còn lại: <t:{int(new_end.timestamp())}:R>"
+                )
+            else:
+                verdict_desc = f"💰 Nộp phạt: **{fine:,} 💰**\n🎉 Án tù đã hết ngay sau khi tuyên!"
+            color = discord.Color.gold() if reduce_pct > 0 else discord.Color.red()
+
+        add_history(uid, f"Hầu tòa ({plea['label']}, điểm {self.total_score}) — {outcome}")
 
         embed = discord.Embed(
             title=verdict_title,
@@ -3980,6 +4046,7 @@ class PleaSelectView(discord.ui.View):
                 description=(
                     f"**Biện hộ đã chọn:** {plea['label']}\n*{plea['flavor']}*\n\n"
                     f"**Công Tố Viên hôm nay:** {prosecutor['name']}\n*{prosecutor['flavor']}*\n\n"
+                    f"⚠️ **Mỗi lựa chọn đều có tỉ lệ thất bại riêng — không có lựa chọn nào an toàn tuyệt đối!**\n\n"
                     f"{'═'*24}\n**{first_stage['stage_title']}**\n{first_stage['question']}"
                 ),
                 color=discord.Color.blue()
@@ -3994,7 +4061,7 @@ class PleaSelectView(discord.ui.View):
 
 @bot.command(aliases=['court', 'hautoa'])
 async def toaan(ctx):
-    """Hầu tòa khi đang ở tù: chọn biện hộ, gặp công tố viên ngẫu nhiên, trải qua 6 giai đoạn xét xử."""
+    """Hầu tòa khi đang ở tù: mọi lựa chọn đều có rủi ro thất bại, không có gì chắc ăn 100%."""
     uid = str(ctx.author.id)
     user_data = load_user(uid)
     end = get_jail_end(user_data)
@@ -4044,6 +4111,228 @@ async def apply_channel_mute(member: discord.Member, channel, seconds: int):
             print(f"[MUTE] Lỗi khôi phục quyền: {e}")
 
     asyncio.create_task(_restore())
+# ═══════════════════════════════════════════════════════════
+# CƯỚP NGỤC — RỦ NHIỀU NGƯỜI ĐỘT KÍCH CỨU TÙ NHÂN
+# Thất bại: TẤT CẢ người tham gia đột kích bị BIỆT GIAM (không phải đi tù thường)
+# ═══════════════════════════════════════════════════════════
+
+RESCUE_COOLDOWN_SECONDS   = 1800   # 30 phút / người tham gia
+RESCUE_JOIN_SECONDS       = 45     # thời gian tụ tập trước khi xông vào
+RESCUE_BASE_CHANCE        = 22     # % thành công cơ bản với 1 người
+RESCUE_BONUS_PER_EXTRA    = 13     # % cộng thêm mỗi người tham gia thêm
+RESCUE_MAX_CHANCE         = 82     # trần tối đa — luôn có rủi ro dù đông người
+RESCUE_FAIL_SOLITARY_BASE = 900    # 15 phút biệt giam cơ bản cho người thất bại
+
+rescue_cooldowns = {}     # {user_id: datetime}
+rescue_active_targets = set()  # target_id đang có 1 cuộc đột kích diễn ra, tránh spam trùng
+
+
+class RescueLobbyView(discord.ui.View):
+    def __init__(self, initiator, target_id, target_name, prison_data):
+        super().__init__(timeout=RESCUE_JOIN_SECONDS)
+        self.initiator = initiator
+        self.target_id = target_id
+        self.target_name = target_name
+        self.prison_data = prison_data
+        self.participants = [str(initiator.id)]
+        self.resolved = False
+        self.message = None
+
+    def make_embed(self):
+        names = ", ".join(f"<@{uid}>" for uid in self.participants)
+        chance = min(RESCUE_MAX_CHANCE, RESCUE_BASE_CHANCE + (len(self.participants) - 1) * RESCUE_BONUS_PER_EXTRA)
+        embed = discord.Embed(
+            title="🚨 KẾ HOẠCH CƯỚP NGỤC ĐANG TỤ TẬP!",
+            description=(
+                f"Mục tiêu giải cứu: <@{self.target_id}> (**{self.target_name}**)\n"
+                f"Nơi giam: **{self.prison_data['name']}**\n\n"
+                f"👥 Đội đột kích ({len(self.participants)} người): {names}\n"
+                f"🎯 Tỉ lệ thành công hiện tại: **{chance}%**\n\n"
+                f"⚠️ Nếu THẤT BẠI: toàn bộ người tham gia bị **BIỆT GIAM**, không phải đi tù thường!\n"
+                f"⏳ Tự động xông vào sau {RESCUE_JOIN_SECONDS}s, hoặc bấm 'Xông Vào Ngay'."
+            ),
+            color=discord.Color.dark_orange()
+        )
+        return embed
+
+    @discord.ui.button(label="🤝 Tham Gia Đột Kích", style=discord.ButtonStyle.success)
+    async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
+        uid = str(interaction.user.id)
+        if self.resolved:
+            return await interaction.response.send_message("Đội đã xông vào rồi!", ephemeral=True)
+        if uid == self.target_id:
+            return await interaction.response.send_message("Không thể tự cứu chính mình!", ephemeral=True)
+        if uid in self.participants:
+            return await interaction.response.send_message("Bạn đã trong đội rồi!", ephemeral=True)
+
+        now = datetime.now()
+        last = rescue_cooldowns.get(uid)
+        if last and (now - last).total_seconds() < RESCUE_COOLDOWN_SECONDS:
+            remain = int(RESCUE_COOLDOWN_SECONDS - (now - last).total_seconds())
+            return await interaction.response.send_message(
+                f"⏳ Bạn vừa tham gia đột kích gần đây! Đợi {remain//60}p {remain%60}s.", ephemeral=True
+            )
+
+        user_data = load_user(uid)
+        jend = get_jail_end(user_data)
+        if jend and now < jend:
+            return await interaction.response.send_message("🚨 Bạn đang ở tù, không thể tham gia đột kích!", ephemeral=True)
+        solitary_str = user_data.get("solitary_until")
+        if solitary_str:
+            try:
+                solitary_end = datetime.strptime(solitary_str, "%Y-%m-%d %H:%M:%S")
+                if now < solitary_end:
+                    return await interaction.response.send_message("🔒 Bạn đang bị biệt giam, không thể tham gia!", ephemeral=True)
+            except Exception:
+                pass
+
+        self.participants.append(uid)
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="⚔️ Xông Vào Ngay", style=discord.ButtonStyle.danger)
+    async def start_now(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.initiator.id:
+            return await interaction.response.send_message("Chỉ người khởi xướng mới bấm được!", ephemeral=True)
+        if self.resolved:
+            return
+        self.resolved = True
+        self.stop()
+        for c in self.children:
+            c.disabled = True
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+        await resolve_rescue(interaction.channel, interaction.guild, self)
+
+    async def on_timeout(self):
+        if self.resolved:
+            return
+        self.resolved = True
+        if self.message:
+            try:
+                for c in self.children:
+                    c.disabled = True
+                await self.message.edit(view=self)
+                await resolve_rescue(self.message.channel, self.message.guild, self)
+            except Exception as e:
+                print(f"[RESCUE] timeout resolve error: {e}")
+
+
+async def resolve_rescue(channel, guild, lobby: "RescueLobbyView"):
+    target_id = lobby.target_id
+    rescue_active_targets.discard(target_id)
+
+    target_data = load_user(target_id)
+    jend = get_jail_end(target_data)
+    if not jend or datetime.now() >= jend:
+        return await channel.send(embed=discord.Embed(
+            description=f"⚠️ <@{target_id}> đã ra tù trước khi đội kịp hành động. Đột kích hủy bỏ!",
+            color=discord.Color.light_grey()
+        ))
+
+    now = datetime.now()
+    for uid in lobby.participants:
+        rescue_cooldowns[uid] = now
+
+    chance = min(RESCUE_MAX_CHANCE, RESCUE_BASE_CHANCE + (len(lobby.participants) - 1) * RESCUE_BONUS_PER_EXTRA)
+    prison_data, prison_lvl = get_prison_data(guild.id)
+    chance = max(5, chance - (prison_lvl - 1) * 4)  # nhà tù cấp cao hơn thì khó cướp hơn
+
+    roll = random.uniform(0, 100)
+    mentions = ", ".join(f"<@{uid}>" for uid in lobby.participants)
+
+    if roll <= chance:
+        target_data["jail_time"] = None
+        target_data["escape_fails"] = 0
+        save_user(target_id)
+        add_history(target_id, f"Được đội {len(lobby.participants)} người cướp ngục cứu thoát!")
+
+        reward = 15000 + len(lobby.participants) * 3000
+        for uid in lobby.participants:
+            udata = load_user(uid)
+            udata["money"] = udata.get("money", 0) + reward
+            save_user(uid)
+            add_history(uid, f"Cướp ngục thành công cứu <@{target_id}> (+{reward:,} 💰)")
+
+        embed = discord.Embed(
+            title="🎉 CƯỚP NGỤC THÀNH CÔNG!",
+            description=(
+                f"Đội đột kích ({mentions}) đã đột nhập **{prison_data['name']}** và giải cứu thành công "
+                f"<@{target_id}>!\n\n"
+                f"🎯 Tỉ lệ đã roll: **{chance}%**\n"
+                f"💰 Mỗi thành viên nhận: **{reward:,} 💰**"
+            ),
+            color=discord.Color.gold()
+        )
+        embed.set_image(url=GIF_LINKS.get("rob_success", ""))
+        await channel.send(embed=embed)
+    else:
+        solitary_seconds = int(RESCUE_FAIL_SOLITARY_BASE * prison_data.get("solitary_mult", 1.3))
+        solitary_end = now + timedelta(seconds=solitary_seconds)
+        sh, sm = divmod(solitary_seconds // 60, 60)
+        mute_seconds = min(CHANNEL_MUTE_SECONDS, solitary_seconds)
+
+        for uid in lobby.participants:
+            udata = load_user(uid)
+            udata["solitary_until"] = solitary_end.strftime("%Y-%m-%d %H:%M:%S")
+            save_user(uid)
+            add_history(uid, f"Cướp ngục thất bại, bị biệt giam {sh}h{sm}p")
+            member = guild.get_member(int(uid))
+            if member:
+                try:
+                    await apply_channel_mute(member, channel, mute_seconds)
+                except Exception as e:
+                    print(f"[RESCUE] mute error for {uid}: {e}")
+
+        embed = discord.Embed(
+            title="🚨 CƯỚP NGỤC THẤT BẠI!",
+            description=(
+                f"Chuông báo động vang khắp **{prison_data['name']}**! Toàn bộ đội đột kích "
+                f"({mentions}) đã bị tóm gọn tại chỗ.\n\n"
+                f"🎯 Tỉ lệ đã roll: **{chance}%**\n"
+                f"🔒 **TẤT CẢ** bị **BIỆT GIAM {sh}h{sm}p** (không phải đi tù thường)!\n"
+                f"🔇 Bị cấm chat tại kênh này trong **{mute_seconds//60}p{mute_seconds%60:02d}s**."
+            ),
+            color=discord.Color.dark_red()
+        )
+        embed.set_image(url=GIF_LINKS.get("rob_fail", ""))
+        await channel.send(embed=embed)
+
+
+@bot.command(aliases=['rescue', 'phanguc', 'giaicuu'])
+async def cuopnguc(ctx, member: discord.Member):
+    """Rủ nhiều người đột kích cứu một tù nhân. Thất bại = cả đội bị BIỆT GIAM."""
+    if member.bot or member.id == ctx.author.id:
+        return await ctx.reply("⚠️ Không thể tự cướp ngục cho chính mình theo cách này!", mention_author=False)
+
+    target_id = str(member.id)
+    target_data = load_user(target_id)
+    jend = get_jail_end(target_data)
+    if not jend or datetime.now() >= jend:
+        return await ctx.reply(f"⚠️ **{member.name}** hiện không ở trong tù!", mention_author=False)
+
+    if target_id in rescue_active_targets:
+        return await ctx.reply("⚠️ Đã có một đội đang lên kế hoạch cướp ngục cho người này rồi!", mention_author=False)
+
+    uid = str(ctx.author.id)
+    now = datetime.now()
+    last = rescue_cooldowns.get(uid)
+    if last and (now - last).total_seconds() < RESCUE_COOLDOWN_SECONDS:
+        remain = int(RESCUE_COOLDOWN_SECONDS - (now - last).total_seconds())
+        return await ctx.reply(f"⏳ Bạn vừa tham gia đột kích gần đây! Đợi {remain//60}p {remain%60}s.", mention_author=False)
+
+    my_jend = get_jail_end(load_user(uid))
+    if my_jend and now < my_jend:
+        return await ctx.reply("🚨 Bạn đang ở tù, không thể khởi xướng đột kích!", mention_author=False)
+
+    rescue_active_targets.add(target_id)
+    prison_data, prison_lvl = get_prison_data(ctx.guild.id)
+
+    lobby = RescueLobbyView(ctx.author, target_id, member.name, prison_data)
+    msg = await ctx.send(
+        content=f"📢 {member.mention}, có người đang tổ chức cướp ngục để cứu bạn!",
+        embed=lobby.make_embed(),
+        view=lobby
+    )
+    lobby.message = msg
 @bot.command(aliases=['escape', 'vuotnguc'])
 async def vuotngu(ctx):
     """Liều mạng vượt ngục — có cooldown, thất bại liên tiếp sẽ bị BIỆT GIAM!"""
