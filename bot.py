@@ -4759,7 +4759,7 @@ async def on_ready():
     if new_g or new_e:
         print(f'>>> [ASSET SCAN] GIF mới: {new_g} | Emoji mới: {new_e}')
     await bot.change_presence(activity=discord.Game(name="Kyo Đến Rồi Đây!"))
-    try:
+try:
        synced = await bot.tree.sync()
        print(f'>>> [SLASH SYNC] Đã đồng bộ {len(synced)} lệnh / lên Discord!')
    except Exception as e:
