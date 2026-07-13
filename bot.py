@@ -88,6 +88,8 @@ fishing_cooldowns = {}
 blackjack_games = {}   # NEW
 poker_games = {}       # NEW
 duel_invites = {}
+escape_cooldowns = {}
+labor_cooldowns = {}
 
 _processing_users = set()
 
@@ -172,6 +174,9 @@ def load_user(user_id):
         "crime_record": 0,           # số lần phạm tội
         "bounty": 0,                 # tiền thưởng truy nã
         "gym_level": 0,              # level gym (buff duel)
+        "prison_rep": 50,            # uy tín tù nhân (0-100)
+        "solitary_until": None,      # thời điểm hết biệt giam
+        "escape_fails": 0,           # số lần vượt ngục thất bại liên tiếp
     }
 
     for key, value in defaults.items():
@@ -385,8 +390,9 @@ async def global_check(ctx):
     # Các lệnh KHÔNG BAO GIỜ bị chặn dù đang ở tù (kể cả alias)
     JAIL_EXEMPT_COMMANDS = {
         "help", "toaan", "court", "hautoa",
-        "bail",
         "vuotngu", "escape", "vuotnguc",
+        "laodongtu", "laodong",
+        "nhatu", "jailinfo", "thongtinnhatu",
     }
     is_exempt = ctx.command and ctx.command.name in JAIL_EXEMPT_COMMANDS
     if not is_exempt:
@@ -404,7 +410,7 @@ async def global_check(ctx):
                             f"{ctx.author.mention} đang bóc lịch trong trại giam!\n\n"
                             f"{random.choice(JAIL_CELL_FLAVOR)}\n\n"
                             f"⏳ Mãn hạn: <t:{int(jail_end.timestamp())}:R>\n\n"
-                            f"💡 `k toaan` (hầu tòa) | `k baolanh` (éo bảo lãnh) | `k vuotngu` (vượt ngục)"
+                            f"💡 `k toaan` (hầu tòa) | `k laodongtu` (lao động giảm án) | `k vuotngu` (vượt ngục)"  
                         ),
                         color=discord.Color.red()
                     )
@@ -3456,7 +3462,7 @@ async def moctui(ctx, member: discord.Member):
             f"🎁 {member.name} nhận bồi thường: **{compensation:,} 💰**\n\n"
             f"{flavor}\n"
             f"⛓️ Ngồi tù đến <t:{int(jail_time.timestamp())}:R>!\n\n"
-            f"💡 Trong tù bạn có thể: `k toaan` (hầu tòa) | `k baolanh` (bảo lãnh) | `k vuotnguc` (vượt ngục - liều mạng)"
+            f"💡 Trong tù bạn có thể: `k toaan` (hầu tòa) | `k laodongtu` (lao động giảm án) | `k vuotnguc` (vượt ngục - liều mạng)"
         ),
         color=discord.Color.red()
     )
@@ -3492,7 +3498,7 @@ async def batgiam(ctx, member: discord.Member, minutes: int, *, reason: str = "V
             f"⏳ **Thời hạn:** {minutes} phút\n"
             f"🏛️ **Nơi giam:** {prison_data['name']} (Lv{prison_lvl})\n"
             f"🔓 Mãn hạn: <t:{int(jail_end.timestamp())}:R>\n\n"
-            f"💡 {member.name} có thể: `k toaan` | `k baolanh` | `k vuotngu`"
+            f"💡 {member.name} có thể: `k toaan` | `k laodongtu` | `k vuotngu`"
         ),
         color=discord.Color.dark_red()
     )
@@ -3535,13 +3541,18 @@ JAIL_CELL_FLAVOR = [
 # 🏛️ HỆ THỐNG CẤP ĐỘ NHÀ TÙ SERVER
 # =====================================================================
 PRISON_LEVELS = {
-    1: {"name": "Nhà Tù Xã 🏚️",          "escape_rate": 25, "bail_mult": 25, "court_fine_mult": 15, "upgrade_cost": 0},
-    2: {"name": "Nhà Tù Huyện 🏢",        "escape_rate": 20, "bail_mult": 30, "court_fine_mult": 18, "upgrade_cost": 2_000_000},
-    3: {"name": "Trại Giam Tỉnh 🏛️",      "escape_rate": 15, "bail_mult": 38, "court_fine_mult": 22, "upgrade_cost": 5_000_000},
-    4: {"name": "Ngục An Ninh Cao 🔒",    "escape_rate": 10, "bail_mult": 48, "court_fine_mult": 28, "upgrade_cost": 12_000_000},
-    5: {"name": "Siêu Ngục Liên Bang 🏰", "escape_rate": 5,  "bail_mult": 60, "court_fine_mult": 35, "upgrade_cost": 30_000_000},
+    1: {"name": "Nhà Tù Xã 🏚️",          "escape_rate": 25, "labor_reduce_pct": 20, "solitary_mult": 1.3, "court_fine_mult": 15, "upgrade_cost": 0},
+    2: {"name": "Nhà Tù Huyện 🏢",        "escape_rate": 20, "labor_reduce_pct": 18, "solitary_mult": 1.4, "court_fine_mult": 18, "upgrade_cost": 2_000_000},
+    3: {"name": "Trại Giam Tỉnh 🏛️",      "escape_rate": 15, "labor_reduce_pct": 15, "solitary_mult": 1.5, "court_fine_mult": 22, "upgrade_cost": 5_000_000},
+    4: {"name": "Ngục An Ninh Cao 🔒",    "escape_rate": 10, "labor_reduce_pct": 12, "solitary_mult": 1.6, "court_fine_mult": 28, "upgrade_cost": 12_000_000},
+    5: {"name": "Siêu Ngục Liên Bang 🏰", "escape_rate": 5,  "labor_reduce_pct": 10, "solitary_mult": 1.8, "court_fine_mult": 35, "upgrade_cost": 30_000_000},
 }
 MAX_PRISON_LEVEL = max(PRISON_LEVELS.keys())
+
+ESCAPE_COOLDOWN_SECONDS = 600      # 10 phút giữa các lần vượt ngục
+LABOR_COOLDOWN_SECONDS  = 900      # 15 phút giữa các lần lao động
+MAX_ESCAPE_FAIL_STREAK  = 3        # thất bại liên tiếp bao nhiêu lần thì bị biệt giam
+SOLITARY_BASE_SECONDS   = 1800     # 30 phút biệt giam cơ bản
 
 def get_prison_data(guild_id):
     cfg = load_server_config(guild_id)
@@ -3591,7 +3602,8 @@ async def nangcapnhatu(ctx):
         description=(
             f"Server đã nâng cấp lên **{p['name']}** (Lv{next_lvl})!\n\n"
             f"🏃 Tỉ lệ vượt ngục: **{p['escape_rate']}%**\n"
-            f"💰 Hệ số bảo lãnh: **x{p['bail_mult']}**\n"
+            f"⛏️ Giảm án lao động: **~{p['labor_reduce_pct']}%**/lần\n"
+            f"🔒 Hệ số biệt giam: **x{p['solitary_mult']}**\n"
             f"⚖️ Hệ số phạt hầu tòa: **x{p['court_fine_mult']}**\n\n"
             f"💸 Chi phí: **{cost:,} 💰** (từ ví cá nhân của {ctx.author.mention})"
         ),
@@ -3604,15 +3616,25 @@ async def nangcapnhatu(ctx):
 async def thongtinnhatu(ctx):
     """Xem thông tin nhà tù hiện tại của server."""
     p, lvl = get_prison_data(ctx.guild.id)
+    user_data = load_user(ctx.author.id)
     embed = discord.Embed(title=f"🏛️ {p['name']} (Lv{lvl}/{MAX_PRISON_LEVEL})", color=discord.Color.dark_grey())
-    embed.add_field(name="🏃 Tỉ lệ vượt ngục thành công", value=f"**{p['escape_rate']}%**", inline=True)
-    embed.add_field(name="💰 Hệ số bảo lãnh", value=f"**x{p['bail_mult']}**", inline=True)
+    embed.add_field(name="🏃 Tỉ lệ vượt ngục cơ bản", value=f"**{p['escape_rate']}%** (+uy tín)", inline=True)
+    embed.add_field(name="⛏️ Giảm án lao động", value=f"**~{p['labor_reduce_pct']}%**/lần", inline=True)
     embed.add_field(name="⚖️ Hệ số phạt hầu tòa", value=f"**x{p['court_fine_mult']}**", inline=True)
+    embed.add_field(
+        name="👤 Chỉ số cá nhân",
+        value=(
+            f"🍀 Uy tín tù nhân: **{user_data.get('prison_rep', 50)}/100**\n"
+            f"⚠️ Vượt ngục thất bại liên tiếp: **{user_data.get('escape_fails', 0)}/{MAX_ESCAPE_FAIL_STREAK}**"
+        ),
+        inline=False
+    )
     if lvl < MAX_PRISON_LEVEL:
         next_p = PRISON_LEVELS[lvl+1]
         embed.add_field(name="📈 Nâng cấp tiếp theo", value=f"**{next_p['name']}** — {next_p['upgrade_cost']:,} 💰\n`k nangcapnhatu`", inline=False)
     else:
         embed.add_field(name="📈 Nâng cấp", value="✅ Đã đạt cấp tối đa!", inline=False)
+    embed.set_footer(text="k laodongtu — lao động giảm án | k vuotngu — liều mạng vượt ngục")
     await ctx.reply(embed=embed, mention_author=False)
 def get_jail_end(user_data):
     jail_str = user_data.get("jail_time")
@@ -3830,52 +3852,44 @@ async def toaan(ctx):
     )
     await ctx.reply(embed=embed, view=BigCourtTrialView(ctx.author), mention_author=False)
 
-
-@bot.command(aliases=['bail'])
-async def baolanh(ctx):
-    """Trả tiền bảo lãnh ra tù ngay lập tức."""
-    uid = str(ctx.author.id)
-    user_data = load_user(uid)
-    end = get_jail_end(user_data)
-
-    if not end or datetime.now() >= end:
-        return await ctx.reply("✅ Bạn không đang bị giam!", mention_author=False)
-
-    remain = int((end - datetime.now()).total_seconds())
-    prison_data, prison_lvl = get_prison_data(ctx.guild.id)
-    bail_cost = max(5000, int(remain * prison_data["bail_mult"]))
-
-    total = user_data.get("money", 0) + user_data.get("bank", 0)
-    if total < bail_cost:
-        return await ctx.reply(embed=discord.Embed(
-            description=f"⚠️ Bảo lãnh cần **{bail_cost:,} 💰** (cả ví + ngân hàng), bạn chỉ có **{total:,} 💰**.",
-            color=discord.Color.red()
-        ), mention_author=False)
-
-    pay_cash = min(user_data.get("money", 0), bail_cost)
-    pay_bank = bail_cost - pay_cash
-    user_data["money"] -= pay_cash
-    user_data["bank"] -= pay_bank
-    user_data["jail_time"] = None
-    save_user(uid)
-    add_history(uid, f"Bảo lãnh ra tù -{bail_cost:,}")
-
-    await ctx.reply(embed=discord.Embed(
-        title="💰 BẢO LÃNH THÀNH CÔNG",
-        description=f"Nộp **{bail_cost:,} 💰** tiền bảo lãnh. Cánh cửa sắt mở ra, bạn bước ra ánh sáng tự do!",
-        color=discord.Color.green()
-    ), mention_author=False)
-
-
 @bot.command(aliases=['escape', 'vuotnguc'])
 async def vuotngu(ctx):
-    """Liều mạng vượt ngục: 25% thành công thoát ngay, 75% bị bắt lại và án nặng hơn."""
+    """Liều mạng vượt ngục — có cooldown, thất bại liên tiếp sẽ bị BIỆT GIAM!"""
     uid = str(ctx.author.id)
     user_data = load_user(uid)
     end = get_jail_end(user_data)
 
     if not end or datetime.now() >= end:
         return await ctx.reply("✅ Bạn không đang bị giam, chạy trốn cái gì!", mention_author=False)
+
+    now = datetime.now()
+
+    solitary_str = user_data.get("solitary_until")
+    if solitary_str:
+        try:
+            solitary_end = datetime.strptime(solitary_str, "%Y-%m-%d %H:%M:%S")
+            if now < solitary_end:
+                return await ctx.reply(embed=discord.Embed(
+                    title="⛔ ĐANG BỊ BIỆT GIAM!",
+                    description=(
+                        f"Sau nhiều lần vượt ngục thất bại, bạn bị nhốt riêng, canh gác nghiêm ngặt!\n"
+                        f"🚫 Không thể vượt ngục hoặc lao động lúc này.\n"
+                        f"⏳ Hết biệt giam: <t:{int(solitary_end.timestamp())}:R>"
+                    ),
+                    color=discord.Color.dark_red()
+                ), mention_author=False)
+        except Exception:
+            pass
+
+    last_try = escape_cooldowns.get(uid)
+    if last_try and (now - last_try).total_seconds() < ESCAPE_COOLDOWN_SECONDS:
+        remain = int(ESCAPE_COOLDOWN_SECONDS - (now - last_try).total_seconds())
+        return await ctx.reply(embed=discord.Embed(
+            description=f"😮‍💨 Vừa mới thử trốn, cai ngục còn để ý! Đợi **{remain//60}p {remain%60}s** nữa.",
+            color=discord.Color.orange()
+        ), mention_author=False)
+
+    escape_cooldowns[uid] = now
 
     msg = await ctx.reply(embed=discord.Embed(
         title="🏃 VƯỢT NGỤC",
@@ -3885,15 +3899,22 @@ async def vuotngu(ctx):
     await asyncio.sleep(2.5)
 
     prison_data, prison_lvl = get_prison_data(ctx.guild.id)
-    if random.randint(1, 100) <= prison_data["escape_rate"]:
+    prison_rep = user_data.get("prison_rep", 50)
+    rep_bonus = min(15, max(0, (prison_rep - 50) // 5))
+    effective_rate = min(80, prison_data["escape_rate"] + rep_bonus)
+
+    if random.randint(1, 100) <= effective_rate:
         user_data["jail_time"] = None
         user_data["bounty"] = user_data.get("bounty", 0) + 20000
+        user_data["escape_fails"] = 0
+        user_data["prison_rep"] = min(100, prison_rep + 5)
         save_user(uid)
         add_history(uid, "Vượt ngục thành công! Bị treo thưởng truy nã")
         embed = discord.Embed(
             title="🎉 VƯỢT NGỤC THÀNH CÔNG!",
             description=(
                 "Bạn chạy thoát vào màn đêm, tiếng còi báo động vang lên phía sau lưng!\n\n"
+                f"🍀 Uy tín tù nhân: **{user_data['prison_rep']}/100** (+5)\n"
                 "⚠️ Nhưng giờ bạn bị treo thưởng truy nã **+20,000 💰**, cẩn thận thợ săn tiền thưởng!"
             ),
             color=discord.Color.gold()
@@ -3905,6 +3926,21 @@ async def vuotngu(ctx):
         fine = min(user_data.get("money", 0), 10000)
         user_data["money"] -= fine
         user_data["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
+        user_data["escape_fails"] = user_data.get("escape_fails", 0) + 1
+        user_data["prison_rep"] = max(0, prison_rep - 5)
+
+        solitary_note = ""
+        if user_data["escape_fails"] >= MAX_ESCAPE_FAIL_STREAK:
+            solitary_seconds = int(SOLITARY_BASE_SECONDS * prison_data.get("solitary_mult", 1.3))
+            solitary_end = datetime.now() + timedelta(seconds=solitary_seconds)
+            user_data["solitary_until"] = solitary_end.strftime("%Y-%m-%d %H:%M:%S")
+            user_data["escape_fails"] = 0
+            sh, sm = divmod(solitary_seconds // 60, 60)
+            solitary_note = (
+                f"\n\n🔒 **BIỆT GIAM!** Cai ngục hết kiên nhẫn với bạn.\n"
+                f"Không thể vượt ngục/lao động trong **{sh}h{sm}p** tới!"
+            )
+
         save_user(uid)
         add_history(uid, f"Vượt ngục thất bại -{fine:,}, án tăng gấp đôi")
         embed = discord.Embed(
@@ -3912,9 +3948,107 @@ async def vuotngu(ctx):
             description=(
                 f"Đèn pha cai ngục quét trúng bạn ngay khi vừa trèo qua tường!\n"
                 f"💰 Phạt roi vọt: **{fine:,} 💰**\n"
-                f"⏳ Án tù tăng gấp đôi, đến <t:{int(new_end.timestamp())}:R>!"
+                f"⏳ Án tù tăng gấp đôi, đến <t:{int(new_end.timestamp())}:R>!\n"
+                f"🍀 Uy tín tù nhân: **{user_data['prison_rep']}/100** (-5)"
+                f"{solitary_note}"
             ),
             color=discord.Color.red()
+        )
+    await msg.edit(embed=embed)
+
+
+@bot.command(aliases=['laodong', 'work_jail', 'taprocong'])
+async def laodongtu(ctx):
+    """Lao động trong tù để giảm án và kiếm thêm chút tiền."""
+    uid = str(ctx.author.id)
+    user_data = load_user(uid)
+    end = get_jail_end(user_data)
+
+    if not end or datetime.now() >= end:
+        return await ctx.reply("✅ Bạn không đang bị giam, lao động gì cơ?", mention_author=False)
+
+    now = datetime.now()
+
+    solitary_str = user_data.get("solitary_until")
+    if solitary_str:
+        try:
+            solitary_end = datetime.strptime(solitary_str, "%Y-%m-%d %H:%M:%S")
+            if now < solitary_end:
+                return await ctx.reply(embed=discord.Embed(
+                    description=f"⛔ Đang bị **biệt giam**, không được lao động! Hết hạn: <t:{int(solitary_end.timestamp())}:R>",
+                    color=discord.Color.dark_red()
+                ), mention_author=False)
+        except Exception:
+            pass
+
+    last_labor = labor_cooldowns.get(uid)
+    if last_labor and (now - last_labor).total_seconds() < LABOR_COOLDOWN_SECONDS:
+        remain = int(LABOR_COOLDOWN_SECONDS - (now - last_labor).total_seconds())
+        return await ctx.reply(embed=discord.Embed(
+            description=f"😓 Vừa lao động xong, nghỉ tay đã! Còn **{remain//60}p {remain%60}s**.",
+            color=discord.Color.orange()
+        ), mention_author=False)
+
+    labor_cooldowns[uid] = now
+    prison_data, prison_lvl = get_prison_data(ctx.guild.id)
+
+    msg = await ctx.reply(embed=discord.Embed(
+        title="⛏️ LAO ĐỘNG CẢI TẠO",
+        description="Bạn được đưa ra xưởng lao động khổ sai...",
+        color=discord.Color.dark_grey()
+    ), mention_author=False)
+    await asyncio.sleep(2)
+
+    accident = random.randint(1, 100) <= 10
+    remain_secs = int((end - now).total_seconds())
+
+    if accident:
+        extra = 300
+        new_end = end + timedelta(seconds=extra)
+        user_data["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
+        money_gain = random.randint(100, 400)
+        user_data["money"] += money_gain
+        save_user(uid)
+        add_history(uid, f"Lao động tù bị tai nạn (+{money_gain:,}, +5p án)")
+        embed = discord.Embed(
+            title="🤕 TAI NẠN LAO ĐỘNG!",
+            description=(
+                f"Cuốc xẻng trượt tay, bạn bị thương nhẹ!\n"
+                f"💰 Vẫn nhận **{money_gain:,} 💰** tiền công\n"
+                f"⏳ Án tù bị cộng thêm **5 phút** do nghỉ dưỡng thương!"
+            ),
+            color=discord.Color.orange()
+        )
+    else:
+        reduce_pct = prison_data.get("labor_reduce_pct", 15)
+        reduce_secs = int(remain_secs * (reduce_pct / 100) * random.uniform(0.7, 1.3))
+        reduce_secs = min(reduce_secs, remain_secs)
+        new_remain = max(0, remain_secs - reduce_secs)
+        money_gain = random.randint(500, 1800)
+        rep_gain = random.randint(1, 3)
+
+        user_data["money"] += money_gain
+        user_data["prison_rep"] = min(100, user_data.get("prison_rep", 50) + rep_gain)
+
+        if new_remain <= 0:
+            user_data["jail_time"] = None
+            time_note = "🎉 **MÃN HẠN LUÔN!** Bạn được thả tự do ngay lập tức!"
+        else:
+            new_end = now + timedelta(seconds=new_remain)
+            user_data["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
+            time_note = f"⏳ Án tù giảm còn: <t:{int(new_end.timestamp())}:R>"
+
+        save_user(uid)
+        add_history(uid, f"Lao động tù (+{money_gain:,} 💰, -{reduce_secs//60}p án)")
+        embed = discord.Embed(
+            title="✅ LAO ĐỘNG HOÀN THÀNH",
+            description=(
+                f"Cần cù bù thông minh! Cai ngục hài lòng với thái độ của bạn.\n"
+                f"💰 Tiền công: **+{money_gain:,} 💰**\n"
+                f"🍀 Uy tín tù nhân: **{user_data['prison_rep']}/100** (+{rep_gain})\n"
+                f"{time_note}"
+            ),
+            color=discord.Color.green()
         )
     await msg.edit(embed=embed)
 
@@ -4167,14 +4301,15 @@ HELP_PAGES = [
         "color": discord.Color.dark_grey(),
         "desc": (
             "Khi bị bắt (cướp/móc túi thất bại), bạn có các lựa chọn sau:\n\n"
-            "`k toaan` (`court`) — Hầu tòa (dùng 1 lần/lượt bị giam)\n"
-            "   ⚖️ Nhận Tội: nộp phạt, giảm 50% thời gian án\n"
-            "   🗣️ Kêu Oan: 30% được tha bổng ngay, 70% án +50%\n\n"
-            "`k baolanh` (`bail`) — Trả tiền bảo lãnh ra tù ngay lập tức\n"
-            "   (chi phí tính theo thời gian án còn lại)\n\n"
-            "`k vuotngu` (`escape`) — Liều mạng vượt ngục\n"
-            "   ✅ 25%: thoát ngay nhưng bị treo thưởng truy nã +20,000 💰\n"
-            "   ❌ 75%: bị tóm lại, án tù gấp đôi + phạt tiền\n\n"
+            "`k toaan` (`court`) — Hầu tòa, trải qua 3 giai đoạn xét xử (1 lần/lượt bị giam)\n\n"
+            "`k laodongtu` (`laodong`) — Lao động cải tạo, giảm án + kiếm tiền\n"
+            "   ✅ ~90%: giảm 10-20% thời gian án còn lại + tiền công\n"
+            "   ❌ ~10%: tai nạn lao động, +5 phút án (vẫn nhận tiền)\n"
+            "   🍀 Tăng **Uy Tín Tù Nhân**, giúp vượt ngục dễ hơn | CD 15 phút\n\n"
+            "`k vuotngu` (`escape`) — Liều mạng vượt ngục | CD 10 phút\n"
+            "   ✅ Thoát ngay nhưng bị treo thưởng truy nã +20,000 💰, +Uy Tín\n"
+            "   ❌ Bị tóm lại, án tù gấp đôi + phạt tiền, -Uy Tín\n"
+            "   🔒 Thất bại 3 lần liên tiếp → bị **BIỆT GIAM**, khóa vượt ngục/lao động!\n\n"
             "💡 Tiền án (crime record) tăng dần theo số lần bị bắt → án cơ bản dài hơn."
         ),
     },
@@ -4620,7 +4755,7 @@ async def on_ready():
     new_g, new_e = scan_source_for_assets()   # 👈 THÊM DÒNG NÀY
     if new_g or new_e:
         print(f'>>> [ASSET SCAN] GIF mới: {new_g} | Emoji mới: {new_e}')
-    await bot.change_presence(activity=discord.Game(name="k help | Bot 7.1 Patched"))
+    await bot.change_presence(activity=discord.Game(name="Kyo Đến Rồi Đây!"))
 
 # =====================================================================
 # LỆNH ADMIN
