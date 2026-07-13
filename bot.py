@@ -117,7 +117,7 @@ mongo_client = pymongo.MongoClient(
     retryWrites=True,
 )
 db = mongo_client["DiscordBotDB"]
-from custom_commands import custom_commands
+from custom_commands import setup_custom_commands
 setup_custom_commands(bot, db)
 users_col = db["users"]
 config_col = db["config"]
@@ -4759,7 +4759,11 @@ async def on_ready():
     if new_g or new_e:
         print(f'>>> [ASSET SCAN] GIF mới: {new_g} | Emoji mới: {new_e}')
     await bot.change_presence(activity=discord.Game(name="Kyo Đến Rồi Đây!"))
-
+    try:
+       synced = await bot.tree.sync()
+       print(f'>>> [SLASH SYNC] Đã đồng bộ {len(synced)} lệnh / lên Discord!')
+   except Exception as e:
+       print(f'>>> [SLASH SYNC] Lỗi đồng bộ: {e}')
 # =====================================================================
 # LỆNH ADMIN
 # =====================================================================
