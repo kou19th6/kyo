@@ -12,8 +12,23 @@
 #   /trigger    — auto-reply khi có ai gõ từ khóa trong tin nhắn
 #   /reactrole  — gắn role khi bấm emoji/nút, gỡ khi bấm lại
 #   /button     — gắn nút bấm vào 1 tin nhắn để chạy 1 tag có sẵn
+#                 + /button clicks — XEM AI ĐÃ BẤM NÚT, lúc nào
 #   /poll       — tạo khảo sát nhanh có nút bấm vote
-#   /tools      — bảng hướng dẫn tổng hợp mọi công cụ + cú pháp biến
+#                 + /poll voters — XEM AI ĐÃ VOTE GÌ
+#   /giveaway   — MỚI: giveaway có nút "Tham gia", tự chọn người thắng
+#   /suggestion — MỚI: hộp góp ý, có nút 👍👎 cho cộng đồng vote
+#   /welcome    — MỚI: tin nhắn chào mừng + auto-role khi có member mới
+#   /afk        — MỚI: đặt trạng thái vắng mặt, tự thông báo khi bị mention
+#   /menu       — MỚI: bảng điều khiển nhanh bằng NÚT + FORM, không cần
+#                 nhớ cú pháp lệnh
+#   /tools      — bảng hướng dẫn dạng DROPDOWN (chọn mục để xem, gọn hơn)
+#
+# ĐIỂM MỚI QUAN TRỌNG — XÁC NHẬN AI ĐÃ BẤM NÚT:
+#   Mọi lượt bấm nút (chạy tag, vote poll, tham gia giveaway, vote góp ý)
+#   đều được ghi log vào MongoDB (guild_id, custom_id, user, thời gian).
+#   - Người bấm luôn nhận 1 tin nhắn ephemeral xác nhận ngay lập tức.
+#   - Admin có thể xem lại toàn bộ lịch sử bằng `/button clicks` hoặc
+#     `/poll voters`.
 #
 # CÁCH GẮN VÀO BOT CHÍNH (bot.py):
 #   from custom_commands import setup_custom_commands
@@ -31,7 +46,7 @@
 
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 import re
 import random
 import asyncio
@@ -43,13 +58,15 @@ from datetime import datetime, timedelta
 MAX_TAGS_PER_GUILD      = 300
 MAX_TAG_CONTENT_LEN     = 1800
 MAX_VAR_VALUE_LEN       = 500
+MAX_SUGGESTION_LEN      = 1000
 DEFAULT_TAG_COOLDOWN    = 3       # giây, tránh spam chạy tag
+GIVEAWAY_CHECK_INTERVAL = 20      # giây, tần suất kiểm tra giveaway hết hạn
 OWNER_IDS_FOR_SYNC      = []      # điền ID chủ bot vào đây nếu muốn giới hạn /synccmd
 
 # =====================================================================
 # TEMPLATE ENGINE — AN TOÀN, KHÔNG EVAL CODE
 # =====================================================================
-# Cú pháp biến hỗ trợ trong nội dung tag / embed / trigger:
+# Cú pháp biến hỗ trợ trong nội dung tag / embed / trigger / welcome:
 #   {user}            -> tên hiển thị người dùng lệnh
 #   {user.mention}     -> mention người dùng lệnh
 #   {user.id}          -> ID người dùng lệnh
@@ -135,14 +152,20 @@ def render_template(template: str, *, user: discord.abc.User, guild: discord.Gui
 # =====================================================================
 class CustomCommandStore:
     def __init__(self, db):
-        self.tags          = db["cc_tags"]
-        self.guild_vars    = db["cc_guild_vars"]
-        self.user_vars     = db["cc_user_vars"]
-        self.embeds        = db["cc_embeds"]
-        self.triggers      = db["cc_triggers"]
-        self.reactroles    = db["cc_reactroles"]
-        self.polls         = db["cc_polls"]
-        self._cooldowns    = {}  # {(guild_id, tag_name, user_id): datetime}
+        self.tags               = db["cc_tags"]
+        self.guild_vars         = db["cc_guild_vars"]
+        self.user_vars          = db["cc_user_vars"]
+        self.embeds             = db["cc_embeds"]
+        self.triggers           = db["cc_triggers"]
+        self.reactroles         = db["cc_reactroles"]
+        self.polls               = db["cc_polls"]
+        self.click_logs          = db["cc_click_logs"]        # MỚI: log ai bấm nút gì, lúc nào
+        self.giveaways           = db["cc_giveaways"]          # MỚI
+        self.afk                 = db["cc_afk"]                # MỚI
+        self.suggestion_config   = db["cc_suggestion_config"]  # MỚI
+        self.suggestions         = db["cc_suggestions"]        # MỚI
+        self.welcome_config      = db["cc_welcome_config"]     # MỚI
+        self._cooldowns          = {}  # {(guild_id, tag_name, user_id): datetime}
 
     # ── TAG ──────────────────────────────────────────────────────────
     def get_tag(self, guild_id: int, name: str):
@@ -266,6 +289,108 @@ class CustomCommandStore:
     def remove_reactrole(self, message_id, emoji):
         return self.reactroles.delete_one({"_id": f"{message_id}:{emoji}"})
 
+    # ── CLICK LOG (MỚI) — xác nhận ai đã bấm nút gì, lúc nào ──────────
+    def log_click(self, guild_id, custom_id, user):
+        self.click_logs.insert_one({
+            "guild_id": guild_id,
+            "custom_id": custom_id,
+            "user_id": str(user.id),
+            "username": str(user),
+            "at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        })
+
+    def get_click_log(self, custom_id, limit=15):
+        return list(self.click_logs.find({"custom_id": custom_id}).sort("at", -1).limit(limit))
+
+    def count_clicks(self, custom_id) -> int:
+        return self.click_logs.count_documents({"custom_id": custom_id})
+
+    # ── GIVEAWAY (MỚI) ─────────────────────────────────────────────────
+    def create_giveaway(self, guild_id, channel_id, message_id, prize, winners_count, end_at, host_id):
+        gid = f"{guild_id}_{int(datetime.now().timestamp())}"
+        doc = {
+            "_id": gid, "guild_id": guild_id, "channel_id": channel_id, "message_id": message_id,
+            "prize": prize, "winners_count": winners_count,
+            "end_at": end_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "entries": [], "ended": False, "host_id": str(host_id),
+        }
+        self.giveaways.insert_one(doc)
+        return doc
+
+    def get_giveaway(self, giveaway_id):
+        return self.giveaways.find_one({"_id": giveaway_id})
+
+    def add_giveaway_entry(self, giveaway_id, user_id):
+        self.giveaways.update_one({"_id": giveaway_id}, {"$addToSet": {"entries": str(user_id)}})
+
+    def mark_giveaway_ended(self, giveaway_id):
+        self.giveaways.update_one({"_id": giveaway_id}, {"$set": {"ended": True}})
+
+    def due_giveaways(self):
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return list(self.giveaways.find({"ended": False, "end_at": {"$lte": now_str}}))
+
+    # ── AFK (MỚI) ────────────────────────────────────────────────────
+    def set_afk(self, guild_id, user_id, reason):
+        self.afk.update_one(
+            {"_id": f"{guild_id}:{user_id}"},
+            {"$set": {"reason": reason, "since": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}},
+            upsert=True,
+        )
+
+    def clear_afk(self, guild_id, user_id):
+        self.afk.delete_one({"_id": f"{guild_id}:{user_id}"})
+
+    def get_afk(self, guild_id, user_id):
+        return self.afk.find_one({"_id": f"{guild_id}:{user_id}"})
+
+    # ── SUGGESTION BOX (MỚI) ────────────────────────────────────────
+    def set_suggestion_channel(self, guild_id, channel_id):
+        self.suggestion_config.update_one({"_id": str(guild_id)}, {"$set": {"channel_id": channel_id}}, upsert=True)
+
+    def get_suggestion_channel(self, guild_id):
+        doc = self.suggestion_config.find_one({"_id": str(guild_id)})
+        return doc.get("channel_id") if doc else None
+
+    def create_suggestion(self, guild_id, author_id, content):
+        sid = f"{guild_id}_{int(datetime.now().timestamp() * 1000)}"
+        doc = {
+            "_id": sid, "guild_id": guild_id, "author_id": str(author_id),
+            "content": content, "up": [], "down": [], "message_id": None,
+        }
+        self.suggestions.insert_one(doc)
+        return doc
+
+    def set_suggestion_message(self, sid, message_id):
+        self.suggestions.update_one({"_id": sid}, {"$set": {"message_id": message_id}})
+
+    def get_suggestion(self, sid):
+        return self.suggestions.find_one({"_id": sid})
+
+    def vote_suggestion(self, sid, user_id, up: bool):
+        uid = str(user_id)
+        if up:
+            self.suggestions.update_one({"_id": sid}, {"$pull": {"down": uid}})
+            self.suggestions.update_one({"_id": sid}, {"$addToSet": {"up": uid}})
+        else:
+            self.suggestions.update_one({"_id": sid}, {"$pull": {"up": uid}})
+            self.suggestions.update_one({"_id": sid}, {"$addToSet": {"down": uid}})
+        return self.get_suggestion(sid)
+
+    # ── WELCOME (MỚI) ────────────────────────────────────────────────
+    def set_welcome(self, guild_id, channel_id, message, role_id=None):
+        self.welcome_config.update_one(
+            {"_id": str(guild_id)},
+            {"$set": {"channel_id": channel_id, "message": message, "role_id": role_id}},
+            upsert=True,
+        )
+
+    def get_welcome(self, guild_id):
+        return self.welcome_config.find_one({"_id": str(guild_id)})
+
+    def disable_welcome(self, guild_id):
+        self.welcome_config.delete_one({"_id": str(guild_id)})
+
 
 # =====================================================================
 # VIEW: NÚT BẤM CHẠY TAG (persistent, dùng chung 1 view cho mọi tag)
@@ -296,6 +421,33 @@ class PollView(discord.ui.View):
                 custom_id=f"cc_poll::{poll_id}::{idx}",
             )
             self.add_item(btn)
+
+
+class GiveawayJoinView(discord.ui.View):
+    """MỚI: nút Tham Gia cho giveaway. Xử lý thực tế nằm ở on_raw_interaction
+    (giống RunTagButton) nên vẫn hoạt động sau khi bot restart."""
+
+    def __init__(self, giveaway_id: str):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Button(
+            label="🎉 Tham gia", style=discord.ButtonStyle.success,
+            custom_id=f"cc_gw::{giveaway_id}",
+        ))
+
+
+class SuggestionVoteView(discord.ui.View):
+    """MỚI: 2 nút 👍 / 👎 gắn vào 1 góp ý."""
+
+    def __init__(self, suggestion_id: str):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Button(
+            label="👍", style=discord.ButtonStyle.success,
+            custom_id=f"cc_sugg::{suggestion_id}::up",
+        ))
+        self.add_item(discord.ui.Button(
+            label="👎", style=discord.ButtonStyle.danger,
+            custom_id=f"cc_sugg::{suggestion_id}::down",
+        ))
 
 
 # =====================================================================
@@ -341,6 +493,81 @@ class EmbedBuilderModal(discord.ui.Modal, title="🎨 Tạo Embed"):
         )
 
 
+class EmbedNameModal(discord.ui.Modal, title="🎨 Tạo Embed — Bước 1/2"):
+    """MỚI: modal đầu tiên chỉ hỏi tên, sau đó mở tiếp EmbedBuilderModal
+    (dùng cho nút '🎨 Tạo Embed' trong /menu — không cần gõ lệnh trước)."""
+
+    def __init__(self, store: CustomCommandStore):
+        super().__init__()
+        self.store = store
+        self.f_name = discord.ui.TextInput(label="Tên embed (để lưu & gửi lại sau)", max_length=32)
+        self.add_item(self.f_name)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        name = self.f_name.value.strip().lower()
+        await interaction.response.send_modal(EmbedBuilderModal(self.store, name))
+
+
+class TagQuickModal(discord.ui.Modal, title="🏷️ Tạo Tag Nhanh"):
+    """MỚI: tạo tag trực tiếp bằng form, dùng trong /menu."""
+
+    def __init__(self, store: CustomCommandStore):
+        super().__init__()
+        self.store = store
+        self.f_name = discord.ui.TextInput(label="Tên tag (chữ thường, không dấu cách)", max_length=32)
+        self.f_content = discord.ui.TextInput(label="Nội dung", style=discord.TextStyle.paragraph, max_length=1800)
+        self.f_cooldown = discord.ui.TextInput(label="Cooldown giây (để trống = 3)", required=False, max_length=5)
+        for item in (self.f_name, self.f_content, self.f_cooldown):
+            self.add_item(item)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return await interaction.response.send_message("⚠️ Chỉ dùng được trong server!", ephemeral=True)
+        name = self.f_name.value.strip().lower()
+        if not re.match(r"^[a-z0-9_\-]{2,32}$", name):
+            return await interaction.response.send_message(
+                "⚠️ Tên chỉ gồm chữ thường/số/gạch dưới, dài 2-32 ký tự!", ephemeral=True)
+        if self.store.get_tag(interaction.guild_id, name):
+            return await interaction.response.send_message(f"⚠️ Tag **{name}** đã tồn tại!", ephemeral=True)
+        if self.store.count_tags(interaction.guild_id) >= MAX_TAGS_PER_GUILD:
+            return await interaction.response.send_message(
+                f"⚠️ Server đã đạt giới hạn {MAX_TAGS_PER_GUILD} tag!", ephemeral=True)
+        try:
+            cd = int(self.f_cooldown.value) if self.f_cooldown.value else DEFAULT_TAG_COOLDOWN
+        except ValueError:
+            cd = DEFAULT_TAG_COOLDOWN
+        content = _safe_truncate(self.f_content.value, MAX_TAG_CONTENT_LEN)
+        self.store.create_tag(interaction.guild_id, name, content, interaction.user.id, [], max(0, cd))
+        await interaction.response.send_message(
+            f"✅ Đã tạo tag **{name}**! Chạy bằng `/tag run name:{name}`", ephemeral=True)
+
+
+class TriggerQuickModal(discord.ui.Modal, title="🔔 Tạo Trigger Nhanh"):
+    """MỚI: tạo trigger auto-reply trực tiếp bằng form, dùng trong /menu."""
+
+    def __init__(self, store: CustomCommandStore):
+        super().__init__()
+        self.store = store
+        self.f_keyword = discord.ui.TextInput(label="Từ khóa", max_length=100)
+        self.f_response = discord.ui.TextInput(label="Nội dung trả lời", style=discord.TextStyle.paragraph, max_length=1800)
+        self.f_exact = discord.ui.TextInput(label="Khớp chính xác? (co / khong)", required=False, max_length=5)
+        for item in (self.f_keyword, self.f_response, self.f_exact):
+            self.add_item(item)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return await interaction.response.send_message("⚠️ Chỉ dùng được trong server!", ephemeral=True)
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("⛔ Cần quyền Manage Server!", ephemeral=True)
+        exact = self.f_exact.value.strip().lower() in ("co", "có", "yes", "true", "1")
+        self.store.add_trigger(
+            interaction.guild_id, self.f_keyword.value,
+            _safe_truncate(self.f_response.value, MAX_TAG_CONTENT_LEN),
+            interaction.user.id, exact,
+        )
+        await interaction.response.send_message(f"✅ Đã thêm trigger **{self.f_keyword.value}**!", ephemeral=True)
+
+
 def build_embed_from_data(data: dict) -> discord.Embed:
     embed = discord.Embed(
         title=data.get("title") or None,
@@ -352,6 +579,95 @@ def build_embed_from_data(data: dict) -> discord.Embed:
     if data.get("thumbnail"):
         embed.set_thumbnail(url=data["thumbnail"])
     return embed
+
+
+# =====================================================================
+# GIAO DIỆN TRỢ GIÚP DẠNG DROPDOWN (MỚI — dễ dùng hơn 1 embed dài)
+# =====================================================================
+HELP_CATEGORIES = [
+    ("tag", "🏷️ Tag", "**/tag create** name content [cooldown] [role_required]\n"
+                        "**/tag run** name [args]\n"
+                        "**/tag edit / delete / list / info**\n"
+                        "Tạo lệnh trả lời riêng, hỗ trợ toàn bộ cú pháp biến."),
+    ("var", "🔢 Biến (Var)", "**/var set / myset** key value — lưu biến chung/riêng\n"
+                              "**/var get / myget / list / delete**\n"
+                              "Dùng trong tag qua `{var:ten}` và `{uvar:ten}`."),
+    ("embed", "🎨 Embed", "**/embed create** name → mở form nhập nội dung\n"
+                           "**/embed send / list / delete**"),
+    ("trigger", "🔔 Trigger", "**/trigger add** keyword response [exact]\n"
+                               "**/trigger list / delete**\n"
+                               "Tự động trả lời khi ai gõ đúng từ khóa."),
+    ("reactrole", "🎭 Reaction Role", "**/reactrole add** message_id emoji role\n"
+                                       "**/reactrole remove**"),
+    ("button", "🖱️ Nút & Log", "**/button create** tag_name label [message]\n"
+                                 "**/button clicks** tag_name — xem CHÍNH XÁC ai đã bấm & lúc nào!"),
+    ("poll", "📊 Khảo sát", "**/poll create** question option1 option2 ...\n"
+                             "**/poll voters** poll_id — xem ai vote lựa chọn nào"),
+    ("giveaway", "🎉 Giveaway", "**/giveaway start** prize duration_minutes winners\n"
+                                 "**/giveaway end** giveaway_id — kết thúc sớm\n"
+                                 "**/giveaway reroll** giveaway_id — bốc lại người thắng"),
+    ("suggestion", "💡 Góp ý", "**/suggestion setup** channel — đặt kênh nhận góp ý\n"
+                                "**/suggestion submit** idea — gửi góp ý, có nút 👍👎ẽ cộng đồng vote"),
+    ("welcome", "👋 Chào mừng", "**/welcome set** channel message [autorole]\n"
+                                 "**/welcome off**"),
+    ("afk", "💤 AFK", "**/afk set** [reason]\n**/afk clear**\n"
+                       "Tự động thông báo khi có người mention bạn lúc đang AFK."),
+    ("menu", "🧭 Menu nhanh", "**/menu** — bảng điều khiển bằng nút bấm + form,\n"
+                               "tạo tag / trigger / embed mà không cần nhớ cú pháp lệnh."),
+    ("syntax", "🧩 Cú pháp biến", "`{user}` `{user.mention}` `{user.id}` `{user.avatar}`\n"
+                                   "`{server}` `{server.id}` `{channel}` `{channel.mention}`\n"
+                                   "`{args}` `{count}` `{random:1-100}` `{choice:a|b|c}`\n"
+                                   "`{var:ten}` `{uvar:ten}`"),
+]
+
+
+def build_help(index: int):
+    key, title, body = HELP_CATEGORIES[index]
+    embed = discord.Embed(title=title, description=body, color=discord.Color.gold())
+    embed.set_footer(text=f"Mục {index + 1}/{len(HELP_CATEGORIES)} — chọn mục khác ở menu bên dưới")
+    return embed, HelpView()
+
+
+class HelpSelect(discord.ui.Select):
+    def __init__(self):
+        options = [discord.SelectOption(label=title, value=str(i)) for i, (_, title, _) in enumerate(HELP_CATEGORIES)]
+        super().__init__(placeholder="📚 Chọn mục hướng dẫn...", options=options, min_values=1, max_values=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        idx = int(self.values[0])
+        embed, view = build_help(idx)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class HelpView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=180)
+        self.add_item(HelpSelect())
+
+
+class MenuView(discord.ui.View):
+    """MỚI: bảng điều khiển nhanh — bấm nút thay vì gõ lệnh dài."""
+
+    def __init__(self, store: CustomCommandStore):
+        super().__init__(timeout=300)
+        self.store = store
+
+    @discord.ui.button(label="🏷️ Tạo Tag", style=discord.ButtonStyle.primary, row=0)
+    async def btn_tag(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TagQuickModal(self.store))
+
+    @discord.ui.button(label="🔔 Tạo Trigger", style=discord.ButtonStyle.primary, row=0)
+    async def btn_trigger(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TriggerQuickModal(self.store))
+
+    @discord.ui.button(label="🎨 Tạo Embed", style=discord.ButtonStyle.primary, row=0)
+    async def btn_embed(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(EmbedNameModal(self.store))
+
+    @discord.ui.button(label="📋 Trợ giúp", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_help(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed, view = build_help(0)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
 # =====================================================================
@@ -632,37 +948,58 @@ def setup_custom_commands(bot: commands.Bot, db):
     bot.tree.add_command(reactrole_group)
 
     # ══════════════════════════════════════════════════════════════
-    # /button — gắn nút bấm chạy 1 tag có sẵn (không cần gõ lệnh)
+    # GROUP: /button — nút bấm chạy tag + XEM AI ĐÃ BẤM (MỚI)
     # ══════════════════════════════════════════════════════════════
-    @bot.tree.command(name="button", description="Tạo 1 tin nhắn có nút bấm — bấm vào sẽ tự chạy 1 tag")
+    button_group = app_commands.Group(name="button", description="Tạo nút bấm chạy tag & xem ai đã bấm")
+
+    @button_group.command(name="create", description="Tạo 1 tin nhắn có nút bấm — bấm vào sẽ tự chạy 1 tag")
     @app_commands.describe(tag_name="Tên tag đã tạo bằng /tag create", label="Chữ hiển thị trên nút",
                             message="Nội dung tin nhắn đi kèm nút (tuỳ chọn)")
-    async def button_cmd(interaction: discord.Interaction, tag_name: str, label: str, message: str = "\u200b"):
+    async def button_create(interaction: discord.Interaction, tag_name: str, label: str, message: str = "\u200b"):
         doc = store.get_tag(interaction.guild_id, tag_name)
         if not doc:
             return await interaction.response.send_message(f"⚠️ Chưa có tag **{tag_name}**! Tạo bằng `/tag create` trước.", ephemeral=True)
         view = RunTagButton(tag_name, label, discord.ButtonStyle.primary)
         await interaction.response.send_message(content=message, view=view)
 
+    @button_group.command(name="clicks", description="Xem CHÍNH XÁC ai đã bấm nút của 1 tag & lúc nào")
+    async def button_clicks(interaction: discord.Interaction, tag_name: str):
+        custom_id = f"cc_tagbtn::{tag_name.lower()}"
+        total = store.count_clicks(custom_id)
+        logs = store.get_click_log(custom_id, 15)
+        if not logs:
+            return await interaction.response.send_message(f"📋 Chưa ai bấm nút tag **{tag_name}**.", ephemeral=True)
+        lines = [f"• <@{l['user_id']}> — {l['at']}" for l in logs]
+        embed = discord.Embed(
+            title=f"🖱️ AI ĐÃ BẤM NÚT: {tag_name}",
+            description="\n".join(lines),
+            color=discord.Color.teal(),
+        )
+        embed.set_footer(text=f"Tổng cộng: {total} lượt bấm — hiển thị {len(logs)} lượt gần nhất")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    bot.tree.add_command(button_group)
+
     # ══════════════════════════════════════════════════════════════
-    # /poll — tạo khảo sát nhanh có nút vote
+    # GROUP: /poll — khảo sát nhanh có nút vote + XEM AI VOTE GÌ (MỚI)
     # ══════════════════════════════════════════════════════════════
     poll_votes_col = db["cc_poll_votes"]
+    poll_group = app_commands.Group(name="poll", description="Khảo sát nhanh có nút vote")
 
-    @bot.tree.command(name="poll", description="Tạo khảo sát nhanh với tối đa 5 lựa chọn (bấm nút để vote)")
+    @poll_group.command(name="create", description="Tạo khảo sát nhanh với tối đa 5 lựa chọn (bấm nút để vote)")
     @app_commands.describe(question="Câu hỏi khảo sát",
                             option1="Lựa chọn 1", option2="Lựa chọn 2",
                             option3="Lựa chọn 3 (tuỳ chọn)", option4="Lựa chọn 4 (tuỳ chọn)",
                             option5="Lựa chọn 5 (tuỳ chọn)")
-    async def poll_cmd(interaction: discord.Interaction, question: str, option1: str, option2: str,
-                        option3: str = None, option4: str = None, option5: str = None):
+    async def poll_create(interaction: discord.Interaction, question: str, option1: str, option2: str,
+                           option3: str = None, option4: str = None, option5: str = None):
         options = [o for o in [option1, option2, option3, option4, option5] if o]
         poll_id = f"{interaction.guild_id}_{int(datetime.now().timestamp())}"
 
         embed = discord.Embed(title=f"📊 {question}", color=discord.Color.blurple())
         counts = "\n".join(f"{i+1}️⃣ **{opt}** — 0 vote" for i, opt in enumerate(options))
         embed.description = counts
-        embed.set_footer(text=f"Khảo sát bởi {interaction.user.display_name}")
+        embed.set_footer(text=f"Khảo sát bởi {interaction.user.display_name} • ID: {poll_id}")
 
         view = PollView(poll_id, options)
         await interaction.response.send_message(embed=embed, view=view)
@@ -673,44 +1010,235 @@ def setup_custom_commands(bot: commands.Bot, db):
             "question": question, "options": options,
         })
 
+    @poll_group.command(name="voters", description="Xem ai đã vote gì trong 1 khảo sát (dùng ID trong footer)")
+    async def poll_voters(interaction: discord.Interaction, poll_id: str):
+        poll = store.polls.find_one({"_id": poll_id, "guild_id": interaction.guild_id})
+        if not poll:
+            return await interaction.response.send_message("⚠️ Không tìm thấy khảo sát!", ephemeral=True)
+        votes = list(poll_votes_col.find({"poll_id": poll_id}))
+        if not votes:
+            return await interaction.response.send_message("📋 Chưa có ai vote.", ephemeral=True)
+        lines = []
+        for v in votes:
+            uid = v["_id"].split(":")[-1]
+            choice = v.get("choice", -1)
+            opt = poll["options"][choice] if 0 <= choice < len(poll["options"]) else "?"
+            lines.append(f"• <@{uid}> → **{opt}**")
+        embed = discord.Embed(
+            title=f"🗳️ VOTE CHI TIẾT: {poll['question']}",
+            description="\n".join(lines)[:4000],
+            color=discord.Color.blurple(),
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    bot.tree.add_command(poll_group)
+
     # ══════════════════════════════════════════════════════════════
-    # /tools — hướng dẫn tổng hợp
+    # GROUP: /giveaway — MỚI: giveaway có nút Tham Gia, tự chọn thắng cuộc
+    # ══════════════════════════════════════════════════════════════
+    giveaway_group = app_commands.Group(name="giveaway", description="Tổ chức giveaway có nút tham gia")
+
+    async def _finish_giveaway(giveaway_id: str):
+        gw = store.get_giveaway(giveaway_id)
+        if not gw or gw.get("ended"):
+            return
+        store.mark_giveaway_ended(giveaway_id)
+        channel = bot.get_channel(gw["channel_id"])
+        entries = gw.get("entries", [])
+        winners_count = gw.get("winners_count", 1)
+        if not entries:
+            result_text = "😢 Không có ai tham gia giveaway này."
+        else:
+            winners = random.sample(entries, min(winners_count, len(entries)))
+            result_text = "🎉 Chúc mừng: " + ", ".join(f"<@{w}>" for w in winners)
+        if channel:
+            try:
+                await channel.send(embed=discord.Embed(
+                    title=f"🎉 GIVEAWAY KẾT THÚC: {gw['prize']}",
+                    description=result_text,
+                    color=discord.Color.gold(),
+                ))
+                try:
+                    msg = await channel.fetch_message(gw["message_id"])
+                    old_embed = msg.embeds[0] if msg.embeds else discord.Embed(title=gw["prize"])
+                    old_embed.title = f"🎉 [ĐÃ KẾT THÚC] {gw['prize']}"
+                    old_embed.color = discord.Color.dark_grey()
+                    await msg.edit(embed=old_embed, view=None)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+    @tasks.loop(seconds=GIVEAWAY_CHECK_INTERVAL)
+    async def giveaway_checker():
+        for gw in store.due_giveaways():
+            await _finish_giveaway(gw["_id"])
+
+    @giveaway_checker.before_loop
+    async def _before_giveaway_checker():
+        await bot.wait_until_ready()
+
+    async def _start_giveaway_checker(*args, **kwargs):
+        if not giveaway_checker.is_running():
+            giveaway_checker.start()
+
+    bot.add_listener(_start_giveaway_checker, "on_ready")
+
+    @giveaway_group.command(name="start", description="Bắt đầu 1 giveaway mới")
+    @app_commands.describe(prize="Phần thưởng", duration_minutes="Thời gian chạy (phút, mặc định 60)",
+                            winners="Số người thắng (mặc định 1)")
+    async def giveaway_start(interaction: discord.Interaction, prize: str,
+                              duration_minutes: int = 60, winners: int = 1):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("⛔ Cần quyền Manage Server!", ephemeral=True)
+        winners = max(1, min(winners, 20))
+        duration_minutes = max(1, min(duration_minutes, 10080))
+        end_at = datetime.now() + timedelta(minutes=duration_minutes)
+
+        embed = discord.Embed(
+            title=f"🎉 GIVEAWAY: {prize}",
+            description=(f"Bấm nút bên dưới để tham gia!\n"
+                         f"🏆 Số người thắng: **{winners}**\n"
+                         f"⏰ Kết thúc: <t:{int(end_at.timestamp())}:R>"),
+            color=discord.Color.gold(),
+        )
+        embed.set_footer(text=f"Tổ chức bởi {interaction.user.display_name}")
+
+        await interaction.response.send_message(embed=embed)
+        sent = await interaction.original_response()
+        doc = store.create_giveaway(interaction.guild_id, interaction.channel_id, sent.id,
+                                     prize, winners, end_at, interaction.user.id)
+        view = GiveawayJoinView(doc["_id"])
+        await sent.edit(view=view)
+        await interaction.followup.send(f"✅ Đã tạo giveaway **{prize}**! ID: `{doc['_id']}`", ephemeral=True)
+
+    @giveaway_group.command(name="end", description="Kết thúc giveaway ngay lập tức")
+    async def giveaway_end(interaction: discord.Interaction, giveaway_id: str):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("⛔ Cần quyền Manage Server!", ephemeral=True)
+        gw = store.get_giveaway(giveaway_id)
+        if not gw or gw["guild_id"] != interaction.guild_id:
+            return await interaction.response.send_message("⚠️ Không tìm thấy giveaway!", ephemeral=True)
+        if gw.get("ended"):
+            return await interaction.response.send_message("⚠️ Giveaway này đã kết thúc rồi!", ephemeral=True)
+        await interaction.response.send_message("✅ Đang kết thúc giveaway...", ephemeral=True)
+        await _finish_giveaway(giveaway_id)
+
+    @giveaway_group.command(name="reroll", description="Bốc lại người thắng cho giveaway đã kết thúc")
+    async def giveaway_reroll(interaction: discord.Interaction, giveaway_id: str):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("⛔ Cần quyền Manage Server!", ephemeral=True)
+        gw = store.get_giveaway(giveaway_id)
+        if not gw or gw["guild_id"] != interaction.guild_id:
+            return await interaction.response.send_message("⚠️ Không tìm thấy giveaway!", ephemeral=True)
+        entries = gw.get("entries", [])
+        if not entries:
+            return await interaction.response.send_message("😢 Không có ai tham gia để bốc lại!", ephemeral=True)
+        winners = random.sample(entries, min(gw.get("winners_count", 1), len(entries)))
+        await interaction.response.send_message(
+            f"🎉 Người thắng mới cho **{gw['prize']}**: " + ", ".join(f"<@{w}>" for w in winners)
+        )
+
+    bot.tree.add_command(giveaway_group)
+
+    # ══════════════════════════════════════════════════════════════
+    # GROUP: /afk — MỚI: đặt trạng thái vắng mặt
+    # ══════════════════════════════════════════════════════════════
+    afk_group = app_commands.Group(name="afk", description="Đặt trạng thái vắng mặt (AFK)")
+
+    @afk_group.command(name="set", description="Đặt trạng thái AFK — tự thông báo khi có người mention bạn")
+    async def afk_set(interaction: discord.Interaction, reason: str = "Đang bận"):
+        store.set_afk(interaction.guild_id, interaction.user.id, _safe_truncate(reason, 200))
+        await interaction.response.send_message(f"💤 Đã đặt AFK: {reason}")
+
+    @afk_group.command(name="clear", description="Gỡ trạng thái AFK")
+    async def afk_clear(interaction: discord.Interaction):
+        store.clear_afk(interaction.guild_id, interaction.user.id)
+        await interaction.response.send_message("✅ Đã gỡ trạng thái AFK.", ephemeral=True)
+
+    bot.tree.add_command(afk_group)
+
+    # ══════════════════════════════════════════════════════════════
+    # GROUP: /suggestion — MỚI: hộp góp ý có nút 👍👎
+    # ══════════════════════════════════════════════════════════════
+    suggestion_group = app_commands.Group(name="suggestion", description="Hộp góp ý cho server")
+
+    @suggestion_group.command(name="setup", description="Đặt kênh nhận góp ý")
+    async def suggestion_setup(interaction: discord.Interaction, channel: discord.TextChannel):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("⛔ Cần quyền Manage Server!", ephemeral=True)
+        store.set_suggestion_channel(interaction.guild_id, channel.id)
+        await interaction.response.send_message(f"✅ Đã đặt kênh góp ý: {channel.mention}", ephemeral=True)
+
+    @suggestion_group.command(name="submit", description="Gửi góp ý cho server")
+    async def suggestion_submit(interaction: discord.Interaction, idea: str):
+        ch_id = store.get_suggestion_channel(interaction.guild_id)
+        if not ch_id:
+            return await interaction.response.send_message(
+                "⚠️ Server chưa đặt kênh góp ý! Nhờ Admin dùng `/suggestion setup`.", ephemeral=True)
+        channel = interaction.guild.get_channel(ch_id)
+        if not channel:
+            return await interaction.response.send_message("⚠️ Kênh góp ý không còn tồn tại!", ephemeral=True)
+        idea = _safe_truncate(idea, MAX_SUGGESTION_LEN)
+        doc = store.create_suggestion(interaction.guild_id, interaction.user.id, idea)
+
+        embed = discord.Embed(title="💡 GÓP Ý MỚI", description=idea, color=discord.Color.blue())
+        embed.set_footer(text=f"Gửi bởi {interaction.user.display_name}")
+        embed.add_field(name="👍", value="0", inline=True)
+        embed.add_field(name="👎", value="0", inline=True)
+
+        view = SuggestionVoteView(doc["_id"])
+        sent = await channel.send(embed=embed, view=view)
+        store.set_suggestion_message(doc["_id"], sent.id)
+        await interaction.response.send_message(f"✅ Đã gửi góp ý của bạn vào {channel.mention}!", ephemeral=True)
+
+    bot.tree.add_command(suggestion_group)
+
+    # ══════════════════════════════════════════════════════════════
+    # GROUP: /welcome — MỚI: tin nhắn chào mừng + auto-role
+    # ══════════════════════════════════════════════════════════════
+    welcome_group = app_commands.Group(name="welcome", description="Tin nhắn chào mừng thành viên mới")
+
+    @welcome_group.command(name="set", description="Đặt tin nhắn chào mừng khi có thành viên mới")
+    @app_commands.describe(channel="Kênh gửi tin chào mừng",
+                            message="Nội dung (dùng {user}, {user.mention}, {server})",
+                            autorole="Role tự động gắn cho thành viên mới (tuỳ chọn)")
+    async def welcome_set(interaction: discord.Interaction, channel: discord.TextChannel, message: str,
+                           autorole: discord.Role = None):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("⛔ Cần quyền Manage Server!", ephemeral=True)
+        store.set_welcome(interaction.guild_id, channel.id, _safe_truncate(message, MAX_TAG_CONTENT_LEN),
+                           autorole.id if autorole else None)
+        await interaction.response.send_message(f"✅ Đã bật chào mừng tại {channel.mention}!", ephemeral=True)
+
+    @welcome_group.command(name="off", description="Tắt tin nhắn chào mừng")
+    async def welcome_off(interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("⛔ Cần quyền Manage Server!", ephemeral=True)
+        store.disable_welcome(interaction.guild_id)
+        await interaction.response.send_message("✅ Đã tắt chào mừng.", ephemeral=True)
+
+    bot.tree.add_command(welcome_group)
+
+    # ══════════════════════════════════════════════════════════════
+    # /menu — MỚI: bảng điều khiển nhanh bằng nút + form
+    # ══════════════════════════════════════════════════════════════
+    @bot.tree.command(name="menu", description="Bảng điều khiển nhanh — tạo tag/trigger/embed bằng form, không cần nhớ lệnh")
+    async def menu_cmd(interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="🧭 BẢNG ĐIỀU KHIỂN NHANH",
+            description="Bấm nút bên dưới để tạo tính năng ngay bằng form — không cần gõ lệnh dài!",
+            color=discord.Color.purple(),
+        )
+        await interaction.response.send_message(embed=embed, view=MenuView(store), ephemeral=True)
+
+    # ══════════════════════════════════════════════════════════════
+    # /tools — hướng dẫn dạng DROPDOWN (gọn & dễ dùng hơn)
     # ══════════════════════════════════════════════════════════════
     @bot.tree.command(name="tools", description="Xem hướng dẫn toàn bộ công cụ tự tạo tính năng")
     async def tools_cmd(interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="🧰 BỘ CÔNG CỤ TỰ SÁNG TẠO",
-            description=(
-                "**/tag** — tạo lệnh riêng của bạn\n"
-                "  `/tag create name:chao content:Xin chào {user}!`\n"
-                "  `/tag run name:chao`\n\n"
-                "**/var** — biến dùng trong tag ({var:ten} / {uvar:ten})\n"
-                "  `/var set key:diem value:100`\n\n"
-                "**/embed** — tạo embed bằng form, gửi lại nhiều lần\n"
-                "  `/embed create name:thongbao` → điền form\n"
-                "  `/embed send name:thongbao`\n\n"
-                "**/trigger** — tự trả lời khi ai gõ từ khóa\n"
-                "  `/trigger add keyword:xin chào response:Chào {user}!`\n\n"
-                "**/reactrole** — gắn role khi bấm emoji\n"
-                "  `/reactrole add message_id:... emoji:✅ role:@Member`\n\n"
-                "**/button** — nút bấm chạy tag có sẵn\n"
-                "  `/button tag_name:chao label:Chào hỏi`\n\n"
-                "**/poll** — khảo sát nhanh có nút vote\n"
-                "  `/poll question:Bạn thích gì? option1:A option2:B`"
-            ),
-            color=discord.Color.gold(),
-        )
-        embed.add_field(
-            name="🧩 CÚ PHÁP BIẾN DÙNG TRONG NỘI DUNG",
-            value=(
-                "`{user}` `{user.mention}` `{user.id}` `{user.avatar}`\n"
-                "`{server}` `{server.id}` `{channel}` `{channel.mention}`\n"
-                "`{args}` `{count}` `{random:1-100}` `{choice:a|b|c}`\n"
-                "`{var:ten_bien}` `{uvar:ten_bien_rieng}`"
-            ),
-            inline=False,
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        embed, view = build_help(0)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     # ══════════════════════════════════════════════════════════════
     # /synccmd — đồng bộ slash command lên Discord (chỉ chủ bot)
@@ -724,7 +1252,7 @@ def setup_custom_commands(bot: commands.Bot, db):
         await interaction.followup.send(f"✅ Đã đồng bộ **{len(synced)}** lệnh slash!", ephemeral=True)
 
     # ══════════════════════════════════════════════════════════════
-    # LẮNG NGHE SỰ KIỆN: trigger tự động + nút tag + nút poll + reaction role
+    # LẮNG NGHE SỰ KIỆN
     # ══════════════════════════════════════════════════════════════
     async def on_message_check_triggers(message: discord.Message):
         if message.author.bot or not message.guild:
@@ -748,18 +1276,73 @@ def setup_custom_commands(bot: commands.Bot, db):
 
     bot.add_listener(on_message_check_triggers, "on_message")
 
+    # MỚI: xử lý AFK (tự gỡ AFK khi nhắn lại + báo khi bị mention lúc đang AFK)
+    async def on_message_afk_handler(message: discord.Message):
+        if message.author.bot or not message.guild:
+            return
+        if store.get_afk(message.guild.id, message.author.id):
+            store.clear_afk(message.guild.id, message.author.id)
+            try:
+                await message.channel.send(
+                    f"👋 Chào mừng trở lại, {message.author.mention}! Đã gỡ trạng thái AFK.", delete_after=6)
+            except Exception:
+                pass
+        for u in message.mentions:
+            afk_doc = store.get_afk(message.guild.id, u.id)
+            if afk_doc:
+                try:
+                    await message.channel.send(f"💤 **{u.display_name}** đang AFK: {afk_doc.get('reason', '')}")
+                except Exception:
+                    pass
+
+    bot.add_listener(on_message_afk_handler, "on_message")
+
+    # MỚI: chào mừng + auto-role khi có thành viên mới
+    async def on_member_join_handler(member: discord.Member):
+        cfg = store.get_welcome(member.guild.id)
+        if not cfg:
+            return
+        channel = member.guild.get_channel(cfg["channel_id"])
+        if channel:
+            rendered = render_template(
+                cfg["message"], user=member, guild=member.guild, channel=channel,
+                args="", guild_vars=store.get_guild_vars(member.guild.id), user_vars={}, run_count=0,
+            )
+            try:
+                await channel.send(rendered)
+            except Exception:
+                pass
+        if cfg.get("role_id"):
+            role = member.guild.get_role(cfg["role_id"])
+            if role:
+                try:
+                    await member.add_roles(role, reason="Auto-role chào mừng")
+                except Exception:
+                    pass
+
+    bot.add_listener(on_member_join_handler, "on_member_join")
+
     async def on_raw_interaction(interaction: discord.Interaction):
         if interaction.type != discord.InteractionType.component:
             return
         custom_id = interaction.data.get("custom_id", "")
 
-        # Nút chạy tag
+        # Nút chạy tag — MỚI: ghi log + xác nhận ai đã bấm
         if custom_id.startswith("cc_tagbtn::"):
             tag_name = custom_id.split("::", 1)[1]
+            store.log_click(interaction.guild_id, custom_id, interaction.user)
             await _execute_tag(interaction, store, tag_name, "")
+            try:
+                await interaction.followup.send(
+                    f"📝 Đã ghi nhận: {interaction.user.mention} bấm nút lúc "
+                    f"{datetime.now().strftime('%H:%M:%S')}",
+                    ephemeral=True,
+                )
+            except Exception:
+                pass
             return
 
-        # Nút vote poll
+        # Nút vote poll — MỚI: ghi log + xác nhận vote riêng cho người bấm
         if custom_id.startswith("cc_poll::"):
             _, poll_id, idx_str = custom_id.split("::")
             idx = int(idx_str)
@@ -767,6 +1350,7 @@ def setup_custom_commands(bot: commands.Bot, db):
             if not poll:
                 return await interaction.response.send_message("⚠️ Khảo sát không còn tồn tại!", ephemeral=True)
 
+            store.log_click(interaction.guild_id, custom_id, interaction.user)
             vote_key = f"{poll_id}:{interaction.user.id}"
             existing = poll_votes_col.find_one({"_id": vote_key})
             if existing and existing.get("choice") == idx:
@@ -777,6 +1361,47 @@ def setup_custom_commands(bot: commands.Bot, db):
             desc = "\n".join(f"{i+1}️⃣ **{opt}** — {counts[i]} vote" for i, opt in enumerate(poll["options"]))
             embed = discord.Embed(title=f"📊 {poll['question']}", description=desc, color=discord.Color.blurple())
             await interaction.response.edit_message(embed=embed)
+            try:
+                await interaction.followup.send(
+                    f"✅ Đã ghi nhận vote của bạn: **{poll['options'][idx]}**", ephemeral=True)
+            except Exception:
+                pass
+            return
+
+        # Nút tham gia giveaway — MỚI
+        if custom_id.startswith("cc_gw::"):
+            gid = custom_id.split("::", 1)[1]
+            gw = store.get_giveaway(gid)
+            if not gw or gw.get("ended"):
+                return await interaction.response.send_message(
+                    "⚠️ Giveaway đã kết thúc hoặc không tồn tại!", ephemeral=True)
+            store.log_click(interaction.guild_id, custom_id, interaction.user)
+            uid = str(interaction.user.id)
+            if uid in gw.get("entries", []):
+                return await interaction.response.send_message("⚠️ Bạn đã tham gia giveaway này rồi!", ephemeral=True)
+            store.add_giveaway_entry(gid, interaction.user.id)
+            return await interaction.response.send_message(
+                f"✅ Bạn đã tham gia giveaway **{gw['prize']}**! Chúc may mắn 🍀", ephemeral=True)
+
+        # Nút vote góp ý (👍/👎) — MỚI
+        if custom_id.startswith("cc_sugg::"):
+            _, sid, direction = custom_id.split("::")
+            store.log_click(interaction.guild_id, custom_id, interaction.user)
+            doc = store.vote_suggestion(sid, interaction.user.id, direction == "up")
+            if not doc:
+                return await interaction.response.send_message("⚠️ Góp ý không còn tồn tại!", ephemeral=True)
+            embed = interaction.message.embeds[0] if interaction.message.embeds else discord.Embed(title="💡 GÓP Ý")
+            try:
+                embed.set_field_at(0, name="👍", value=str(len(doc.get("up", []))), inline=True)
+                embed.set_field_at(1, name="👎", value=str(len(doc.get("down", []))), inline=True)
+            except Exception:
+                pass
+            await interaction.response.edit_message(embed=embed)
+            try:
+                await interaction.followup.send(
+                    f"✅ Đã ghi nhận vote **{'👍' if direction == 'up' else '👎'}** của bạn!", ephemeral=True)
+            except Exception:
+                pass
             return
 
     bot.add_listener(on_raw_interaction, "on_interaction")
@@ -818,5 +1443,6 @@ def setup_custom_commands(bot: commands.Bot, db):
     bot.add_listener(on_raw_reaction_add, "on_raw_reaction_add")
     bot.add_listener(on_raw_reaction_remove, "on_raw_reaction_remove")
 
-    print("[custom_commands] Đã gắn module thành công — nhớ chạy /synccmd 1 lần để Discord hiện lệnh /")
+    print("[custom_commands] Đã gắn module thành công (bản nâng cấp: log click, giveaway, afk, "
+          "suggestion, welcome, menu) — nhớ chạy /synccmd 1 lần để Discord hiện lệnh /")
     return store
