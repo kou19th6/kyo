@@ -117,7 +117,7 @@ mongo_client = pymongo.MongoClient(
     retryWrites=True,
 )
 db = mongo_client["DiscordBotDB"]
-from custom_commands import setup_custom_commands
+from custom_commands import custom_commands
 setup_custom_commands(bot, db)
 users_col = db["users"]
 config_col = db["config"]
