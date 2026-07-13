@@ -21,6 +21,7 @@ intents.members = True
 
 bot = commands.Bot(command_prefix=['K ', 'k ', 'K', 'k'], intents=intents)
 bot.remove_command('help')
+
 # =====================================================================
 # AI TRẢ LỜI KHI TAG BOT
 # =====================================================================
@@ -116,7 +117,8 @@ mongo_client = pymongo.MongoClient(
     retryWrites=True,
 )
 db = mongo_client["DiscordBotDB"]
-
+from custom_commands import setup_custom_commands
+setup_custom_commands(bot, db)
 users_col = db["users"]
 config_col = db["config"]
 companies_col = db["companies"]
