@@ -489,6 +489,9 @@ async def global_check(ctx):
                 save_user(ctx.author.id)
 
     if ctx.guild:
+        prison_data = PRISON_GUILD_CACHE.get(ctx.guild.id)     # 👈 THÊM
+        if prison_data and ctx.channel.id == prison_data.get("channel_id"):  # 👈 THÊM
+            return True                                          # 👈 THÊM
         try:
             server_config = load_server_config(ctx.guild.id)
             allowed_channels = server_config.get("allowed_channels", [])
@@ -4554,7 +4557,501 @@ async def laodongtu(ctx):
             color=discord.Color.green()
         )
     await msg.edit(embed=embed)
+# =====================================================================
+# 🔒 PRISON NETWORK v2 — CÁCH LY TOÀN DIỆN + CHAT TÙ NHÂN LIÊN SERVER
+# =====================================================================
+# CÁCH CÀI ĐẶT:
+# 1) Dán TOÀN BỘ file này vào bot.py, TRƯỚC dòng keep_alive()
+#    (đặt sau khối "CUỘC SỐNG TRONG TÙ" cũ là hợp lý nhất)
+#
+# 2) Trong on_ready() hiện tại, thêm 2 dòng:
+#        load_prison_network()
+#        bot.loop.create_task(prison_watcher())
+#
+# 3) Trong on_message() hiện tại, thêm 1 dòng NGAY SAU dòng
+#        handled = await handle_bridge_relay(message)
+#        if handled:
+#            return
+#    thành:
+#        handled = await handle_bridge_relay(message)
+#        if handled:
+#            return
+#        await handle_prison_relay(message)          # 👈 THÊM DÒNG NÀY
+#
+# 4) (Khuyên dùng) Trong global_check(), ngay đầu khối "if ctx.guild:"
+#    (chỗ check allowed_channels), thêm đoạn sau để tù nhân vẫn gõ được
+#    lệnh trong phòng giam kể cả khi server giới hạn kênh dùng bot:
+#
+#        prison_data = PRISON_GUILD_CACHE.get(ctx.guild.id)
+#        if prison_data and ctx.channel.id == prison_data.get("channel_id"):
+#            return True
+#
+#    (đặt TRƯỚC đoạn code check allowed_channels hiện có)
+#
+# CƠ CHẾ HOẠT ĐỘNG:
+# - Không cần sửa bất kỳ lệnh bắt giam cũ nào (moctui, cuopnganhang,
+#   batgiam, vuotngu thất bại...). Một vòng lặp nền (prison_watcher)
+#   cứ 20 giây quét toàn bộ member từng server, ai có jail_time còn
+#   hiệu lực mà chưa bị cách ly -> tự động cách ly; ai hết hạn mà vẫn
+#   đang bị cách ly -> tự động thả.
+# - Cách ly = tạo/lấy 1 kênh "phòng-giam-tap-the" riêng mỗi server,
+#   chặn view_channel của user đó trên MỌI kênh khác, chỉ mở kênh giam.
+# - Tin nhắn gõ trong phòng giam được relay (qua webhook) sang phòng
+#   giam của TẤT CẢ server khác đang có bot -> tù nhân chat xuyên server.
+# - Khi phòng giam hết người (thả hết) -> đợi 5 phút không có ai vào
+#   lại -> tự xoá kênh + category luôn.
+# =====================================================================
 
+PRISON_CATEGORY_NAME = "🔒 KHU BIỆT GIAM"
+PRISON_CHANNEL_NAME  = "phong-giam-tap-the"
+PRISON_CLEANUP_DELAY = 300  # 5 phút sau khi trống mới tự xoá kênh
+
+prison_network_col   = db["prison_network_v2"]
+PRISON_CHANNEL_CACHE = {}   # {channel_id: guild_id} — tra nhanh khi relay chat
+PRISON_GUILD_CACHE   = {}   # {guild_id: {"channel_id":, "category_id":, "prisoners": set(uid)}}
+prison_cleanup_tasks = {}   # {guild_id: asyncio.Task}
+
+
+# ── LOAD/SAVE ─────────────────────────────────────────────────────────
+def load_prison_network():
+    try:
+        for doc in prison_network_col.find():
+            gid = doc["_id"]
+            PRISON_GUILD_CACHE[gid] = {
+                "channel_id":  doc.get("channel_id"),
+                "category_id": doc.get("category_id"),
+                "prisoners":   set(doc.get("prisoners", [])),
+            }
+            if doc.get("channel_id"):
+                PRISON_CHANNEL_CACHE[doc["channel_id"]] = gid
+    except Exception as e:
+        print(f"[PRISON] load error: {e}")
+
+
+def save_prison_guild(guild_id):
+    data = PRISON_GUILD_CACHE.get(guild_id)
+    if not data:
+        try:
+            prison_network_col.delete_one({"_id": guild_id})
+        except Exception:
+            pass
+        return
+    try:
+        prison_network_col.update_one(
+            {"_id": guild_id},
+            {"$set": {
+                "channel_id":  data["channel_id"],
+                "category_id": data["category_id"],
+                "prisoners":   list(data["prisoners"]),
+            }},
+            upsert=True
+        )
+    except Exception as e:
+        print(f"[PRISON] save error: {e}")
+
+
+# ── TẠO / LẤY KÊNH PHÒNG GIAM ──────────────────────────────────────────
+async def get_or_create_prison_channel(guild: discord.Guild):
+    data = PRISON_GUILD_CACHE.get(guild.id)
+    if data and data.get("channel_id"):
+        ch = guild.get_channel(data["channel_id"])
+        if ch:
+            return ch
+        PRISON_CHANNEL_CACHE.pop(data["channel_id"], None)  # kênh bị xoá thủ công
+
+    try:
+        category = discord.utils.get(guild.categories, name=PRISON_CATEGORY_NAME)
+        if not category:
+            category = await guild.create_category(
+                PRISON_CATEGORY_NAME,
+                overwrites={guild.default_role: discord.PermissionOverwrite(view_channel=False)}
+            )
+        channel = await guild.create_text_channel(
+            PRISON_CHANNEL_NAME,
+            category=category,
+            topic="🔒 Phòng giam tập thể — chat được kết nối xuyên server với tù nhân server khác!",
+            overwrites={guild.default_role: discord.PermissionOverwrite(view_channel=False)}
+        )
+    except discord.Forbidden:
+        return None
+    except Exception as e:
+        print(f"[PRISON] create channel error: {e}")
+        return None
+
+    PRISON_GUILD_CACHE[guild.id] = {
+        "channel_id": channel.id, "category_id": category.id, "prisoners": set()
+    }
+    PRISON_CHANNEL_CACHE[channel.id] = guild.id
+    save_prison_guild(guild.id)
+    return channel
+
+
+# ── CÁCH LY / THẢ ────────────────────────────────────────────────────
+async def isolate_prisoner(member: discord.Member):
+    guild = member.guild
+    channel = await get_or_create_prison_channel(guild)
+    if not channel:
+        return False
+
+    try:
+        await channel.set_permissions(
+            member, view_channel=True, send_messages=True, read_message_history=True,
+            reason="Vào tù"
+        )
+    except Exception as e:
+        print(f"[PRISON] grant prison view error: {e}")
+
+    for ch in guild.channels:
+        if ch.id == channel.id or (channel.category and ch.id == channel.category.id):
+            continue
+        try:
+            existing = ch.overwrites_for(member)
+            if existing.view_channel is False:
+                continue
+            await ch.set_permissions(member, view_channel=False, reason="Cách ly tù nhân")
+            await asyncio.sleep(0.15)
+        except (discord.Forbidden, Exception):
+            continue
+
+    data = PRISON_GUILD_CACHE.setdefault(guild.id, {
+        "channel_id": channel.id,
+        "category_id": channel.category.id if channel.category else None,
+        "prisoners": set()
+    })
+    data["prisoners"].add(str(member.id))
+    save_prison_guild(guild.id)
+
+    task = prison_cleanup_tasks.pop(guild.id, None)
+    if task and not task.done():
+        task.cancel()
+
+    try:
+        await channel.send(embed=discord.Embed(
+            description=f"⛓️ {member.mention} vừa bị áp giải vào phòng giam!",
+            color=discord.Color.dark_red()
+        ))
+    except Exception:
+        pass
+    return True
+
+
+async def free_prisoner(member: discord.Member):
+    guild = member.guild
+    data = PRISON_GUILD_CACHE.get(guild.id)
+    if not data:
+        return
+
+    channel = guild.get_channel(data["channel_id"])
+
+    for ch in guild.channels:
+        try:
+            if ch.overwrites_for(member).is_empty():
+                continue
+            await ch.set_permissions(member, overwrite=None, reason="Mãn hạn tù")
+            await asyncio.sleep(0.15)
+        except (discord.Forbidden, Exception):
+            continue
+
+    data["prisoners"].discard(str(member.id))
+    save_prison_guild(guild.id)
+
+    if channel:
+        try:
+            await channel.send(embed=discord.Embed(
+                description=f"🔓 {member.mention} đã được thả tự do!",
+                color=discord.Color.green()
+            ))
+        except Exception:
+            pass
+
+    if not data["prisoners"]:
+        prison_cleanup_tasks[guild.id] = asyncio.create_task(schedule_prison_cleanup(guild.id))
+
+
+async def schedule_prison_cleanup(guild_id):
+    try:
+        await asyncio.sleep(PRISON_CLEANUP_DELAY)
+    except asyncio.CancelledError:
+        return
+
+    data = PRISON_GUILD_CACHE.get(guild_id)
+    if not data or data["prisoners"]:
+        return  # có người vào tù lại trong lúc chờ -> không xoá
+
+    guild = bot.get_guild(guild_id)
+    if guild:
+        channel  = guild.get_channel(data["channel_id"])
+        category = guild.get_channel(data["category_id"]) if data["category_id"] else None
+        try:
+            if channel:
+                await channel.delete(reason="Nhà tù trống, tự dọn dẹp")
+        except Exception:
+            pass
+        try:
+            if category and not category.channels:
+                await category.delete(reason="Nhà tù trống, tự dọn dẹp")
+        except Exception:
+            pass
+
+    PRISON_CHANNEL_CACHE.pop(data["channel_id"], None)
+    PRISON_GUILD_CACHE.pop(guild_id, None)
+    try:
+        prison_network_col.delete_one({"_id": guild_id})
+    except Exception:
+        pass
+    prison_cleanup_tasks.pop(guild_id, None)
+
+
+# ── VÒNG LẶP NỀN: TỰ CÁCH LY / TỰ THẢ, KHÔNG CẦN SỬA LỆNH CŨ ──────────
+async def prison_watcher():
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        try:
+            now = datetime.now()
+            for guild in list(bot.guilds):
+                data = PRISON_GUILD_CACHE.get(guild.id, {"prisoners": set()})
+                known_prisoners = set(data.get("prisoners", set()))
+
+                for member in list(guild.members):
+                    if member.bot:
+                        continue
+                    ud = load_user(member.id)
+                    jail_str = ud.get("jail_time")
+                    is_jailed = False
+                    if jail_str:
+                        try:
+                            end = datetime.strptime(jail_str, "%Y-%m-%d %H:%M:%S")
+                            is_jailed = now < end
+                        except Exception:
+                            is_jailed = False
+
+                    uid = str(member.id)
+                    if is_jailed and uid not in known_prisoners:
+                        await isolate_prisoner(member)
+                        await asyncio.sleep(0.5)
+                    elif not is_jailed and uid in known_prisoners:
+                        await free_prisoner(member)
+                        await asyncio.sleep(0.5)
+        except Exception as e:
+            print(f"[PRISON] watcher error: {e}")
+        await asyncio.sleep(20)
+
+
+# ── GIỮ TÙ NHÂN KHÔNG THẤY KÊNH MỚI TẠO SAU KHI ĐÃ BỊ GIAM ────────────
+@bot.event
+async def on_guild_channel_create(channel):
+    data = PRISON_GUILD_CACHE.get(channel.guild.id)
+    if not data or not data.get("prisoners"):
+        return
+    if channel.id == data.get("channel_id"):
+        return
+    for uid in list(data["prisoners"]):
+        member = channel.guild.get_member(int(uid))
+        if member:
+            try:
+                await channel.set_permissions(member, view_channel=False, reason="Tù nhân không được thấy kênh mới")
+            except Exception:
+                pass
+
+
+# ── RELAY CHAT LIÊN SERVER GIỮA CÁC PHÒNG GIAM ────────────────────────
+async def handle_prison_relay(message: discord.Message) -> bool:
+    if message.author.bot or not message.guild:
+        return False
+    if message.channel.id not in PRISON_CHANNEL_CACHE:
+        return False
+
+    content = message.content or ""
+    if not content and not message.attachments:
+        return False
+
+    username = f"⛓️ {message.author.display_name} [{message.guild.name}]"[:80]
+
+    for gid, data in list(PRISON_GUILD_CACHE.items()):
+        if gid == message.guild.id:
+            continue
+        target_guild = bot.get_guild(gid)
+        if not target_guild:
+            continue
+        target_channel = target_guild.get_channel(data["channel_id"])
+        if not target_channel:
+            continue
+
+        files = []
+        for att in message.attachments:
+            try:
+                files.append(await att.to_file())
+            except Exception:
+                pass
+
+        wh = await get_or_create_webhook(target_channel)
+        try:
+            if wh:
+                await wh.send(
+                    content=content[:2000] or "📎 (đính kèm)",
+                    username=username,
+                    avatar_url=message.author.display_avatar.url,
+                    files=files,
+                )
+            else:
+                await target_channel.send(f"**{username}**: {content}")
+        except Exception as e:
+            print(f"[PRISON] relay error to {gid}: {e}")
+    return False  # tin nhắn gốc vẫn hiển thị bình thường, không chặn gì thêm
+
+
+# =====================================================================
+# 🥫 TÍNH NĂNG "ĐỜI THỰC" TRONG TÙ
+# =====================================================================
+
+PRISON_CANTEEN = {
+    "thuoclao":  {"name": "🚬 Điếu Thuốc Lào",   "price": 3_000,  "rep": 1,  "desc": "Giết thời gian, +1 uy tín"},
+    "banhmi":    {"name": "🥖 Bánh Mì Ngoài Chợ", "price": 8_000,  "rep": 2,  "desc": "Ăn ngon hơn cơm tù, +2 uy tín"},
+    "capheden":  {"name": "☕ Cà Phê Đen",         "price": 15_000, "rep": 4,  "desc": "Tỉnh táo mưu tính chuyện vượt ngục, +4 uy tín"},
+    "radiocu":   {"name": "📻 Radio Cũ",          "price": 40_000, "rep": 8,  "desc": "Nghe tin tức bên ngoài, +8 uy tín"},
+}
+
+
+@bot.command(aliases=['canteen'])
+async def cantin(ctx, item: str = None):
+    """Căng tin nhà tù — chỉ dùng được khi đang ngồi tù, mua đồ bằng tiền để tăng uy tín."""
+    uid = str(ctx.author.id)
+    ud = load_user(uid)
+    jail_str = ud.get("jail_time")
+    if not jail_str:
+        return await ctx.reply("✅ Bạn không ở trong tù, căng tin không phục vụ người tự do!", mention_author=False)
+    try:
+        end = datetime.strptime(jail_str, "%Y-%m-%d %H:%M:%S")
+        if datetime.now() >= end:
+            return await ctx.reply("✅ Bạn đã mãn hạn rồi!", mention_author=False)
+    except Exception:
+        return await ctx.reply("✅ Bạn không ở trong tù!", mention_author=False)
+
+    if not item:
+        lines = [f"`{k}` — {v['name']} — **{v['price']:,} 💰** ({v['desc']})" for k, v in PRISON_CANTEEN.items()]
+        return await ctx.reply(embed=discord.Embed(
+            title="🥫 CĂNG TIN NHÀ TÙ",
+            description="\n".join(lines) + "\n\n`k cantin <mã hàng>` để mua",
+            color=discord.Color.orange()
+        ), mention_author=False)
+
+    key = item.lower()
+    if key not in PRISON_CANTEEN:
+        return await ctx.reply("⚠️ Không có món này trong căng tin!", mention_author=False)
+
+    good = PRISON_CANTEEN[key]
+    if ud.get("money", 0) < good["price"]:
+        return await ctx.reply(f"⚠️ Cần **{good['price']:,} 💰**!", mention_author=False)
+
+    ud["money"] -= good["price"]
+    ud["prison_rep"] = min(100, ud.get("prison_rep", 50) + good["rep"])
+    save_user(uid)
+    add_history(uid, f"Mua {good['name']} ở căng tin (-{good['price']:,} 💰, +{good['rep']} uy tín)")
+
+    await ctx.reply(embed=discord.Embed(
+        description=f"🥫 Mua **{good['name']}**!\n🍀 Uy tín: **{ud['prison_rep']}/100** (+{good['rep']})",
+        color=discord.Color.green()
+    ), mention_author=False)
+
+
+@bot.command(aliases=['prisonfight', 'daugiam'])
+async def danhnhau(ctx, target: discord.Member):
+    """Đấu tay đôi với tù nhân khác (kể cả server khác nếu cùng ở phòng giam liên kết)."""
+    uid = str(ctx.author.id)
+    tid = str(target.id)
+    if uid == tid:
+        return await ctx.reply("⚠️ Tự đánh mình á?", mention_author=False)
+
+    ud = load_user(uid)
+    td = load_user(tid)
+
+    def _in_jail(data):
+        js = data.get("jail_time")
+        if not js:
+            return False
+        try:
+            return datetime.now() < datetime.strptime(js, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return False
+
+    if not _in_jail(ud):
+        return await ctx.reply("⚠️ Bạn phải đang ở tù mới gây sự được!", mention_author=False)
+    if not _in_jail(td):
+        return await ctx.reply(f"⚠️ **{target.name}** hiện không ở tù!", mention_author=False)
+
+    my_power  = ud.get("prison_rep", 50) + random.randint(1, 40)
+    opp_power = td.get("prison_rep", 50) + random.randint(1, 40)
+
+    if my_power >= opp_power:
+        winner_id, loser_id, winner_name, loser_name = uid, tid, ctx.author.name, target.name
+    else:
+        winner_id, loser_id, winner_name, loser_name = tid, uid, target.name, ctx.author.name
+
+    wd = load_user(winner_id)
+    ld = load_user(loser_id)
+    steal = min(ld.get("money", 0), random.randint(2_000, 10_000))
+    ld["money"]      = max(0, ld.get("money", 0) - steal)
+    wd["money"]       = wd.get("money", 0) + steal
+    wd["prison_rep"]  = min(100, wd.get("prison_rep", 50) + 5)
+    ld["prison_rep"]  = max(0, ld.get("prison_rep", 50) - 5)
+    save_user(winner_id)
+    save_user(loser_id)
+    add_history(winner_id, f"Thắng đánh nhau trong tù vs {loser_name} (+{steal:,} 💰)")
+    add_history(loser_id,  f"Thua đánh nhau trong tù vs {winner_name} (-{steal:,} 💰)")
+
+    embed = discord.Embed(
+        title="🥊 ẨU ĐẢ TRONG PHÒNG GIAM!",
+        description=(
+            f"**{winner_name}** hạ gục **{loser_name}**!\n"
+            f"💰 Cướp được **{steal:,} 💰**\n"
+            f"🍀 {winner_name}: +5 uy tín | {loser_name}: -5 uy tín"
+        ),
+        color=discord.Color.dark_red()
+    )
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@bot.command(aliases=['visit'])
+async def thamtu(ctx, target: discord.Member, amount: int):
+    """Người tự do gửi tiền thăm nuôi cho tù nhân (bị trích 10% phí trại giam)."""
+    if amount <= 0:
+        return await ctx.reply("⚠️ Số tiền phải > 0!", mention_author=False)
+    sid = str(ctx.author.id)
+    tid = str(target.id)
+    if sid == tid:
+        return await ctx.reply("⚠️ Không thể tự thăm nuôi chính mình!", mention_author=False)
+
+    td = load_user(tid)
+    jail_str = td.get("jail_time")
+    if not jail_str:
+        return await ctx.reply(f"⚠️ **{target.name}** hiện không ở tù, không cần thăm nuôi!", mention_author=False)
+    try:
+        if datetime.now() >= datetime.strptime(jail_str, "%Y-%m-%d %H:%M:%S"):
+            return await ctx.reply(f"⚠️ **{target.name}** đã mãn hạn rồi!", mention_author=False)
+    except Exception:
+        pass
+
+    sd = load_user(sid)
+    if sd.get("money", 0) < amount:
+        return await ctx.reply("⚠️ Bạn không đủ tiền!", mention_author=False)
+
+    fee = int(amount * 0.1)
+    net = amount - fee
+    sd["money"] -= amount
+    td["money"] = td.get("money", 0) + net
+    save_user(sid)
+    save_user(tid)
+    add_history(sid, f"Thăm nuôi {target.name} -{amount:,} 💰 (phí {fee:,})")
+    add_history(tid, f"Nhận thăm nuôi từ {ctx.author.name} +{net:,} 💰")
+
+    await ctx.reply(embed=discord.Embed(
+        title="🚪 THĂM NUÔI",
+        description=(
+            f"{ctx.author.mention} gửi **{amount:,} 💰** cho {target.mention} đang ở tù.\n"
+            f"🏛️ Phí trại giam: **{fee:,} 💰** | Tù nhân nhận: **{net:,} 💰**"
+        ),
+        color=discord.Color.blue()
+    ), mention_author=False)
 @bot.command(aliases=['mine', 'daomo'])
 async def daovang(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); now = datetime.now()
@@ -5358,6 +5855,7 @@ async def on_message(message):
     handled = await handle_bridge_relay(message)
     if handled:
         return
+    await handle_prison_relay(message)          # 👈 THÊM DÒNG NÀY
     if message.author.bot: return
 
     # ═══════════════════════════════════════════
@@ -5410,6 +5908,8 @@ async def on_ready():
     new_g, new_e = scan_source_for_assets()   # 👈 THÊM DÒNG NÀY
     if new_g or new_e:
         print(f'>>> [ASSET SCAN] GIF mới: {new_g} | Emoji mới: {new_e}')
+    load_prison_network()                              # 👈 THÊM
+    bot.loop.create_task(prison_watcher())              # 👈 THÊM
     await bot.change_presence(activity=discord.Game(name="Kyo Đến Rồi Đây!"))
     try:
        synced = await bot.tree.sync()
