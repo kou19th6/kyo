@@ -179,6 +179,7 @@ def load_user(user_id):
         "prison_rep": 50,            # uy tín tù nhân (0-100)
         "solitary_until": None,      # thời điểm hết biệt giam
         "escape_fails": 0,           # số lần vượt ngục thất bại liên tiếp
+        "kim_cuong": 0,              # 💎 Tiền cao cấp — sinh ra khi tiền thường vượt ngưỡng
     }
 
     for key, value in defaults.items():
@@ -187,10 +188,69 @@ def load_user(user_id):
 
     return DB_CACHE[user_id]
 
+# =====================================================================
+# 💎 HỆ THỐNG TIỀN CAO CẤP (chống tràn số + không mất tài sản)
+# =====================================================================
+MAX_SAFE_INT           = 9_000_000_000_000_000_000   # sát trần int64 thật của BSON/MongoDB
+MIN_SAFE_INT           = -MAX_SAFE_INT
+
+MONEY_SOFT_CAP         = MAX_SAFE_INT - 1_000_000_000   # tiền thường tối đa, chỉ chừa 1 nấc để đổi 💎 khi vượt trần
+COMPANY_SOFT_CAP       = MAX_SAFE_INT - 1_000_000_000
+PREMIUM_EXCHANGE_RATE  = 1_000_000_000         # 1 tỷ 💰 = 1 💎
+PREMIUM_CURRENCY_NAME  = "Kim Cương 💎"
+
+def overflow_user_to_premium(user_data):
+    gained_total = 0
+    for field in ["money", "bank"]:
+        val = user_data.get(field, 0)
+        if isinstance(val, (int, float)) and val > MONEY_SOFT_CAP:
+            overflow = val - MONEY_SOFT_CAP
+            gained = int(overflow // PREMIUM_EXCHANGE_RATE)
+            user_data[field] = MONEY_SOFT_CAP + int(overflow % PREMIUM_EXCHANGE_RATE)
+            if gained > 0:
+                user_data["kim_cuong"] = user_data.get("kim_cuong", 0) + gained
+                gained_total += gained
+    return gained_total
+
+def overflow_company_to_premium(comp_data):
+    val = comp_data.get("treasury", 0)
+    if isinstance(val, (int, float)) and val > COMPANY_SOFT_CAP:
+        overflow = val - COMPANY_SOFT_CAP
+        gained = int(overflow // PREMIUM_EXCHANGE_RATE)
+        comp_data["treasury"] = COMPANY_SOFT_CAP + int(overflow % PREMIUM_EXCHANGE_RATE)
+        if gained > 0:
+            boss_id = next((uid for uid, role in comp_data.get("members", {}).items() if role == "boss"), None)
+            if boss_id:
+                boss_data = load_user(boss_id)
+                boss_data["kim_cuong"] = boss_data.get("kim_cuong", 0) + gained
+                save_user(boss_id)
+                add_history(boss_id, f"Quỹ công ty tràn ngưỡng, quy đổi +{gained} {PREMIUM_CURRENCY_NAME}")
+
+def _clamp_numbers(obj):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            obj[k] = _clamp_numbers(v)
+        return obj
+    if isinstance(obj, list):
+        for i, v in enumerate(obj):
+            obj[i] = _clamp_numbers(v)
+        return obj
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, int):
+        return max(MIN_SAFE_INT, min(MAX_SAFE_INT, obj))
+    if isinstance(obj, float):
+        if obj != obj:
+            return 0
+        return max(float(MIN_SAFE_INT), min(float(MAX_SAFE_INT), obj))
+    return obj
+
 def save_user(user_id):
     user_id = str(user_id)
     if user_id in DB_CACHE:
         try:
+            overflow_user_to_premium(DB_CACHE[user_id])
+            _clamp_numbers(DB_CACHE[user_id])
             users_col.update_one({"_id": user_id}, {"$set": DB_CACHE[user_id]}, upsert=True)
         except Exception as e:
             print(f"[ERROR] save_user DB error for {user_id}: {e}")
@@ -239,6 +299,8 @@ def save_company(company_id):
     company_id = str(company_id)
     if company_id in COMPANY_CACHE:
         try:
+            overflow_company_to_premium(COMPANY_CACHE[company_id])
+            _clamp_numbers(COMPANY_CACHE[company_id])
             companies_col.update_one({"_id": company_id}, {"$set": COMPANY_CACHE[company_id]}, upsert=True)
         except Exception as e:
             print(f"[ERROR] save_company DB error for {company_id}: {e}")
@@ -470,6 +532,11 @@ async def on_command_error(ctx, error):
 # =====================================================================
 # UTILITY FUNCTIONS
 # =====================================================================
+def truncate_field_value(text, limit=1024):
+    if len(text) <= limit:
+        return text
+    return text[:limit - 25].rstrip() + "\n… (còn nữa, quá dài)"
+
 def make_progress_bar(current_value, total_value, bar_length=12):
     if total_value == 0: return "⬛" * bar_length
     progress_blocks = int((current_value / total_value) * bar_length)
@@ -506,8 +573,9 @@ async def check_gamble_conditions(ctx, amount_str):
         await ctx.reply(embed=embed_poor, mention_author=False)
         return None, None
 
-    if bet_amount > 300000:
-        embed_max = discord.Embed(description="🛑 Mỗi ván tối đa **300,000 💰** thôi nhé!", color=discord.Color.red())
+    diamond_bet_cap = 300000 + min(user_data.get("kim_cuong", 0), 50) * 20000
+    if bet_amount > diamond_bet_cap:
+        embed_max = discord.Embed(description=f"🛑 Mỗi ván tối đa **{diamond_bet_cap:,} 💰** thôi nhé! (Sở hữu 💎 sẽ tăng giới hạn cược)", color=discord.Color.red())
         await ctx.reply(embed=embed_max, mention_author=False)
         return None, None
 
@@ -1069,7 +1137,9 @@ async def list_orders(ctx):
         return await ctx.reply(embed=discord.Embed(description="📋 Không có lệnh chờ nào.", color=discord.Color.blue()), mention_author=False)
 
     embed = discord.Embed(title="📋 LỆNH CHỜ KHỚP", color=discord.Color.blue())
-    for o in orders:
+    if len(orders) > 25:
+        embed.description = f"⚠️ Bạn có **{len(orders)}** lệnh chờ, chỉ hiển thị 25 lệnh gần nhất."
+    for o in orders[:25]:
         current = get_stock_price(o["code"])
         diff = current - o["price"]
         side_emoji = "🟢" if o["side"] == "buy" else "🔴"
@@ -1378,7 +1448,7 @@ async def port(ctx, member: discord.Member = None):
                 f"{icon} **{code}** {qty:,}CP @ avg {avg_buy:,}\n"
                 f"    Giá hiện tại: {curr:,} | Giá trị: {val:,} | P&L: **{pnl:+,}** ({pnl_pct:+.1f}%){sl_str}{tp_str}"
             )
-        embed.add_field(name=f"📦 CỔ PHIẾU NẮNG GIỮ (Tổng: {total_long_value:,} 💰)", value="\n".join(long_lines) or "Trống", inline=False)
+        embed.add_field(name=f"📦 CỔ PHIẾU NẮNG GIỮ (Tổng: {total_long_value:,} 💰)", value=truncate_field_value("\n".join(long_lines) or "Trống"), inline=False)
 
     if shorts:
         short_lines = []
@@ -1390,7 +1460,7 @@ async def port(ctx, member: discord.Member = None):
             total_short_pnl += pnl
             icon = "📈" if pnl >= 0 else "📉"
             short_lines.append(f"{icon} **{code}** SHORT {qty:,}CP | Entry: {entry:,} | Hiện: {curr:,} | P&L: **{pnl:+,}**")
-        embed.add_field(name=f"📉 VỊ THẾ BÁN KHỐNG", value="\n".join(short_lines), inline=False)
+        embed.add_field(name=f"📉 VỊ THẾ BÁN KHỐNG", value=truncate_field_value("\n".join(short_lines)), inline=False)
 
     if margin > 0:
         daily_int = int(margin * MARGIN_INTEREST_RATE / 365)
@@ -1635,6 +1705,15 @@ def draw_card():
 def format_hand(hand):
     return " | ".join(hand)
 
+class _FakeResponse:
+    def is_done(self):
+        return True
+
+class _FakeInteraction:
+    def __init__(self, message):
+        self.response = _FakeResponse()
+        self.message = message
+
 class BlackjackView(discord.ui.View):
     def __init__(self, player, bet, player_hand, dealer_hand, user_data):
         super().__init__(timeout=60)
@@ -1820,9 +1899,9 @@ async def blackjack(ctx, amount: str):
 
     # Kiểm tra Blackjack ngay
     if ph == 21 and dh != 21:
-        await view.end_game(type('obj', (object,), {'response': type('r', (object,), {'is_done': lambda: True, 'edit_message': None})(), 'message': msg})(), "player_bj")
+        await view.end_game(_FakeInteraction(msg), "player_bj")
     elif ph == 21 and dh == 21:
-        await view.end_game(type('obj', (object,), {'response': type('r', (object,), {'is_done': lambda: True, 'edit_message': None})(), 'message': msg})(), "tie")
+        await view.end_game(_FakeInteraction(msg), "tie")
 
 
 # ===== VÒNG QUAY MAY MẮN =====
@@ -4882,21 +4961,49 @@ HELP_PAGES = [
             "📖 9 Chapter (2 ẩn/finale), mỗi Chapter có nhiều Wave + Boss riêng."
         ),
     },
+    {
+        "title": "💎 KIM CƯƠNG (k kimcuong / kc)",
+        "color": discord.Color.blue(),
+        "desc": (
+            "`k kimcuong` — Xem số dư & hướng dẫn\n"
+            "`k kimcuong doi <số/all>` — Đổi 💎 → 💰\n"
+            "`k kimcuong chuyen @user <số>` — Tặng 💎 cho người khác\n"
+            "`k kimcuong top` — Bảng xếp hạng Kim Cương\n"
+            "`k kimcuong shop` — Cửa hàng độc quyền bằng 💎\n\n"
+            "💡 Kim Cương tự sinh ra khi ví/ngân hàng vượt ngưỡng cực cao "
+            "(tránh mất tiền do lỗi tràn số).\n"
+            "🎰 **Perk:** Sở hữu 💎 tự tăng giới hạn cược casino (tối đa +1,000,000 💰)."
+        ),
+    },
 ]
+
+
+HELP_PAGE_ICONS = [
+    "🏦", "🤖", "📈", "🎮", "🎁", "⛓️", "🌾", "⚔️",
+    "🏢", "⚔️", "🌸", "💎",
+]
+
+def _help_page_icon(idx):
+    if idx < len(HELP_PAGE_ICONS):
+        return HELP_PAGE_ICONS[idx]
+    return "📖"
 
 
 class HelpCategorySelect(discord.ui.Select):
     def __init__(self, parent_view):
         self.parent_view = parent_view
-        options = [
-            discord.SelectOption(
-                label=page["title"].replace("_", " "),
+        options = []
+        for i, page in enumerate(HELP_PAGES):
+            clean_title = page["title"].split("(")[0].strip()
+            # bỏ icon đầu tiên khỏi label vì đã hiển thị riêng ở emoji
+            words = clean_title.split(" ", 1)
+            label_text = words[1] if len(words) > 1 else clean_title
+            options.append(discord.SelectOption(
+                label=f"{i+1}. {label_text}"[:100],
                 description=f"Trang {i+1}/{len(HELP_PAGES)}",
                 value=str(i),
-                emoji=page["title"].split()[0] if page["title"].split()[0].strip() else None,
-            )
-            for i, page in enumerate(HELP_PAGES)
-        ]
+                emoji=_help_page_icon(i),
+            ))
         super().__init__(
             placeholder="📂 Chọn danh mục để xem nhanh...",
             min_values=1,
@@ -4927,8 +5034,7 @@ class HelpPaginatorView(discord.ui.View):
         self.btn_prev.disabled = self.page <= 0
         self.btn_next.disabled = self.page >= len(HELP_PAGES) - 1
         self.btn_last.disabled = self.page >= len(HELP_PAGES) - 1
-        self.btn_page.label = f"{self.page + 1}/{len(HELP_PAGES)}"
-        # Đồng bộ dropdown hiển thị đúng lựa chọn hiện tại
+        self.btn_page.label = f"📍 {self.page + 1}/{len(HELP_PAGES)}"
         for item in self.children:
             if isinstance(item, HelpCategorySelect):
                 for opt in item.options:
@@ -4936,17 +5042,33 @@ class HelpPaginatorView(discord.ui.View):
 
     def make_embed(self):
         data = HELP_PAGES[self.page]
+        icon = _help_page_icon(self.page)
+        clean_title = data["title"].split("(")[0].strip()
+        sub_cmd = ""
+        if "(" in data["title"]:
+            sub_cmd = "(" + data["title"].split("(", 1)[1]
+
+        bar = make_progress_bar(self.page + 1, len(HELP_PAGES), bar_length=len(HELP_PAGES))
+
         embed = discord.Embed(
-            title=f"📚 {data['title']}",
-            description=data["desc"],
+            title=f"{icon}  {clean_title}",
+            description=(
+                f"*{sub_cmd}*\n" if sub_cmd else ""
+            ) + f"{'─'*32}\n{data['desc']}",
             color=data["color"]
         )
         if bot.user.avatar:
             embed.set_thumbnail(url=bot.user.avatar.url)
-        embed.set_footer(text=f"Trang {self.page + 1}/{len(HELP_PAGES)} | k help | Chọn ở dropdown để nhảy nhanh")
+
+        embed.set_author(
+            name=f"Bảng Trợ Giúp — {bot.user.name}",
+            icon_url=bot.user.avatar.url if bot.user.avatar else None
+        )
+        embed.add_field(name="📊 Tiến độ", value=f"`{bar}`", inline=False)
+        embed.set_footer(text=f"Trang {self.page + 1}/{len(HELP_PAGES)} • k help • Dùng dropdown để nhảy nhanh")
         return embed
 
-    @discord.ui.button(label="⏮", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="⏮ Đầu", style=discord.ButtonStyle.secondary, row=1)
     async def btn_first(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.page = 0
         self._update_buttons()
@@ -4959,7 +5081,7 @@ class HelpPaginatorView(discord.ui.View):
         self._update_buttons()
         await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
-    @discord.ui.button(label="1/1", style=discord.ButtonStyle.secondary, disabled=True, row=1)
+    @discord.ui.button(label="📍 1/1", style=discord.ButtonStyle.secondary, disabled=True, row=1)
     async def btn_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         pass
 
@@ -4970,7 +5092,7 @@ class HelpPaginatorView(discord.ui.View):
         self._update_buttons()
         await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
-    @discord.ui.button(label="⏭", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Cuối ⏭", style=discord.ButtonStyle.secondary, row=1)
     async def btn_last(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.page = len(HELP_PAGES) - 1
         self._update_buttons()
@@ -4983,6 +5105,12 @@ class HelpPaginatorView(discord.ui.View):
         new_view._update_buttons()
         await interaction.response.edit_message(embed=new_view.make_embed(), view=new_view)
         new_view.message = interaction.message
+
+    @discord.ui.button(label="🏠 Trang Chủ", style=discord.ButtonStyle.danger, row=2)
+    async def btn_home(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page = 0
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
     async def on_timeout(self):
         for child in self.children:
@@ -11572,6 +11700,210 @@ async def lenhadmin(ctx):
 
     view = AdminCmdsPaginatorView(ctx.author, found, newly_added)
     await ctx.reply(embed=view.make_embed(), view=view, mention_author=False)
+# =====================================================================
+# 💎 LỆNH & TÍNH NĂNG LIÊN QUAN ĐẾN KIM CƯƠNG
+# =====================================================================
+
+KC_SHOP_ITEMS = {
+    "kc_title_1": {"type": "title",   "name": "👑 Chúa Tể Kim Cương",        "price": 5,  "emoji": "💎"},
+    "kc_title_2": {"type": "title",   "name": "💎 Huyền Thoại Vĩnh Cửu",     "price": 15, "emoji": "💎"},
+    "kc_vehicle_1": {"type": "vehicle", "name": "🚀 Phi Thuyền Kim Cương",   "price": 25, "emoji": "🚀"},
+    "kc_house_1": {"type": "house",   "name": "🌌 Cung Điện Ngoài Không Gian", "price": 40, "emoji": "🌌"},
+    "kc_pet_1": {"type": "pet_guaranteed", "name": "Thần Long Hoàng Kim 🐲", "price": 10, "emoji": "🐲"},
+    "kc_pet_2": {"type": "pet_guaranteed", "name": "Godzilla Vĩ Đại 🦖",     "price": 10, "emoji": "🦖"},
+}
+
+KC_EXCHANGE_BACK_RATE = 800_000_000  # 1 💎 -> 800 triệu 💰 khi đổi ngược (thấp hơn tỷ giá sinh ra để tránh lạm dụng)
+
+
+class KCShopSelect(discord.ui.Select):
+    def __init__(self):
+        options = []
+        for key, item in KC_SHOP_ITEMS.items():
+            options.append(discord.SelectOption(
+                label=item["name"], description=f"Giá: {item['price']} 💎", value=key, emoji=item["emoji"]
+            ))
+        super().__init__(placeholder="Chọn vật phẩm để mua bằng Kim Cương...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        user_id = str(interaction.user.id)
+        user_data = load_user(user_id)
+        item_info = KC_SHOP_ITEMS[self.values[0]]
+        kc = user_data.get("kim_cuong", 0)
+
+        if kc < item_info["price"]:
+            return await interaction.response.send_message(
+                f"⚠️ Cần **{item_info['price']} 💎**, bạn chỉ có **{kc} 💎**!", ephemeral=True
+            )
+
+        user_data["kim_cuong"] -= item_info["price"]
+
+        if item_info["type"] == "title":
+            user_data["title"] = item_info["name"]
+            msg = f"🎉 Trang bị danh hiệu: **{item_info['name']}**."
+        elif item_info["type"] == "pet_guaranteed":
+            pet_name = item_info["name"]
+            if "pets" not in user_data:
+                user_data["pets"] = {}
+            user_data["pets"][pet_name] = user_data["pets"].get(pet_name, 0) + 1
+            msg = f"🎉 Nhận được thú cưng: **{pet_name}**!"
+        else:
+            if item_info["name"] in user_data.get("assets", []):
+                user_data["kim_cuong"] += item_info["price"]
+                return await interaction.response.send_message("⚠️ Bạn đã sở hữu vật phẩm này rồi!", ephemeral=True)
+            user_data.setdefault("assets", []).append(item_info["name"])
+            msg = f"🎉 Đập hộp **{item_info['name']}**!"
+
+        save_user(user_id)
+        add_history(user_id, f"Mua {item_info['name']} bằng {item_info['price']} 💎")
+
+        embed = discord.Embed(
+            title="💎 GIAO DỊCH KIM CƯƠNG HOÀN TẤT!",
+            description=msg,
+            color=discord.Color.blue()
+        )
+        embed.set_footer(text=f"Kim Cương còn: {user_data['kim_cuong']} 💎")
+        await interaction.response.edit_message(embed=embed, view=None)
+
+
+class KCShopView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.author = author
+        self.add_item(KCShopSelect())
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Ai gọi lệnh người đó mua!", ephemeral=True)
+            return False
+        return True
+
+
+@bot.group(invoke_without_command=True, aliases=['kc', 'diamond', 'premium'])
+async def kimcuong(ctx):
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    kc = user_data.get("kim_cuong", 0)
+
+    embed = discord.Embed(
+        title=f"💎 KIM CƯƠNG — {ctx.author.name}",
+        description=(
+            f"Bạn đang có: **{kc:,} {PREMIUM_CURRENCY_NAME}**\n\n"
+            f"💡 Kim Cương tự sinh ra khi ví/ngân hàng vượt ngưỡng **{MONEY_SOFT_CAP:,} 💰** "
+            f"(tỷ giá {PREMIUM_EXCHANGE_RATE:,} 💰 = 1 💎).\n\n"
+            "**LỆNH:**\n"
+            "`k kimcuong doi <số/all>` — Đổi 💎 → 💰\n"
+            "`k kimcuong chuyen @user <số>` — Tặng 💎 cho người khác\n"
+            "`k kimcuong top` — Bảng xếp hạng Kim Cương\n"
+            "`k kimcuong shop` — Cửa hàng độc quyền bằng 💎\n\n"
+            "🎰 **Perk:** Sở hữu 💎 tăng giới hạn cược casino (+20,000 💰/viên, tối đa +1,000,000 💰)."
+        ),
+        color=discord.Color.blue()
+    )
+    embed.set_footer(text=f"Tỷ giá đổi ngược: 1 💎 = {KC_EXCHANGE_BACK_RATE:,} 💰")
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@kimcuong.command(name='doi', aliases=['exchange', 'convert'])
+async def kc_doi(ctx, amount: str = None):
+    user_id = str(ctx.author.id)
+    user_data = load_user(user_id)
+    kc = user_data.get("kim_cuong", 0)
+
+    if not amount:
+        return await ctx.reply("⚠️ Nhập số 💎 muốn đổi hoặc `all`! VD: `k kimcuong doi 5`", mention_author=False)
+
+    try:
+        qty = kc if amount.lower() == "all" else int(amount)
+    except ValueError:
+        return await ctx.reply("⚠️ Số không hợp lệ!", mention_author=False)
+
+    if qty <= 0 or qty > kc:
+        return await ctx.reply(f"⚠️ Bạn chỉ có **{kc:,} 💎**!", mention_author=False)
+
+    gain = qty * KC_EXCHANGE_BACK_RATE
+    user_data["kim_cuong"] -= qty
+    user_data["money"] = min(MONEY_SOFT_CAP, user_data.get("money", 0) + gain)
+    save_user(user_id)
+    add_history(user_id, f"Đổi {qty} 💎 → +{gain:,} 💰")
+
+    await ctx.reply(embed=discord.Embed(
+        description=f"✅ Đổi **{qty:,} 💎** → **+{gain:,} 💰**!\nSố dư 💎 còn lại: **{user_data['kim_cuong']:,}**",
+        color=discord.Color.green()
+    ), mention_author=False)
+
+
+@kimcuong.command(name='chuyen', aliases=['transfer', 'give'])
+async def kc_chuyen(ctx, member: discord.Member, amount: int):
+    if member.bot or member.id == ctx.author.id:
+        return await ctx.reply("⚠️ Không thể tự chuyển cho bản thân!", mention_author=False)
+    if amount <= 0:
+        return await ctx.reply("⚠️ Số 💎 phải lớn hơn 0!", mention_author=False)
+
+    sender_id = str(ctx.author.id)
+    receiver_id = str(member.id)
+    sender_data = load_user(sender_id)
+    receiver_data = load_user(receiver_id)
+
+    if sender_data.get("kim_cuong", 0) < amount:
+        return await ctx.reply(f"⚠️ Bạn chỉ có **{sender_data.get('kim_cuong', 0):,} 💎**!", mention_author=False)
+
+    sender_data["kim_cuong"] -= amount
+    receiver_data["kim_cuong"] = receiver_data.get("kim_cuong", 0) + amount
+    save_user(sender_id)
+    save_user(receiver_id)
+    add_history(sender_id, f"Tặng {amount} 💎 cho {member.name}")
+    add_history(receiver_id, f"Nhận {amount} 💎 từ {ctx.author.name}")
+
+    embed = discord.Embed(
+        title="💎 CHUYỂN KIM CƯƠNG",
+        description=f"{ctx.author.mention} tặng **{amount:,} 💎** cho {member.mention}!",
+        color=discord.Color.blue()
+    )
+    await ctx.send(embed=embed)
+
+
+@kimcuong.command(name='top', aliases=['bxh', 'leaderboard'])
+async def kc_top(ctx):
+    try:
+        all_users = list(users_col.find())
+    except Exception:
+        return await ctx.reply("⚠️ DB lỗi!", mention_author=False)
+
+    ranked = sorted(
+        [(d["_id"], d.get("kim_cuong", 0)) for d in all_users if d.get("kim_cuong", 0) > 0],
+        key=lambda x: x[1], reverse=True
+    )
+
+    if not ranked:
+        return await ctx.reply(embed=discord.Embed(description="💎 Chưa ai sở hữu Kim Cương!", color=discord.Color.light_grey()), mention_author=False)
+
+    desc = ""
+    for idx, (uid, kc) in enumerate(ranked[:10]):
+        user = bot.get_user(int(uid))
+        try:
+            if not user:
+                user = await bot.fetch_user(int(uid))
+        except Exception:
+            pass
+        name = user.name if user else f"Ẩn#{uid[-4:]}"
+        icon = "🥇" if idx == 0 else "🥈" if idx == 1 else "🥉" if idx == 2 else f"**#{idx+1}**"
+        desc += f"{icon} **{name}** ━ {kc:,} 💎\n\n"
+
+    await ctx.reply(embed=discord.Embed(title="💎 BẢNG XẾP HẠNG KIM CƯƠNG", description=desc, color=discord.Color.blue()), mention_author=False)
+
+
+@kimcuong.command(name='shop', aliases=['cuahang'])
+async def kc_shop(ctx):
+    user_data = load_user(ctx.author.id)
+    embed = discord.Embed(
+        title="💎 CỬA HÀNG KIM CƯƠNG",
+        description=f"Kim Cương của bạn: **{user_data.get('kim_cuong', 0):,} 💎**\n\nVật phẩm dưới đây chỉ mua được bằng Kim Cương!",
+        color=discord.Color.blue()
+    )
+    for key, item in KC_SHOP_ITEMS.items():
+        embed.add_field(name=f"{item['emoji']} {item['name']}", value=f"Giá: **{item['price']} 💎**", inline=True)
+    await ctx.reply(embed=embed, view=KCShopView(ctx.author), mention_author=False)
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
