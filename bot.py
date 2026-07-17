@@ -5154,30 +5154,130 @@ async def rank(ctx, member: discord.Member = None):
     embed.add_field(name="💪 Gym", value=f"Lv{user_data.get('gym_level',0)}", inline=True)
     await ctx.reply(embed=embed, mention_author=False)
 
+TOP_CATEGORIES = {
+    "tien":  {"label": "💰 Tài Sản",   "emoji": "💰", "color": discord.Color.gold()},
+    "level": {"label": "🌟 Cấp Độ",    "emoji": "🌟", "color": discord.Color.purple()},
+    "ca":    {"label": "🎣 Ngư Dân",   "emoji": "🎣", "color": discord.Color.blue()},
+    "kc":    {"label": "💎 Kim Cương", "emoji": "💎", "color": discord.Color.teal()},
+}
+
+def resolve_display_name(ctx_or_interaction, uid):
+    """Ưu tiên tên hiển thị trong server (nickname), fallback username cache. Không bao giờ lộ ID."""
+    guild = ctx_or_interaction.guild
+    member = guild.get_member(int(uid)) if guild else None
+    if member:
+        return member.display_name
+    user = bot.get_user(int(uid))
+    if user:
+        return user.name
+    return "🕵️ Người Chơi Ẩn Danh"
+
+def build_top_data(category):
+    try:
+        all_users = list(users_col.find())
+    except Exception:
+        return None, None, None
+
+    if category == "level":
+        dl = sorted([(d["_id"], d.get("level", 1), d.get("xp", 0)) for d in all_users], key=lambda x: (x[1], x[2]), reverse=True)
+        fmt = lambda a: f"Lv{a[0]} ({a[1]:,} XP)"
+    elif category == "ca":
+        dl = sorted([(d["_id"], d.get("fish_count", 0)) for d in all_users], key=lambda x: x[1], reverse=True)
+        fmt = lambda a: f"{a[0]:,} con cá"
+    elif category == "kc":
+        dl = sorted([(d["_id"], d.get("kim_cuong", 0)) for d in all_users], key=lambda x: x[1], reverse=True)
+        fmt = lambda a: f"{a[0]:,} 💎"
+    else:
+        dl = sorted([(d["_id"], d.get("money", 0) + d.get("bank", 0)) for d in all_users], key=lambda x: x[1], reverse=True)
+        fmt = lambda a: f"{a[0]:,} 💰"
+
+    return dl, fmt, TOP_CATEGORIES.get(category, TOP_CATEGORIES["tien"])
+
+
+class TopBoardView(discord.ui.View):
+    def __init__(self, ctx, category="tien"):
+        super().__init__(timeout=180)
+        self.ctx = ctx
+        self.category = category
+        self.message = None
+        self._sync_buttons()
+
+    def _sync_buttons(self):
+        for item in self.children:
+            if isinstance(item, discord.ui.Button) and item.custom_id in TOP_CATEGORIES:
+                item.style = discord.ButtonStyle.success if item.custom_id == self.category else discord.ButtonStyle.secondary
+
+    def make_embed(self):
+        dl, fmt, meta = build_top_data(self.category)
+        if dl is None:
+            return discord.Embed(description="⚠️ Không thể tải dữ liệu bảng xếp hạng!", color=discord.Color.red())
+
+        dl = [d for d in dl if d[1] > 0][:10]
+        icons = ["🥇", "🥈", "🥉"]
+        lines = []
+        for idx, data in enumerate(dl):
+            uid, rest = data[0], data[1:]
+            name = resolve_display_name(self.ctx, uid)
+            icon = icons[idx] if idx < 3 else f"**#{idx+1}**"
+            lines.append(f"{icon} **{name}** ━ {fmt(rest)}")
+
+        embed = discord.Embed(
+            title=f"{meta['emoji']} {meta['label'].upper()} — BẢNG XẾP HẠNG",
+            description="\n\n".join(lines) if lines else "Chưa có dữ liệu.",
+            color=meta["color"],
+            timestamp=datetime.now()
+        )
+        embed.set_footer(text=f"Cập nhật lúc • {self.ctx.guild.name if self.ctx.guild else 'Server'}")
+        return embed
+
+    async def _switch(self, interaction: discord.Interaction, category: str):
+        self.category = category
+        self._sync_buttons()
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="Tài Sản", emoji="💰", style=discord.ButtonStyle.success, custom_id="tien", row=0)
+    async def btn_tien(self, interaction, button):
+        await self._switch(interaction, "tien")
+
+    @discord.ui.button(label="Cấp Độ", emoji="🌟", style=discord.ButtonStyle.secondary, custom_id="level", row=0)
+    async def btn_level(self, interaction, button):
+        await self._switch(interaction, "level")
+
+    @discord.ui.button(label="Ngư Dân", emoji="🎣", style=discord.ButtonStyle.secondary, custom_id="ca", row=0)
+    async def btn_ca(self, interaction, button):
+        await self._switch(interaction, "ca")
+
+    @discord.ui.button(label="Kim Cương", emoji="💎", style=discord.ButtonStyle.secondary, custom_id="kc", row=0)
+    async def btn_kc(self, interaction, button):
+        await self._switch(interaction, "kc")
+
+    @discord.ui.button(label="Làm Mới", emoji="🔄", style=discord.ButtonStyle.primary, row=1)
+    async def btn_refresh(self, interaction, button):
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                embed = self.make_embed()
+                embed.set_footer(text="⏳ Bảng đã hết hạn tương tác — gõ lại `k top` để mở bảng mới")
+                await self.message.edit(embed=embed, view=self)
+            except Exception:
+                pass
+
+
 @bot.command()
 async def top(ctx, category: str = "tien"):
-    try: all_users = list(users_col.find())
-    except Exception: return await ctx.reply("⚠️ DB lỗi!")
-    if category.lower() in ["level","cap"]:
-        dl = sorted([(d["_id"], d.get("level",1), d.get("xp",0)) for d in all_users], key=lambda x:(x[1],x[2]), reverse=True)
-        title = "🌟 TOP CẤP"; fmt = lambda i,u,*a: f"Lv{a[0]} ({a[1]} XP)"
-    elif category.lower() in ["ca","fish"]:
-        dl = sorted([(d["_id"], d.get("fish_count",0)) for d in all_users], key=lambda x:x[1], reverse=True)
-        title = "🎣 TOP NGƯ DÂN"; fmt = lambda i,u,*a: f"{a[0]} cá"
-    else:
-        dl = sorted([(d["_id"], d.get("money",0)+d.get("bank",0)) for d in all_users], key=lambda x:x[1], reverse=True)
-        title = "🏆 BẢNG VÀNG"; fmt = lambda i,u,*a: f"{a[0]:,} 💰"
-    desc = ""
-    for idx, data in enumerate(dl[:10]):
-        uid = data[0]; rest = data[1:]
-        user = bot.get_user(int(uid))
-        try:
-            if not user: user = await bot.fetch_user(int(uid))
-        except Exception: pass
-        name = user.name if user else f"Ẩn#{uid[-4:]}"
-        icon = "🥇" if idx==0 else "🥈" if idx==1 else "🥉" if idx==2 else f"**#{idx+1}**"
-        desc += f"{icon} **{name}** ━ {fmt(idx, uid, *rest)}\n\n"
-    await ctx.send(embed=discord.Embed(title=title, description=desc, color=discord.Color.gold()))
+    category = category.lower()
+    alias_map = {"cap": "level", "fish": "ca", "diamond": "kc", "premium": "kc"}
+    category = alias_map.get(category, category)
+    if category not in TOP_CATEGORIES:
+        category = "tien"
+
+    view = TopBoardView(ctx, category)
+    msg = await ctx.send(embed=view.make_embed(), view=view)
+    view.message = msg
 
 @bot.command()
 async def daily(ctx):
