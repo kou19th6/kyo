@@ -4971,7 +4971,7 @@ class HelpPaginatorView(discord.ui.View):
         self.btn_prev.disabled = self.page <= 0
         self.btn_next.disabled = self.page >= len(HELP_PAGES) - 1
         self.btn_last.disabled = self.page >= len(HELP_PAGES) - 1
-        self.btn_page.label = f"📍 {self.page + 1}/{len(HELP_PAGES)}"
+        self.btn_page.label = f"{self.page + 1} / {len(HELP_PAGES)}"
         for item in self.children:
             if isinstance(item, HelpCategorySelect):
                 for opt in item.options:
@@ -4983,29 +4983,36 @@ class HelpPaginatorView(discord.ui.View):
         clean_title = data["title"].split("(")[0].strip()
         sub_cmd = ""
         if "(" in data["title"]:
-            sub_cmd = "(" + data["title"].split("(", 1)[1]
+            sub_cmd = data["title"].split("(", 1)[1].rstrip(")").strip()
 
-        bar = make_progress_bar(self.page + 1, len(HELP_PAGES), bar_length=len(HELP_PAGES))
+        lines = [l for l in data["desc"].strip().split("\n") if l.strip()]
+        mid = math.ceil(len(lines) / 2)
+        col1 = "\n".join(lines[:mid]) or "\u200b"
+        col2 = "\n".join(lines[mid:])
 
-        embed = discord.Embed(
-            title=f"{icon}  {clean_title}",
-            description=(
-                f"*{sub_cmd}*\n" if sub_cmd else ""
-            ) + f"{'─'*32}\n{data['desc']}",
-            color=data["color"]
+        embed = discord.Embed(color=data["color"])
+        embed.set_author(
+            name=f"📖  BẢNG TRỢ GIÚP  •  {bot.user.name}",
+            icon_url=bot.user.avatar.url if bot.user.avatar else None
         )
+        embed.title = f"{icon}   {clean_title}"
+        if sub_cmd:
+            embed.description = f"```{sub_cmd}```"
+
+        embed.add_field(name="⠀", value=col1, inline=True)
+        if col2:
+            embed.add_field(name="⠀", value=col2, inline=True)
+
         if bot.user.avatar:
             embed.set_thumbnail(url=bot.user.avatar.url)
 
-        embed.set_author(
-            name=f"Bảng Trợ Giúp — {bot.user.name}",
-            icon_url=bot.user.avatar.url if bot.user.avatar else None
-        )
-        embed.add_field(name="📊 Tiến độ", value=f"`{bar}`", inline=False)
-        embed.set_footer(text=f"Trang {self.page + 1}/{len(HELP_PAGES)} • k help • Dùng dropdown để nhảy nhanh")
+        dots = "".join("🔘" if i == self.page else "⚪" for i in range(len(HELP_PAGES)))
+        embed.add_field(name="\u200b", value=f"**{dots}**", inline=False)
+
+        embed.set_footer(text=f"Trang {self.page + 1}/{len(HELP_PAGES)}  •  k help  •  Chọn mục ở dropdown để nhảy nhanh")
         return embed
 
-    @discord.ui.button(label="⏮ Đầu", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="⏮", style=discord.ButtonStyle.secondary, row=1)
     async def btn_first(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.page = 0
         self._update_buttons()
@@ -5018,7 +5025,7 @@ class HelpPaginatorView(discord.ui.View):
         self._update_buttons()
         await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
-    @discord.ui.button(label="📍 1/1", style=discord.ButtonStyle.secondary, disabled=True, row=1)
+    @discord.ui.button(label="1 / 1", style=discord.ButtonStyle.secondary, disabled=True, row=1)
     async def btn_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         pass
 
@@ -5029,21 +5036,17 @@ class HelpPaginatorView(discord.ui.View):
         self._update_buttons()
         await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
-    @discord.ui.button(label="Cuối ⏭", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="⏭", style=discord.ButtonStyle.secondary, row=1)
     async def btn_last(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.page = len(HELP_PAGES) - 1
         self._update_buttons()
         await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
-    @discord.ui.button(label="🔄 Làm Mới", style=discord.ButtonStyle.success, row=2)
+    @discord.ui.button(label="Làm Mới", emoji="🔄", style=discord.ButtonStyle.success, row=2)
     async def btn_refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
-        new_view = HelpPaginatorView(self.author)
-        new_view.page = self.page
-        new_view._update_buttons()
-        await interaction.response.edit_message(embed=new_view.make_embed(), view=new_view)
-        new_view.message = interaction.message
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
-    @discord.ui.button(label="🏠 Trang Chủ", style=discord.ButtonStyle.danger, row=2)
+    @discord.ui.button(label="Trang Chủ", emoji="🏠", style=discord.ButtonStyle.danger, row=2)
     async def btn_home(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.page = 0
         self._update_buttons()
