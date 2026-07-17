@@ -3658,6 +3658,100 @@ async def thongtinnhatu(ctx):
         embed.add_field(name="📈 Nâng cấp", value="✅ Đã đạt cấp tối đa!", inline=False)
     embed.set_footer(text="k laodongtu — lao động giảm án | k vuotngu — liều mạng vượt ngục")
     await ctx.reply(embed=embed, mention_author=False)
+
+@bot.command(aliases=['dstu', 'prisonlist', 'jaillist'])
+async def danhsachtu(ctx):
+    """Xem danh sách toàn bộ tù nhân đang bị giam trong server + thời gian còn lại."""
+    now = datetime.now()
+    prisoners = []
+    for member in ctx.guild.members:
+        if member.bot:
+            continue
+        user_data = load_user(member.id)
+        jail_str = user_data.get("jail_time")
+        if not jail_str:
+            continue
+        try:
+            end = datetime.strptime(jail_str, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            continue
+        if now < end:
+            prisoners.append((member, end, user_data.get("crime_record", 0)))
+
+    if not prisoners:
+        return await ctx.reply(embed=discord.Embed(
+            description="✅ Hiện không có ai đang bị giam trong server này!",
+            color=discord.Color.green()
+        ), mention_author=False)
+
+    prisoners.sort(key=lambda x: x[1])
+    prison_data, prison_lvl = get_prison_data(ctx.guild.id)
+
+    lines = []
+    for member, end, crime in prisoners[:25]:
+        lines.append(f"⛓️ {member.mention} — Mãn hạn: <t:{int(end.timestamp())}:R> | Tiền án: **{crime}** lần")
+
+    embed = discord.Embed(
+        title=f"🏛️ DANH SÁCH TÙ NHÂN — {prison_data['name']}",
+        description="\n".join(lines),
+        color=discord.Color.dark_grey()
+    )
+    embed.set_footer(text=f"Tổng: {len(prisoners)} tù nhân đang bị giam | k hosotu @user để xem chi tiết")
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@bot.command(aliases=['tienan', 'criminalrecord', 'jailprofile'])
+async def hosotu(ctx, member: discord.Member = None):
+    """Xem hồ sơ tù nhân: tổng tiền án, uy tín, trạng thái giam giữ hiện tại."""
+    target = member or ctx.author
+    user_data = load_user(target.id)
+    now = datetime.now()
+
+    jail_str = user_data.get("jail_time")
+    is_jailed = False
+    end = None
+    if jail_str:
+        try:
+            end = datetime.strptime(jail_str, "%Y-%m-%d %H:%M:%S")
+            is_jailed = now < end
+        except Exception:
+            pass
+
+    solitary_str = user_data.get("solitary_until")
+    is_solitary = False
+    solitary_end = None
+    if solitary_str:
+        try:
+            solitary_end = datetime.strptime(solitary_str, "%Y-%m-%d %H:%M:%S")
+            is_solitary = now < solitary_end
+        except Exception:
+            pass
+
+    crime = user_data.get("crime_record", 0)
+    rep = user_data.get("prison_rep", 50)
+    escape_fails = user_data.get("escape_fails", 0)
+    bounty = user_data.get("bounty", 0)
+
+    color = discord.Color.dark_red() if is_jailed else (discord.Color.dark_grey() if is_solitary else discord.Color.blue())
+    embed = discord.Embed(title=f"📇 HỒ SƠ TÙ NHÂN — {target.name}", color=color)
+    embed.set_thumbnail(url=target.display_avatar.url)
+
+    if is_jailed:
+        embed.add_field(name="⛓️ Trạng thái", value=f"**ĐANG BỊ GIAM**\nMãn hạn: <t:{int(end.timestamp())}:R>", inline=False)
+    elif is_solitary:
+        embed.add_field(name="🔒 Trạng thái", value=f"**BIỆT GIAM**\nHết hạn: <t:{int(solitary_end.timestamp())}:R>", inline=False)
+    else:
+        embed.add_field(name="✅ Trạng thái", value="Tự do", inline=False)
+
+    embed.add_field(name="⚖️ Tổng Tiền Án", value=f"**{crime}** lần bị bắt", inline=True)
+    embed.add_field(name="🍀 Uy Tín Tù Nhân", value=f"**{rep}/100**", inline=True)
+    embed.add_field(name="🏃 Vượt Ngục Thất Bại Liên Tiếp", value=f"**{escape_fails}/{MAX_ESCAPE_FAIL_STREAK}**", inline=True)
+    if bounty > 0:
+        embed.add_field(name="💰 Tiền Treo Thưởng Truy Nã", value=f"**{bounty:,} 💰**", inline=True)
+
+    embed.set_footer(text="k toaan | k laodongtu | k vuotnguc | k cantin")
+    await ctx.reply(embed=embed, mention_author=False)
+
 def get_jail_end(user_data):
     jail_str = user_data.get("jail_time")
     if not jail_str:
@@ -5301,15 +5395,22 @@ HELP_PAGES = [
         "color": discord.Color.dark_grey(),
         "desc": (
             "Khi bị bắt (cướp/móc túi thất bại), bạn có các lựa chọn sau:\n\n"
-            "`k toaan` (`court`) — Hầu tòa, trải qua 3 giai đoạn xét xử (1 lần/lượt bị giam)\n\n"
-            "`k laodongtu` (`laodong`) — Lao động cải tạo, giảm án + kiếm tiền\n"
-            "   ✅ ~90%: giảm 10-20% thời gian án còn lại + tiền công\n"
-            "   ❌ ~10%: tai nạn lao động, +5 phút án (vẫn nhận tiền)\n"
-            "   🍀 Tăng **Uy Tín Tù Nhân**, giúp vượt ngục dễ hơn | CD 15 phút\n\n"
-            "`k vuotngu` (`escape`) — Liều mạng vượt ngục | CD 10 phút\n"
-            "   ✅ Thoát ngay nhưng bị treo thưởng truy nã +20,000 💰, +Uy Tín\n"
-            "   ❌ Bị tóm lại, án tù gấp đôi + phạt tiền, -Uy Tín\n"
-            "   🔒 Thất bại 3 lần liên tiếp → bị **BIỆT GIAM**, khóa vượt ngục/lao động!\n\n"
+            "`k toaan` (`court`) — Hầu tòa, trải qua 6 giai đoạn xét xử (1 lần/lượt bị giam)\n"
+            "`k laodongtu` (`laodong`) — Lao động cải tạo, giảm án + kiếm tiền | CD 15p\n"
+            "`k vuotnguc` (`escape`) — Liều mạng vượt ngục, thất bại 3 lần liên tiếp → BIỆT GIAM | CD 10p\n"
+            "`k cuopnguc @user` (`rescue`) — Rủ nhiều người đột kích giải cứu tù nhân khác\n"
+            "   ❌ Thất bại: TOÀN ĐỘI bị biệt giam + cấm chat tại kênh\n"
+            "`k cantin [mã hàng]` (`canteen`) — Mua đồ trong tù để tăng Uy Tín\n"
+            "`k danhnhau @user` (`prisonfight`) — Ẩu đả với tù nhân khác, cướp tiền\n"
+            "`k thamtu @user <tiền>` (`visit`) — Người tự do gửi tiền thăm nuôi cho tù nhân\n\n"
+            "**Tra cứu:**\n"
+            "`k danhsachtu` (`dstu`) — Danh sách toàn bộ tù nhân đang bị giam + thời gian còn lại\n"
+            "`k hosotu [@user]` (`tienan`) — Hồ sơ cá nhân: tổng tiền án, uy tín, trạng thái giam giữ\n"
+            "`k thongtinnhatu` (`jailinfo`) — Thông tin cấp độ nhà tù server hiện tại\n\n"
+            "**Admin:**\n"
+            "`k batgiam @user <phút> [lý do]` — Bắt giam thủ công (cần quyền Admin)\n"
+            "`k thagiamnguoi @user` (`unjail`) — Thả tù nhân (cần quyền Admin)\n"
+            "`k nangcapnhatu` (`upgradejail`) — Nâng cấp nhà tù server, tăng độ khó vượt ngục\n\n"
             "💡 Tiền án (crime record) tăng dần theo số lần bị bắt → án cơ bản dài hơn."
         ),
     },
