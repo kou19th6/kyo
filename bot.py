@@ -5402,7 +5402,7 @@ async def thamtu(ctx, target: discord.Member, amount: int):
         ),
         color=discord.Color.blue()
     ), mention_author=False)
-@bot.command(aliases=['mine', 'daomo'])
+@bot.command(aliases=['mine'])
 async def daovang(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); now = datetime.now()
     if user_id in mining_cooldowns and (now - mining_cooldowns[user_id]).total_seconds() < 60:
@@ -5583,7 +5583,8 @@ HELP_PAGES = [
             "`k thanhtich [@user]` — Xem thành tích đã đạt\n"
             "`k marry @user` — Cầu hôn (phí 1,000,000 💰)\n"
             "`k lyhon` — Ly hôn (phí 500,000 💰)\n"
-            "`k dilamthem` (`work`) — Đi làm thêm (CD 45p)"
+            "`k dilamthem` (`work`) — Đi làm thêm (CD 45p)\n"
+            "`k tuido` (`fire`) — Tính điểm Tự Do Tài Chính (FIRE), xem tổng tài sản"
         ),
     },
     {
@@ -5616,6 +5617,7 @@ HELP_PAGES = [
             "`k ck covershort <MÃ> <SL>` — Đóng vị thế bán khống\n"
             "`k ck port [@user]` — Xem portfolio đầu tư\n"
             "`k ck chart <MÃ>` — Biểu đồ giá 6 giờ qua\n"
+            "`k ck depth <MÃ>` — Xem độ sâu thanh khoản (trượt giá theo khối lượng lệnh)\n"
             "`k ck ipo` — Niêm yết công ty lên sàn (Chủ tịch)\n\n"
             "💸 Spread 0.1% + Thuế bán 0.1% | ⏳ Cooldown 10 phút/lệnh\n"
             "⚡ Cầu dao tự động: dừng nếu giá biến động >7%/phiên"
@@ -5659,6 +5661,11 @@ HELP_PAGES = [
             "`k cantin [mã hàng]` (`canteen`) — Mua đồ trong tù để tăng Uy Tín\n"
             "`k danhnhau @user` (`prisonfight`) — Ẩu đả với tù nhân khác, cướp tiền\n"
             "`k thamtu @user <tiền>` (`visit`) — Người tự do gửi tiền thăm nuôi cho tù nhân\n\n"
+            "**Tu Luyện & Pháp Bảo (chỉ dùng ở phòng giam tập thể):**\n"
+            "`k daomo` (`daomotu`/`digprison`) — Đào mò tìm nguyên liệu chế pháp bảo | CD 10p\n"
+            "`k phapbao` (`phapbaotu`/`prisonequip`) — Xem/mua/chế vũ khí & giáp trong tù\n"
+            "`k phapbao mua <id>` — Rèn hoặc mua trang bị bằng tiền hoặc nguyên liệu\n"
+            "`k phacanh` (`breakthrough`/`dotpha`) — Phá cảnh tu luyện, nâng ATK/DEF/HP\n\n"
             "**Tra cứu:**\n"
             "`k danhsachtu` (`dstu`) — Danh sách toàn bộ tù nhân đang bị giam + thời gian còn lại\n"
             "`k hosotu [@user]` (`tienan`) — Hồ sơ cá nhân: tổng tiền án, uy tín, trạng thái giam giữ\n"
@@ -5712,6 +5719,11 @@ HELP_PAGES = [
             "`k cty chucvu @user <role>` — Đặt chức vụ (Chủ tịch)\n"
             "`k cty doitenchuc <role> <tên>` — Đổi tên chức vụ\n"
             "`k cty roi` — Rời/giải tán công ty\n\n"
+            "**Phòng ban & Tài chính:**\n"
+            "`k cty phongban [tên] [cấp]` — Xây/nâng cấp phòng ban sinh doanh thu thụ động\n"
+            "`k cty baocaotaichinh` — Báo cáo tài chính thật (DT/CP/lợi nhuận, xếp hạng tín dụng)\n"
+            "`k cty codividend` — Chia cổ tức THẬT từ lợi nhuận cho cổ đông ngoài sàn (cty đã IPO)\n"
+            "`k cty sapnhap <tên cty>` — Đề nghị sáp nhập/thâu tóm công ty khác\n\n"
             "**Thương trường:** `k cty vaycty` | `k cty tranocty` | `k cty quangcao`\n"
             "`k cty boicong` | `k cty giandiep` | `k cty anninh` | `k cty cotuc`"
         ),
@@ -5753,6 +5765,17 @@ HELP_PAGES = [
         ),
     },
     {
+        "title": "📺 KÊNH YOUTUBE (k yt)",
+        "color": discord.Color.red(),
+        "desc": (
+            "`k yt <tên> <link/@handle>` — Lưu một kênh Youtube (banner, avatar, sub, video)\n"
+            "`k yt <tên>` — Xem lại kênh đã lưu, không cần nhập link nữa\n"
+            "`k dskenh` — Xem danh sách toàn bộ kênh đã lưu trong server\n"
+            "`k xoakenh <tên>` — Xóa một kênh đã lưu\n\n"
+            "💡 Hỗ trợ link dạng `/channel/UC...`, `@handle`, hoặc gõ thẳng tên kênh để bot tự tìm."
+        ),
+    },
+    {
         "title": "💎 KIM CƯƠNG (k kimcuong / kc)",
         "color": discord.Color.blue(),
         "desc": (
@@ -5771,7 +5794,7 @@ HELP_PAGES = [
 
 HELP_PAGE_ICONS = [
     "🏦", "🤖", "📈", "🎮", "🎁", "⛓️", "🌾", "⚔️",
-    "🏢", "⚔️", "🌸", "💎",
+    "🏢", "⚔️", "🌸", "📺", "💎",
 ]
 
 def _help_page_icon(idx):
