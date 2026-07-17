@@ -644,98 +644,148 @@ def get_pet_sell_price(pet_name):
     return 1000
 
 # =====================================================================
-# HỆ THỐNG CHỨNG KHOÁN THỰC TẾ (HOÀN TOÀN MỚI)
+# 📈 HỆ THỐNG CHỨNG KHOÁN v3 — SÀN THẬT: ORDER BOOK, SLIPPAGE, EARNINGS
 # =====================================================================
 
-STANDARD_STOCKS = {
-    "VIN": {"name": "Tập Đoàn VIN", "base": 80000, "sector": "BDS", "volatility": 0.03},
-    "FLC": {"name": "Hàng Không FLC", "base": 12000, "sector": "HK", "volatility": 0.05},
-    "VNZ": {"name": "Công Nghệ VNZ", "base": 150000, "sector": "TECH", "volatility": 0.04},
-    "DOGE": {"name": "Doge Coin", "base": 5000, "sector": "CRYPTO", "volatility": 0.15},
-    "BTC": {"name": "Bitcoin", "base": 500000, "sector": "CRYPTO", "volatility": 0.10},
-    "AAPL": {"name": "Apple Inc.", "base": 200000, "sector": "TECH", "volatility": 0.025},
-    "TSLA": {"name": "Tesla", "base": 180000, "sector": "AUTO", "volatility": 0.07},
-    "VCB": {"name": "Vietcombank", "base": 90000, "sector": "BANK", "volatility": 0.02},
-    "TCB": {"name": "Techcombank", "base": 55000, "sector": "BANK", "volatility": 0.025},
-    "HPG": {"name": "Hòa Phát Group", "base": 40000, "sector": "STEEL", "volatility": 0.035},
+SECTOR_NAMES = {
+    "BDS": "🏘️ Bất Động Sản", "HK": "✈️ Hàng Không", "TECH": "💻 Công Nghệ",
+    "CRYPTO": "🪙 Tiền Số", "AUTO": "🚗 Ô Tô", "BANK": "🏦 Ngân Hàng", "STEEL": "🔩 Thép",
 }
 
-# Hằng số thị trường
-STOCK_TAX_RATE = 0.001      # Thuế bán 0.1% (thực tế VN)
-STOCK_SPREAD = 0.001        # Spread 0.1%
-MARGIN_INTEREST_RATE = 0.15 # Lãi vay ký quỹ 15%/năm
-MAX_MARGIN_RATIO = 2.0      # Tối đa vay gấp 2 lần tài sản
-CIRCUIT_BREAKER = 0.07      # Tạm ngừng khi giá thay đổi >7% trong phiên
+STANDARD_STOCKS = {
+    "VIN":  {"name": "Tập Đoàn VIN",     "base": 80000,  "sector": "BDS",    "volatility": 0.03,  "beta": 1.1},
+    "FLC":  {"name": "Hàng Không FLC",   "base": 12000,  "sector": "HK",     "volatility": 0.05,  "beta": 1.3},
+    "VNZ":  {"name": "Công Nghệ VNZ",    "base": 150000, "sector": "TECH",   "volatility": 0.04,  "beta": 1.2},
+    "DOGE": {"name": "Doge Coin",        "base": 5000,   "sector": "CRYPTO", "volatility": 0.15,  "beta": 1.8},
+    "BTC":  {"name": "Bitcoin",          "base": 500000, "sector": "CRYPTO", "volatility": 0.10,  "beta": 1.6},
+    "AAPL": {"name": "Apple Inc.",       "base": 200000, "sector": "TECH",   "volatility": 0.025, "beta": 0.9},
+    "TSLA": {"name": "Tesla",            "base": 180000, "sector": "AUTO",   "volatility": 0.07,  "beta": 1.4},
+    "VCB":  {"name": "Vietcombank",      "base": 90000,  "sector": "BANK",   "volatility": 0.02,  "beta": 0.6},
+    "TCB":  {"name": "Techcombank",      "base": 55000,  "sector": "BANK",   "volatility": 0.025, "beta": 0.7},
+    "HPG":  {"name": "Hòa Phát Group",   "base": 40000,  "sector": "STEEL",  "volatility": 0.035, "beta": 1.0},
+}
 
-# Lưu trữ giá phiên trong RAM để tính circuit breaker
-_session_open_prices = {}   # {code: giá mở phiên}
-_market_events = []         # tin tức thị trường đang active
+STOCK_TAX_RATE          = 0.001
+STOCK_SPREAD            = 0.0015
+MARGIN_BASE_SPREAD      = 0.06       # cộng thêm vào lãi suất nền
+MAX_MARGIN_RATIO        = 2.0
+CIRCUIT_BREAKER         = 0.07
+MAINTENANCE_MARGIN_RATIO= 1.3        # kiểu Reg-T: tài sản < 130% nợ ký quỹ -> margin call
+EARNINGS_INTERVAL_HOURS = 4
+
+_session_open_prices = {}
+_market_events = []
+
+def get_base_interest_rate():
+    """Lãi suất nền thị trường, thay đổi theo ngày (giống lãi suất ngân hàng trung ương)."""
+    day_seed = int(datetime.now().strftime("%Y%m%d"))
+    rng = random.Random(day_seed + 777)
+    return round(rng.uniform(0.03, 0.09), 3)
+
+def get_market_index():
+    """Chỉ số thị trường chung (VN-Index style), seed theo giờ hiện tại."""
+    seed = int(datetime.now().strftime("%Y%m%d%H")) + 424242
+    rng = random.Random(seed)
+    return rng.uniform(-0.015, 0.015)
 
 def get_sector_trend(sector):
-    """Tính xu hướng ngành theo giờ"""
     hour = datetime.now().hour
     rng = random.Random(int(datetime.now().strftime("%Y%m%d%H")) + sum(ord(c) for c in sector))
     return rng.uniform(-0.02, 0.02)
 
-def get_stock_price(stock_code, hour_offset=0, use_cache=True):
-    """Tính giá cổ phiếu với mô phỏng Geometric Brownian Motion"""
-    code = stock_code.upper()
+def get_sector_index(sector):
+    """% thay đổi trung bình của các mã trong ngành so với 1 giờ trước."""
+    codes = [c for c, d in STANDARD_STOCKS.items() if d["sector"] == sector]
+    if not codes:
+        return 0.0
+    diffs = []
+    for c in codes:
+        cur = get_stock_price(c)
+        prev = get_stock_price(c, hour_offset=-1)
+        if prev > 0:
+            diffs.append((cur - prev) / prev * 100)
+    return sum(diffs) / len(diffs) if diffs else 0.0
 
-    # Kiểm tra cổ phiếu IPO của công ty
+def maybe_run_earnings(comp):
+    """Chấm điểm 'báo cáo kết quả kinh doanh' cho công ty đã IPO, ảnh hưởng giá cổ phiếu."""
+    now = datetime.now()
+    last_str = comp.get("last_earnings", "2000-01-01 00:00:00")
+    try:
+        last = datetime.strptime(last_str, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        last = datetime(2000, 1, 1)
+    if now - last < timedelta(hours=EARNINGS_INTERVAL_HOURS):
+        return
+    snap_treasury = comp.get("_fin_snapshot_treasury", comp.get("treasury", 0))
+    snap_rep      = comp.get("_fin_snapshot_rep", comp.get("reputation", 100))
+    cur_treasury  = comp.get("treasury", 0)
+    cur_rep       = comp.get("reputation", 100)
+
+    treasury_growth = 0.0
+    if snap_treasury > 0:
+        treasury_growth = (cur_treasury - snap_treasury) / snap_treasury
+    rep_growth = (cur_rep - snap_rep) / 100.0
+
+    drift = max(-0.06, min(0.06, treasury_growth * 0.4 + rep_growth * 0.3))
+    comp["earnings_drift"] = drift
+    comp["last_earnings"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    comp["_fin_snapshot_treasury"] = cur_treasury
+    comp["_fin_snapshot_rep"] = cur_rep
+    save_company(comp["_id"])
+
+def get_stock_price(stock_code, hour_offset=0, use_cache=True):
+    code = stock_code.upper()
     try:
         ipo_comp = companies_col.find_one({"is_ipo": True, "name": {"$regex": f"^{code}", "$options": "i"}})
     except Exception:
         ipo_comp = None
 
     if ipo_comp:
+        COMPANY_CACHE[ipo_comp["_id"]] = ipo_comp
+        maybe_run_earnings(ipo_comp)
         base_price = max(5000, int(ipo_comp.get("treasury", 0) / 1000))
         rep_mult = max(0.1, ipo_comp.get("reputation", 100) / 100.0)
         scandal = 0.5 if ipo_comp.get("has_scandal", False) else 1.0
+        drift = 1 + ipo_comp.get("earnings_drift", 0.0)
         target_time = datetime.now() + timedelta(hours=hour_offset)
         rng = random.Random(int(target_time.strftime("%Y%m%d%H%M")) // 15 + sum(ord(c) for c in code))
         fluctuation = rng.uniform(0.85, 1.15)
-        return max(1000, int(base_price * rep_mult * scandal * fluctuation))
+        return max(1000, int(base_price * rep_mult * scandal * drift * fluctuation))
 
     stock_info = STANDARD_STOCKS.get(code)
     if not stock_info:
         return 0
 
     base = stock_info["base"]
-    vol = stock_info["volatility"]
+    vol  = stock_info["volatility"]
     sector = stock_info["sector"]
+    beta = stock_info.get("beta", 1.0)
 
-    # Dùng seed theo ngày + mã để giá ổn định trong ngày, thay đổi từng 15 phút
     target_time = datetime.now() + timedelta(hours=hour_offset)
     seed_15min = int(target_time.strftime("%Y%m%d%H%M")) // 15
     seed = seed_15min * 1000 + sum(ord(c) for c in code)
     rng = random.Random(seed)
 
-    # GBM simulation: log-normal price walk
-    dt = 1 / 252  # 1 ngày giao dịch
-    periods = seed_15min % 26  # trong 1 ngày có 26 phiên 15 phút
-    
+    dt = 1 / 252
+    periods = seed_15min % 26
+    market_drift = get_market_index() * beta
+
     price = base
     for i in range(periods):
         period_seed = seed - i * 100
         r = random.Random(period_seed)
         z = r.gauss(0, 1)
-        # drift nhỏ + volatility random
-        sector_drift = get_sector_trend(sector) / 26
+        sector_drift = (get_sector_trend(sector) + market_drift) / 26
         price = price * math.exp((sector_drift - 0.5 * vol**2) * dt + vol * math.sqrt(dt) * z)
 
     price = max(100, int(price))
-
-    # Áp dụng tin tức thị trường nếu có
     for event in _market_events:
         if event.get("sector") in [sector, "ALL"] or event.get("code") == code:
             price = int(price * event.get("multiplier", 1.0))
-
     return price
 
 def get_session_open_price(code):
-    """Lấy giá mở phiên hôm nay"""
     if code not in _session_open_prices:
-        # Lấy giá đầu ngày (offset về đầu ngày)
         today_seed = int(datetime.now().strftime("%Y%m%d")) * 1000 + sum(ord(c) for c in code)
         rng = random.Random(today_seed)
         stock_info = STANDARD_STOCKS.get(code)
@@ -746,27 +796,47 @@ def get_session_open_price(code):
     return _session_open_prices[code]
 
 def check_circuit_breaker(code):
-    """Kiểm tra có kích hoạt cầu dao tự động không"""
     current = get_stock_price(code)
     open_price = get_session_open_price(code)
     if open_price == 0:
         return False
-    change_pct = abs(current - open_price) / open_price
-    return change_pct >= CIRCUIT_BREAKER
+    return abs(current - open_price) / open_price >= CIRCUIT_BREAKER
 
-def get_stock_buy_price(code):
-    """Giá mua = giá thị trường + spread"""
-    return int(get_stock_price(code) * (1 + STOCK_SPREAD))
+def get_market_depth(code):
+    """Độ sâu thanh khoản — mã vốn hóa lớn/ít biến động thì 'chịu' được lệnh lớn hơn."""
+    stock_info = STANDARD_STOCKS.get(code)
+    if stock_info:
+        base = stock_info["base"]
+        vol = stock_info["volatility"]
+        return max(300, int(80_000_000 / (base * vol * 60)))
+    comp = None
+    try:
+        comp = companies_col.find_one({"is_ipo": True, "name": {"$regex": f"^{code}", "$options": "i"}})
+    except Exception:
+        pass
+    treasury = comp.get("treasury", 1_000_000) if comp else 1_000_000
+    return max(150, int(treasury / 80_000))
 
-def get_stock_sell_price(code):
-    """Giá bán = giá thị trường - spread - thuế"""
+def get_slippage_pct(code, qty):
+    depth = get_market_depth(code)
+    impact = qty / depth
+    return min(0.30, impact * 0.18)
+
+def get_stock_buy_price(code, qty=1):
+    """Giá mua = giá TT + spread + trượt giá theo khối lượng (mua nhiều đắt hơn)."""
     market = get_stock_price(code)
-    after_spread = int(market * (1 - STOCK_SPREAD))
-    tax = int(after_spread * STOCK_TAX_RATE)
-    return after_spread - tax
+    slip = get_slippage_pct(code, qty)
+    return int(market * (1 + STOCK_SPREAD) * (1 + slip))
+
+def get_stock_sell_price(code, qty=1):
+    """Giá bán = giá TT - spread - trượt giá - thuế."""
+    market = get_stock_price(code)
+    slip = get_slippage_pct(code, qty)
+    after_impact = market * (1 - STOCK_SPREAD) * (1 - slip)
+    tax = int(after_impact * STOCK_TAX_RATE)
+    return max(1, int(after_impact) - tax)
 
 def get_price_change_pct(code):
-    """Phần trăm thay đổi giá so với 1 giờ trước"""
     current = get_stock_price(code)
     prev = get_stock_price(code, hour_offset=-1)
     if prev == 0: return 0.0
@@ -783,8 +853,7 @@ def get_all_stocks():
     for code, info in STANDARD_STOCKS.items():
         all_stocks[code] = info["name"]
     try:
-        ipo_companies = companies_col.find({"is_ipo": True})
-        for comp in ipo_companies:
+        for comp in companies_col.find({"is_ipo": True}):
             code = comp["name"][:4].upper()
             all_stocks[code] = comp["name"]
     except Exception as e:
@@ -792,16 +861,11 @@ def get_all_stocks():
     return all_stocks
 
 async def check_stop_loss_take_profit(user_id, channel):
-    """Kiểm tra và thực thi lệnh stop-loss / take-profit tự động"""
     user_data = load_user(user_id)
     sold_msg = []
-
     for code, qty in dict(user_data.get("stocks", {})).items():
-        if qty <= 0:
-            continue
-        current_price = get_stock_sell_price(code)
-
-        # Stop-loss
+        if qty <= 0: continue
+        current_price = get_stock_sell_price(code, qty)
         sl_price = user_data.get("stop_loss", {}).get(code, 0)
         if sl_price and current_price <= sl_price:
             gain = current_price * qty
@@ -811,8 +875,6 @@ async def check_stop_loss_take_profit(user_id, channel):
             user_data["stock_buy_prices"].pop(code, None)
             add_history(user_id, f"[SL] Bán {qty} {code} @ {current_price:,} (+{gain:,})")
             sold_msg.append(f"🛑 **STOP-LOSS {code}**: Bán {qty} CP @ {current_price:,} (tổng {gain:,} 💰)")
-
-        # Take-profit
         tp_price = user_data.get("take_profit", {}).get(code, 0)
         if tp_price and current_price >= tp_price:
             gain = current_price * qty
@@ -823,19 +885,15 @@ async def check_stop_loss_take_profit(user_id, channel):
             add_history(user_id, f"[TP] Bán {qty} {code} @ {current_price:,} (+{gain:,})")
             sold_msg.append(f"✅ **TAKE-PROFIT {code}**: Bán {qty} CP @ {current_price:,} (tổng {gain:,} 💰)")
 
-    # Kiểm tra margin call
     margin = user_data.get("margin_used", 0)
     if margin > 0:
-        total_stock_value = sum(get_stock_sell_price(c) * q for c, q in user_data.get("stocks", {}).items())
+        total_stock_value = sum(get_stock_sell_price(c, q) * q for c, q in user_data.get("stocks", {}).items())
         total_assets = user_data.get("money", 0) + user_data.get("bank", 0) + total_stock_value
-        # Margin call nếu tài sản < 130% tiền vay
-        if total_assets < margin * 1.3 and total_assets > 0:
-            # Bán cổ phiếu tự động để trả ký quỹ
+        if total_assets < margin * MAINTENANCE_MARGIN_RATIO and total_assets > 0:
             for code in list(user_data.get("stocks", {}).keys()):
-                if user_data.get("margin_used", 0) <= 0:
-                    break
+                if user_data.get("margin_used", 0) <= 0: break
                 qty = user_data["stocks"].get(code, 0)
-                sp = get_stock_sell_price(code)
+                sp = get_stock_sell_price(code, qty)
                 proceeds = sp * qty
                 user_data["money"] += proceeds
                 user_data["margin_used"] = max(0, user_data.get("margin_used", 0) - proceeds)
@@ -846,135 +904,128 @@ async def check_stop_loss_take_profit(user_id, channel):
     if sold_msg:
         save_user(user_id)
         try:
-            embed = discord.Embed(
-                title="🤖 TỰ ĐỘNG KHỚP LỆNH",
-                description="\n".join(sold_msg),
-                color=discord.Color.orange()
-            )
+            embed = discord.Embed(title="🤖 TỰ ĐỘNG KHỚP LỆNH", description="\n".join(sold_msg), color=discord.Color.orange())
             await channel.send(f"<@{user_id}>", embed=embed)
         except Exception:
             pass
 
 # =====================================================================
-# CÁC LỆNH CHỨNG KHOÁN MỚI
+# LỆNH CHỨNG KHOÁN v3
 # =====================================================================
 
 @bot.group(invoke_without_command=True, aliases=['ck', 'trade'])
 async def chungkhoan(ctx):
     all_stocks = get_all_stocks()
+    base_rate = get_base_interest_rate()
     embed = discord.Embed(
-        title="📈 SÀN GIAO DỊCH CHỨNG KHOÁN",
+        title="📈 SÀN GIAO DỊCH CHỨNG KHOÁN v3",
         description=(
             f"⏱️ Cập nhật mỗi **15 phút** | Tiếp theo: <t:{get_next_15min_timestamp()}:R>\n"
-            f"💸 Phí: Spread **0.1%** + Thuế bán **0.1%** (thực tế VN)\n"
-            f"⚡ Cầu dao: Tạm ngừng nếu giá biến động >7%/phiên\n"
-            f"📊 Cooldown: **2 phút** mỗi lệnh\n\n"
-            f"**LỆNH:**\n"
-            f"🛒 Mua: `k ck buy <MÃ> <SL>`\n"
-            f"💸 Bán: `k ck sell <MÃ> <SL/all>`\n"
-            f"📋 Lệnh giá: `k ck order <MÃ> buy/sell <SL> <GIÁ>`\n"
-            f"🔍 Lịch sử: `k ck chart <MÃ>`\n"
-            f"📊 Portfolio: `k ck port`\n"
-            f"🛑 Stop-Loss: `k ck sl <MÃ> <GIÁ>`\n"
-            f"✅ Take-Profit: `k ck tp <MÃ> <GIÁ>`\n"
-            f"💳 Mua ký quỹ: `k ck margin <MÃ> <SL>`\n"
-            f"📉 Bán khống: `k ck short <MÃ> <SL>`\n"
-            f"🏢 IPO: `k ck ipo`"
+            f"💸 Phí: Spread **{STOCK_SPREAD*100:.2f}%** + Thuế bán **{STOCK_TAX_RATE*100:.1f}%** + **trượt giá theo khối lượng**\n"
+            f"🏦 Lãi suất nền hôm nay: **{base_rate*100:.1f}%/năm** (ảnh hưởng lãi vay ký quỹ)\n"
+            f"⚡ Cầu dao: dừng nếu giá biến động >7%/phiên\n\n"
+            f"**LỆNH:** `buy` `sell` `order` `orders` `cancel` `sl` `tp` `margin` `short` `covershort` `port` `chart` `market` `ipo`"
         ),
         color=discord.Color.blue()
     )
+    sector_lines = []
+    for sec, name in SECTOR_NAMES.items():
+        idx = get_sector_index(sec)
+        icon = "🟢" if idx > 0 else "🔴" if idx < 0 else "⚪"
+        sector_lines.append(f"{icon} {name}: **{idx:+.2f}%**")
+    embed.add_field(name="📊 Chỉ Số Ngành", value="\n".join(sector_lines), inline=False)
 
     for code, name in list(all_stocks.items())[:8]:
         current = get_stock_price(code)
-        prev = get_stock_price(code, hour_offset=-1)
-        change_pct = (current - prev) / prev * 100 if prev > 0 else 0
+        change_pct = get_price_change_pct(code)
         circuit = "🔴DỪNG" if check_circuit_breaker(code) else ""
         trend = "🟢" if change_pct > 0 else "🔴" if change_pct < 0 else "⚪"
-        buy_p = get_stock_buy_price(code)
-        sell_p = get_stock_sell_price(code)
-        vol = STANDARD_STOCKS.get(code, {}).get("volatility", 0.05)
+        buy_p = get_stock_buy_price(code, 100)
+        sell_p = get_stock_sell_price(code, 100)
         embed.add_field(
             name=f"{trend} {code} {circuit}",
-            value=f"Giá: **{current:,}** | Mua: {buy_p:,} | Bán: {sell_p:,}\n"
-                  f"Thay đổi: **{change_pct:+.2f}%** | Biến động: {vol*100:.1f}%",
+            value=f"Giá: **{current:,}** | Mua(100cp): {buy_p:,} | Bán(100cp): {sell_p:,}\nThay đổi: **{change_pct:+.2f}%**",
             inline=True
         )
+    await ctx.reply(embed=embed, mention_author=False)
 
+
+@chungkhoan.command()
+async def market(ctx):
+    """Xem tổng quan chỉ số ngành."""
+    embed = discord.Embed(title="📊 CHỈ SỐ THỊ TRƯỜNG", color=discord.Color.teal())
+    for sec, name in SECTOR_NAMES.items():
+        idx = get_sector_index(sec)
+        icon = "🟢" if idx > 0 else "🔴" if idx < 0 else "⚪"
+        codes = [c for c, d in STANDARD_STOCKS.items() if d["sector"] == sec]
+        embed.add_field(name=f"{icon} {name}", value=f"**{idx:+.2f}%**\nMã: {', '.join(codes)}", inline=True)
+    embed.set_footer(text=f"Lãi suất nền: {get_base_interest_rate()*100:.1f}%/năm")
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@chungkhoan.command()
+async def depth(ctx, code: str):
+    """Xem độ sâu thanh khoản của 1 mã — càng sâu càng ít bị trượt giá khi đặt lệnh lớn."""
+    code = code.upper()
+    if code not in get_all_stocks():
+        return await ctx.reply("⚠️ Mã CK không tồn tại!")
+    d = get_market_depth(code)
+    embed = discord.Embed(title=f"📊 ĐỘ SÂU THANH KHOẢN {code}", color=discord.Color.blue())
+    for qty in [10, 100, 1000, 5000]:
+        slip = get_slippage_pct(code, qty)
+        embed.add_field(name=f"Lệnh {qty:,} CP", value=f"Trượt giá: **{slip*100:.2f}%**", inline=True)
+    embed.set_footer(text=f"Thanh khoản cơ sở: ~{d:,} CP")
     await ctx.reply(embed=embed, mention_author=False)
 
 
 @chungkhoan.command()
 async def buy(ctx, code: str, qty: int):
-    """Mua cổ phiếu theo giá thị trường"""
     user_id = str(ctx.author.id)
-
     if not acquire_lock(user_id):
         return await ctx.reply(embed=discord.Embed(description="⚠️ Đang xử lý lệnh trước!", color=discord.Color.orange()), mention_author=False)
-
     try:
         now = datetime.now()
-        if user_id in stock_cooldowns:
+        if user_id in stock_cooldowns and (now - stock_cooldowns[user_id]).total_seconds() < 600:
             diff = (now - stock_cooldowns[user_id]).total_seconds()
-            if diff < 600:
-                return await ctx.reply(embed=discord.Embed(
-                    description=f"⏳ Cooldown: còn **{int((600-diff)//60)}p {int((600-diff)%60)}s**",
-                    color=discord.Color.orange()
-                ), mention_author=False)
+            return await ctx.reply(embed=discord.Embed(description=f"⏳ Cooldown: còn **{int((600-diff)//60)}p {int((600-diff)%60)}s**", color=discord.Color.orange()), mention_author=False)
 
         code = code.upper()
-        all_stocks = get_all_stocks()
-        if code not in all_stocks:
+        if code not in get_all_stocks():
             return await ctx.reply("⚠️ Mã CK không tồn tại!")
-
         if qty <= 0 or qty > 10000:
             return await ctx.reply("⚠️ Số lượng từ 1-10,000 CP!")
-
-        # Kiểm tra cầu dao
         if check_circuit_breaker(code):
-            return await ctx.reply(embed=discord.Embed(
-                description=f"🔴 **CẦU DAO TỰ ĐỘNG!** Mã {code} tạm ngừng giao dịch do biến động >7%!",
-                color=discord.Color.red()
-            ), mention_author=False)
+            return await ctx.reply(embed=discord.Embed(description=f"🔴 **CẦU DAO!** Mã {code} tạm ngừng do biến động >7%!", color=discord.Color.red()), mention_author=False)
 
-        buy_price = get_stock_buy_price(code)
-        market_price = get_stock_price(code)
-        if market_price <= 100:
+        buy_price = get_stock_buy_price(code, qty)
+        if get_stock_price(code) <= 100:
             return await ctx.reply("⚠️ Mã CP giá quá thấp, không cho mua!")
 
         total_cost = buy_price * qty
         user_data = load_user(user_id)
-
         if user_data.get("money", 0) < total_cost:
-            return await ctx.reply(embed=discord.Embed(
-                description=f"⚠️ Thiếu tiền! Cần **{total_cost:,} 💰** (Giá mua: {buy_price:,}/CP × {qty} CP)",
-                color=discord.Color.red()
-            ), mention_author=False)
+            return await ctx.reply(embed=discord.Embed(description=f"⚠️ Thiếu tiền! Cần **{total_cost:,} 💰** (giá {buy_price:,}/CP đã gồm trượt giá)", color=discord.Color.red()), mention_author=False)
 
         user_data["money"] -= total_cost
-
-        # Tính giá mua trung bình (average cost)
         old_qty = user_data["stocks"].get(code, 0)
         old_avg = user_data.get("stock_buy_prices", {}).get(code, buy_price)
         new_qty = old_qty + qty
         new_avg = int((old_qty * old_avg + qty * buy_price) / new_qty)
-
-        if "stocks" not in user_data: user_data["stocks"] = {}
-        if "stock_buy_prices" not in user_data: user_data["stock_buy_prices"] = {}
-        user_data["stocks"][code] = new_qty
-        user_data["stock_buy_prices"][code] = new_avg
+        user_data.setdefault("stocks", {})[code] = new_qty
+        user_data.setdefault("stock_buy_prices", {})[code] = new_avg
 
         stock_cooldowns[user_id] = now
         save_user(user_id)
         add_history(user_id, f"Mua {qty} {code} @ {buy_price:,} (-{total_cost:,})")
 
+        slip = get_slippage_pct(code, qty)
         embed = discord.Embed(title="✅ LỆNH MUA KHỚP", color=discord.Color.green())
         embed.add_field(name="Mã CK", value=f"**{code}**", inline=True)
         embed.add_field(name="Số lượng", value=f"**{qty:,} CP**", inline=True)
-        embed.add_field(name="Giá mua", value=f"**{buy_price:,} 💰/CP**", inline=True)
+        embed.add_field(name="Giá mua (đã trượt giá)", value=f"**{buy_price:,} 💰/CP**", inline=True)
+        embed.add_field(name="Trượt giá", value=f"**{slip*100:.2f}%**", inline=True)
         embed.add_field(name="Tổng chi", value=f"**{total_cost:,} 💰**", inline=True)
-        embed.add_field(name="Giá TB mới", value=f"**{new_avg:,} 💰/CP**", inline=True)
         embed.add_field(name="Số dư ví", value=f"**{user_data['money']:,} 💰**", inline=True)
-        embed.set_footer(text="⏳ Cooldown 2 phút | Dùng 'k ck sl' để đặt cắt lỗ")
         await ctx.reply(embed=embed, mention_author=False)
     finally:
         release_lock(user_id)
@@ -982,58 +1033,30 @@ async def buy(ctx, code: str, qty: int):
 
 @chungkhoan.command()
 async def sell(ctx, code: str, qty_str: str):
-    """Bán cổ phiếu theo giá thị trường"""
     user_id = str(ctx.author.id)
-
     if not acquire_lock(user_id):
         return await ctx.reply(embed=discord.Embed(description="⚠️ Đang xử lý!", color=discord.Color.orange()), mention_author=False)
-
     try:
         now = datetime.now()
-        if user_id in stock_cooldowns:
+        if user_id in stock_cooldowns and (now - stock_cooldowns[user_id]).total_seconds() < 120:
             diff = (now - stock_cooldowns[user_id]).total_seconds()
-            if diff < 120:
-                return await ctx.reply(embed=discord.Embed(
-                    description=f"⏳ Cooldown: còn **{int((120-diff)//60)}p {int((120-diff)%60)}s**",
-                    color=discord.Color.orange()
-                ), mention_author=False)
+            return await ctx.reply(embed=discord.Embed(description=f"⏳ Cooldown: còn **{int((120-diff)//60)}p {int((120-diff)%60)}s**", color=discord.Color.orange()), mention_author=False)
 
         code = code.upper()
         user_data = load_user(user_id)
         owned = user_data.get("stocks", {}).get(code, 0)
-
-        if qty_str.lower() == "all":
-            qty = owned
-        else:
-            try: qty = int(qty_str)
-            except ValueError: return await ctx.reply("⚠️ Nhập số lượng hoặc `all`!")
-
-        if qty <= 0:
-            return await ctx.reply("⚠️ Số lượng > 0!")
-
-        if owned < qty:
-            return await ctx.reply(embed=discord.Embed(
-                description=f"⚠️ Bạn chỉ có **{owned:,} CP {code}**! Bán tối đa {owned} CP.",
-                color=discord.Color.red()
-            ), mention_author=False)
-
-        # Kiểm tra cầu dao
+        qty = owned if qty_str.lower() == "all" else int(qty_str)
+        if qty <= 0: return await ctx.reply("⚠️ Số lượng > 0!")
+        if owned < qty: return await ctx.reply(embed=discord.Embed(description=f"⚠️ Chỉ có **{owned:,} CP {code}**!", color=discord.Color.red()), mention_author=False)
         if check_circuit_breaker(code):
-            return await ctx.reply(embed=discord.Embed(
-                description=f"🔴 **CẦU DAO TỰ ĐỘNG!** Mã {code} tạm ngừng giao dịch!",
-                color=discord.Color.red()
-            ), mention_author=False)
+            return await ctx.reply(embed=discord.Embed(description=f"🔴 **CẦU DAO!** Mã {code} tạm ngừng!", color=discord.Color.red()), mention_author=False)
 
-        sell_price = get_stock_sell_price(code)
-        market_price = get_stock_price(code)
+        sell_price = get_stock_sell_price(code, qty)
         total_gain = sell_price * qty
-        tax = int(market_price * STOCK_TAX_RATE * qty)
-
         avg_buy = user_data.get("stock_buy_prices", {}).get(code, sell_price)
         profit = (sell_price - avg_buy) * qty
         profit_pct = ((sell_price - avg_buy) / avg_buy * 100) if avg_buy > 0 else 0
 
-        # Cập nhật portfolio
         user_data["stocks"][code] -= qty
         if user_data["stocks"][code] <= 0:
             del user_data["stocks"][code]
@@ -1047,15 +1070,12 @@ async def sell(ctx, code: str, qty_str: str):
         add_history(user_id, f"Bán {qty} {code} @ {sell_price:,} (+{total_gain:,}, P&L {profit:+,})")
 
         color = discord.Color.green() if profit >= 0 else discord.Color.red()
-        profit_icon = "📈" if profit >= 0 else "📉"
-
         embed = discord.Embed(title="✅ LỆNH BÁN KHỚP", color=color)
         embed.add_field(name="Mã CK", value=f"**{code}**", inline=True)
         embed.add_field(name="Số lượng", value=f"**{qty:,} CP**", inline=True)
-        embed.add_field(name="Giá bán", value=f"**{sell_price:,} 💰/CP**", inline=True)
+        embed.add_field(name="Giá bán (đã trượt giá+thuế)", value=f"**{sell_price:,} 💰/CP**", inline=True)
         embed.add_field(name="Thu về", value=f"**{total_gain:,} 💰**", inline=True)
-        embed.add_field(name="Thuế", value=f"**{tax:,} 💰** (0.1%)", inline=True)
-        embed.add_field(name=f"{profit_icon} P&L", value=f"**{profit:+,} 💰** ({profit_pct:+.2f}%)", inline=True)
+        embed.add_field(name="P&L", value=f"**{profit:+,} 💰** ({profit_pct:+.2f}%)", inline=True)
         embed.set_footer(text=f"Số dư ví: {user_data['money']:,} 💰")
         await ctx.reply(embed=embed, mention_author=False)
     finally:
@@ -1064,46 +1084,27 @@ async def sell(ctx, code: str, qty_str: str):
 
 @chungkhoan.command()
 async def order(ctx, code: str, side: str, qty: int, price: int):
-    """Đặt lệnh giá - chờ thị trường về mức giá mong muốn mới khớp"""
     user_id = str(ctx.author.id)
-    code = code.upper()
-    side = side.lower()
-
+    code = code.upper(); side = side.lower()
     if side not in ["buy", "sell", "mua", "ban", "bán"]:
         return await ctx.reply("⚠️ Dùng: `k ck order <MÃ> buy/sell <SL> <GIÁ>`")
-
-    if code not in get_all_stocks():
-        return await ctx.reply("⚠️ Mã không tồn tại!")
-    if qty <= 0 or qty > 10000:
-        return await ctx.reply("⚠️ SL 1-10000!")
-    if price <= 0:
-        return await ctx.reply("⚠️ Giá > 0!")
+    if code not in get_all_stocks(): return await ctx.reply("⚠️ Mã không tồn tại!")
+    if qty <= 0 or qty > 10000: return await ctx.reply("⚠️ SL 1-10000!")
+    if price <= 0: return await ctx.reply("⚠️ Giá > 0!")
 
     is_buy = side in ["buy", "mua"]
     user_data = load_user(user_id)
-
     if is_buy:
         total = price * qty
-        if user_data["money"] < total:
-            return await ctx.reply(f"⚠️ Cần **{total:,} 💰** để đặt lệnh mua!")
-        # Phong tỏa tiền
+        if user_data["money"] < total: return await ctx.reply(f"⚠️ Cần **{total:,} 💰** để đặt lệnh mua!")
         user_data["money"] -= total
     else:
         owned = user_data["stocks"].get(code, 0)
-        if owned < qty:
-            return await ctx.reply(f"⚠️ Chỉ có {owned} CP, không đủ để đặt bán {qty} CP!")
+        if owned < qty: return await ctx.reply(f"⚠️ Chỉ có {owned} CP, không đủ để đặt bán {qty} CP!")
 
-    # Lưu lệnh chờ
-    pending_order = {
-        "user_id": user_id,
-        "code": code,
-        "side": "buy" if is_buy else "sell",
-        "qty": qty,
-        "price": price,
-        "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "status": "pending"
-    }
-    if "stock_orders" not in user_data: user_data["stock_orders"] = []
+    pending_order = {"user_id": user_id, "code": code, "side": "buy" if is_buy else "sell", "qty": qty, "price": price,
+                      "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "status": "pending"}
+    user_data.setdefault("stock_orders", [])
     order_id = len(user_data["stock_orders"])
     pending_order["id"] = order_id
     user_data["stock_orders"].append(pending_order)
@@ -1113,173 +1114,97 @@ async def order(ctx, code: str, side: str, qty: int, price: int):
     current = get_stock_price(code)
     embed = discord.Embed(
         title=f"📋 ĐẶT LỆNH {side_name} THÀNH CÔNG",
-        description=(
-            f"Mã: **{code}** | SL: **{qty:,} CP** | Giá đặt: **{price:,}**\n"
-            f"Giá thị trường hiện tại: **{current:,}**\n\n"
-            f"⏳ Lệnh sẽ tự động khớp khi giá {'≤' if is_buy else '≥'} **{price:,}**\n"
-            f"📋 Xem lệnh chờ: `k ck orders` | Hủy: `k ck cancel {order_id}`"
-        ),
+        description=(f"Mã: **{code}** | SL: **{qty:,} CP** | Giá đặt: **{price:,}**\nGiá TT: **{current:,}**\n\n"
+                      f"⏳ Khớp khi giá {'≤' if is_buy else '≥'} **{price:,}**\n`k ck orders` | `k ck cancel {order_id}`"),
         color=discord.Color.blue()
     )
-    if is_buy:
-        embed.set_footer(text=f"Đã phong tỏa {price*qty:,} 💰 từ ví")
+    if is_buy: embed.set_footer(text=f"Đã phong tỏa {price*qty:,} 💰")
     await ctx.reply(embed=embed, mention_author=False)
 
 
 @chungkhoan.command(name="orders")
 async def list_orders(ctx):
-    """Xem danh sách lệnh chờ"""
     user_id = str(ctx.author.id)
     user_data = load_user(user_id)
     orders = [o for o in user_data.get("stock_orders", []) if o.get("status") == "pending"]
-
     if not orders:
         return await ctx.reply(embed=discord.Embed(description="📋 Không có lệnh chờ nào.", color=discord.Color.blue()), mention_author=False)
-
     embed = discord.Embed(title="📋 LỆNH CHỜ KHỚP", color=discord.Color.blue())
-    if len(orders) > 25:
-        embed.description = f"⚠️ Bạn có **{len(orders)}** lệnh chờ, chỉ hiển thị 25 lệnh gần nhất."
     for o in orders[:25]:
         current = get_stock_price(o["code"])
-        diff = current - o["price"]
         side_emoji = "🟢" if o["side"] == "buy" else "🔴"
-        embed.add_field(
-            name=f"#{o['id']} {side_emoji} {o['side'].upper()} {o['code']}",
-            value=f"SL: {o['qty']:,} CP | Giá đặt: **{o['price']:,}** | Hiện tại: **{current:,}** (cách {diff:+,})\n"
-                  f"Đặt lúc: {o['created']}",
-            inline=False
-        )
-    embed.set_footer(text="Hủy lệnh: k ck cancel <ID>")
+        embed.add_field(name=f"#{o['id']} {side_emoji} {o['side'].upper()} {o['code']}",
+                         value=f"SL: {o['qty']:,} | Giá đặt: **{o['price']:,}** | Hiện tại: **{current:,}**", inline=False)
     await ctx.reply(embed=embed, mention_author=False)
 
 
 @chungkhoan.command()
 async def cancel(ctx, order_id: int):
-    """Hủy lệnh chờ"""
     user_id = str(ctx.author.id)
     user_data = load_user(user_id)
-    orders = user_data.get("stock_orders", [])
-
-    target = next((o for o in orders if o.get("id") == order_id and o.get("status") == "pending"), None)
-    if not target:
-        return await ctx.reply("⚠️ Không tìm thấy lệnh này!")
-
+    target = next((o for o in user_data.get("stock_orders", []) if o.get("id") == order_id and o.get("status") == "pending"), None)
+    if not target: return await ctx.reply("⚠️ Không tìm thấy lệnh này!")
     target["status"] = "cancelled"
-    # Hoàn tiền nếu là lệnh mua
     if target["side"] == "buy":
         refund = target["price"] * target["qty"]
         user_data["money"] += refund
         await ctx.reply(embed=discord.Embed(description=f"✅ Đã hủy lệnh #{order_id}. Hoàn lại **{refund:,} 💰**", color=discord.Color.green()), mention_author=False)
     else:
         await ctx.reply(embed=discord.Embed(description=f"✅ Đã hủy lệnh bán #{order_id}.", color=discord.Color.green()), mention_author=False)
-
     save_user(user_id)
 
 
 @chungkhoan.command()
 async def sl(ctx, code: str, price: int):
-    """Đặt lệnh Stop-Loss (cắt lỗ tự động)"""
     user_id = str(ctx.author.id)
     code = code.upper()
     user_data = load_user(user_id)
-
-    if code not in user_data.get("stocks", {}):
-        return await ctx.reply(f"⚠️ Bạn chưa có cổ phiếu {code}!")
-
+    if code not in user_data.get("stocks", {}): return await ctx.reply(f"⚠️ Bạn chưa có cổ phiếu {code}!")
     current = get_stock_price(code)
-    if price >= current:
-        return await ctx.reply(f"⚠️ Giá SL ({price:,}) phải **thấp hơn** giá hiện tại ({current:,})!")
-
-    if "stop_loss" not in user_data: user_data["stop_loss"] = {}
-    user_data["stop_loss"][code] = price
+    if price >= current: return await ctx.reply(f"⚠️ Giá SL phải thấp hơn giá hiện tại ({current:,})!")
+    user_data.setdefault("stop_loss", {})[code] = price
     save_user(user_id)
-
-    avg_buy = user_data.get("stock_buy_prices", {}).get(code, current)
-    loss_pct = (price - avg_buy) / avg_buy * 100
-
-    embed = discord.Embed(
-        title="🛑 ĐẶT STOP-LOSS THÀNH CÔNG",
-        description=f"Mã: **{code}** | Giá SL: **{price:,}**\n"
-                    f"Nếu giá xuống **≤ {price:,}**, hệ thống tự bán tất cả!\n"
-                    f"Giá mua TB: {avg_buy:,} | Lỗ tối đa: **{loss_pct:.1f}%**",
-        color=discord.Color.red()
-    )
-    await ctx.reply(embed=embed, mention_author=False)
+    await ctx.reply(embed=discord.Embed(title="🛑 ĐẶT STOP-LOSS", description=f"Mã: **{code}** | Giá SL: **{price:,}**", color=discord.Color.red()), mention_author=False)
 
 
 @chungkhoan.command()
 async def tp(ctx, code: str, price: int):
-    """Đặt lệnh Take-Profit (chốt lời tự động)"""
     user_id = str(ctx.author.id)
     code = code.upper()
     user_data = load_user(user_id)
-
-    if code not in user_data.get("stocks", {}):
-        return await ctx.reply(f"⚠️ Bạn chưa có cổ phiếu {code}!")
-
+    if code not in user_data.get("stocks", {}): return await ctx.reply(f"⚠️ Bạn chưa có cổ phiếu {code}!")
     current = get_stock_price(code)
-    if price <= current:
-        return await ctx.reply(f"⚠️ Giá TP ({price:,}) phải **cao hơn** giá hiện tại ({current:,})!")
-
-    if "take_profit" not in user_data: user_data["take_profit"] = {}
-    user_data["take_profit"][code] = price
+    if price <= current: return await ctx.reply(f"⚠️ Giá TP phải cao hơn giá hiện tại ({current:,})!")
+    user_data.setdefault("take_profit", {})[code] = price
     save_user(user_id)
-
-    avg_buy = user_data.get("stock_buy_prices", {}).get(code, current)
-    profit_pct = (price - avg_buy) / avg_buy * 100
-
-    embed = discord.Embed(
-        title="✅ ĐẶT TAKE-PROFIT THÀNH CÔNG",
-        description=f"Mã: **{code}** | Giá TP: **{price:,}**\n"
-                    f"Khi giá lên **≥ {price:,}**, hệ thống tự bán để chốt lời!\n"
-                    f"Giá mua TB: {avg_buy:,} | Lợi nhuận mục tiêu: **+{profit_pct:.1f}%**",
-        color=discord.Color.green()
-    )
-    await ctx.reply(embed=embed, mention_author=False)
+    await ctx.reply(embed=discord.Embed(title="✅ ĐẶT TAKE-PROFIT", description=f"Mã: **{code}** | Giá TP: **{price:,}**", color=discord.Color.green()), mention_author=False)
 
 
 @chungkhoan.command()
 async def margin(ctx, code: str, qty: int):
-    """Mua ký quỹ - dùng đòn bẩy tài chính (tối đa 2x vốn tự có)"""
     user_id = str(ctx.author.id)
-
     if not acquire_lock(user_id):
         return await ctx.reply("⚠️ Đang xử lý!", mention_author=False)
-
     try:
         code = code.upper()
-        if code not in get_all_stocks():
-            return await ctx.reply("⚠️ Mã không tồn tại!")
-        if qty <= 0:
-            return await ctx.reply("⚠️ SL > 0!")
+        if code not in get_all_stocks(): return await ctx.reply("⚠️ Mã không tồn tại!")
+        if qty <= 0: return await ctx.reply("⚠️ SL > 0!")
 
         user_data = load_user(user_id)
-        buy_price = get_stock_buy_price(code)
+        buy_price = get_stock_buy_price(code, qty)
         total_cost = buy_price * qty
-
-        # Tính tài sản hiện tại (không gồm tiền vay)
         own_cash = user_data.get("money", 0)
         current_margin = user_data.get("margin_used", 0)
-        stock_value = sum(get_stock_sell_price(c) * q for c, q in user_data.get("stocks", {}).items())
+        stock_value = sum(get_stock_sell_price(c, q) * q for c, q in user_data.get("stocks", {}).items())
         total_own_assets = own_cash + user_data.get("bank", 0) + stock_value
-
-        # Kiểm tra hạn mức ký quỹ
         max_borrow = total_own_assets * MAX_MARGIN_RATIO - current_margin
         if max_borrow <= 0:
-            return await ctx.reply(embed=discord.Embed(
-                description=f"⚠️ Bạn đã vay tới hạn mức!\nHạn mức tối đa: {total_own_assets * MAX_MARGIN_RATIO:,.0f} 💰",
-                color=discord.Color.red()
-            ), mention_author=False)
+            return await ctx.reply(embed=discord.Embed(description=f"⚠️ Đã vay tới hạn mức! Tối đa: {total_own_assets*MAX_MARGIN_RATIO:,.0f} 💰", color=discord.Color.red()), mention_author=False)
 
-        # Tính tiền cần vay
         cash_needed = max(0, total_cost - own_cash)
         if cash_needed > max_borrow:
-            return await ctx.reply(embed=discord.Embed(
-                description=f"⚠️ Vượt hạn mức ký quỹ!\nCó thể vay thêm: {max_borrow:,.0f} 💰\nCần vay: {cash_needed:,.0f} 💰",
-                color=discord.Color.red()
-            ), mention_author=False)
+            return await ctx.reply(embed=discord.Embed(description=f"⚠️ Vượt hạn mức! Có thể vay thêm: {max_borrow:,.0f} 💰", color=discord.Color.red()), mention_author=False)
 
-        # Thực hiện mua
         paid_cash = min(own_cash, total_cost)
         user_data["money"] -= paid_cash
         if cash_needed > 0:
@@ -1289,25 +1214,21 @@ async def margin(ctx, code: str, qty: int):
         old_avg = user_data.get("stock_buy_prices", {}).get(code, buy_price)
         new_qty = old_qty + qty
         new_avg = int((old_qty * old_avg + qty * buy_price) / new_qty)
+        user_data.setdefault("stocks", {})[code] = new_qty
+        user_data.setdefault("stock_buy_prices", {})[code] = new_avg
 
-        if "stocks" not in user_data: user_data["stocks"] = {}
-        if "stock_buy_prices" not in user_data: user_data["stock_buy_prices"] = {}
-        user_data["stocks"][code] = new_qty
-        user_data["stock_buy_prices"][code] = new_avg
-
-        daily_interest = int(cash_needed * MARGIN_INTEREST_RATE / 365)
+        rate = get_base_interest_rate() + MARGIN_BASE_SPREAD
+        daily_interest = int(cash_needed * rate / 365)
         save_user(user_id)
         add_history(user_id, f"[MARGIN] Mua {qty} {code} @ {buy_price:,} (vay {cash_needed:,})")
 
         embed = discord.Embed(title="💳 MUA KÝ QUỸ THÀNH CÔNG", color=discord.Color.gold())
         embed.add_field(name="Mã CK", value=code, inline=True)
-        embed.add_field(name="SL mua", value=f"{qty:,} CP", inline=True)
-        embed.add_field(name="Giá mua", value=f"{buy_price:,}", inline=True)
-        embed.add_field(name="Tự bỏ", value=f"{paid_cash:,} 💰", inline=True)
         embed.add_field(name="Vay ký quỹ", value=f"{cash_needed:,} 💰", inline=True)
+        embed.add_field(name="Lãi suất áp dụng", value=f"{rate*100:.1f}%/năm", inline=True)
         embed.add_field(name="Lãi vay/ngày", value=f"~{daily_interest:,} 💰", inline=True)
         embed.add_field(name="Tổng nợ ký quỹ", value=f"{user_data['margin_used']:,} 💰", inline=False)
-        embed.set_footer(text=f"⚠️ MARGIN CALL nếu tài sản < 130% nợ! Lãi suất {MARGIN_INTEREST_RATE*100}%/năm")
+        embed.set_footer(text=f"⚠️ MARGIN CALL nếu tài sản < {int(MAINTENANCE_MARGIN_RATIO*100)}% nợ!")
         await ctx.reply(embed=embed, mention_author=False)
     finally:
         release_lock(user_id)
@@ -1315,51 +1236,27 @@ async def margin(ctx, code: str, qty: int):
 
 @chungkhoan.command()
 async def short(ctx, code: str, qty: int):
-    """Bán khống - kiếm tiền khi giá xuống"""
     user_id = str(ctx.author.id)
-
-    if not acquire_lock(user_id):
-        return await ctx.reply("⚠️ Đang xử lý!", mention_author=False)
-
+    if not acquire_lock(user_id): return await ctx.reply("⚠️ Đang xử lý!", mention_author=False)
     try:
         code = code.upper()
-        if code not in STANDARD_STOCKS:
-            return await ctx.reply("⚠️ Chỉ bán khống cổ phiếu tiêu chuẩn!")
-        if qty <= 0 or qty > 1000:
-            return await ctx.reply("⚠️ SL 1-1000 CP!")
-
+        if code not in STANDARD_STOCKS: return await ctx.reply("⚠️ Chỉ bán khống cổ phiếu tiêu chuẩn!")
+        if qty <= 0 or qty > 1000: return await ctx.reply("⚠️ SL 1-1000 CP!")
         user_data = load_user(user_id)
         market_price = get_stock_price(code)
-        total_collateral = market_price * qty  # Ký quỹ bằng 100% giá trị
-
+        total_collateral = market_price * qty
         if user_data.get("money", 0) < total_collateral:
-            return await ctx.reply(embed=discord.Embed(
-                description=f"⚠️ Cần **{total_collateral:,} 💰** ký quỹ bán khống!",
-                color=discord.Color.red()
-            ), mention_author=False)
-
-        user_data["money"] -= total_collateral  # Phong tỏa ký quỹ
-        if "short_positions" not in user_data: user_data["short_positions"] = {}
-        if "short_buy_prices" not in user_data: user_data["short_buy_prices"] = {}
-
-        existing = user_data["short_positions"].get(code, 0)
-        user_data["short_positions"][code] = existing + qty
-        user_data["short_buy_prices"][code] = market_price  # Giá bán khống ban đầu
-
+            return await ctx.reply(embed=discord.Embed(description=f"⚠️ Cần **{total_collateral:,} 💰** ký quỹ!", color=discord.Color.red()), mention_author=False)
+        user_data["money"] -= total_collateral
+        user_data.setdefault("short_positions", {})
+        user_data.setdefault("short_buy_prices", {})
+        user_data["short_positions"][code] = user_data["short_positions"].get(code, 0) + qty
+        user_data["short_buy_prices"][code] = market_price
         save_user(user_id)
         add_history(user_id, f"[SHORT] Mở {qty} {code} @ {market_price:,}")
-
-        embed = discord.Embed(
-            title="📉 MỞ VỊ THẾ BÁN KHỐNG",
-            description=(
-                f"Mã: **{code}** | SL: **{qty:,} CP**\n"
-                f"Giá bán khống: **{market_price:,}**\n"
-                f"Ký quỹ phong tỏa: **{total_collateral:,} 💰**\n\n"
-                f"💡 Bạn lãi khi giá **xuống**, lỗ khi giá **lên**!\n"
-                f"Đóng short: `k ck covershort {code} {qty}`"
-            ),
-            color=discord.Color.dark_red()
-        )
+        embed = discord.Embed(title="📉 MỞ VỊ THẾ BÁN KHỐNG",
+            description=f"Mã: **{code}** | SL: **{qty:,}** | Giá: **{market_price:,}**\nKý quỹ: **{total_collateral:,} 💰**\n`k ck covershort {code} {qty}`",
+            color=discord.Color.dark_red())
         await ctx.reply(embed=embed, mention_author=False)
     finally:
         release_lock(user_id)
@@ -1367,48 +1264,28 @@ async def short(ctx, code: str, qty: int):
 
 @chungkhoan.command()
 async def covershort(ctx, code: str, qty: int):
-    """Đóng vị thế bán khống"""
     user_id = str(ctx.author.id)
-
-    if not acquire_lock(user_id):
-        return await ctx.reply("⚠️ Đang xử lý!", mention_author=False)
-
+    if not acquire_lock(user_id): return await ctx.reply("⚠️ Đang xử lý!", mention_author=False)
     try:
         code = code.upper()
         user_data = load_user(user_id)
         short_qty = user_data.get("short_positions", {}).get(code, 0)
-
-        if short_qty <= 0:
-            return await ctx.reply(f"⚠️ Không có vị thế bán khống {code}!")
-        if qty > short_qty:
-            return await ctx.reply(f"⚠️ Chỉ có {short_qty} CP bán khống!")
-
+        if short_qty <= 0: return await ctx.reply(f"⚠️ Không có vị thế bán khống {code}!")
+        if qty > short_qty: return await ctx.reply(f"⚠️ Chỉ có {short_qty} CP!")
         short_price = user_data.get("short_buy_prices", {}).get(code, 0)
         current_price = get_stock_price(code)
-
-        # Lãi/lỗ: short lãi khi giá xuống
-        profit_per_share = short_price - current_price
-        total_profit = profit_per_share * qty
-        collateral_return = short_price * qty  # Hoàn ký quỹ gốc
-
+        total_profit = (short_price - current_price) * qty
+        collateral_return = short_price * qty
         user_data["money"] += collateral_return + total_profit
         user_data["short_positions"][code] -= qty
         if user_data["short_positions"][code] <= 0:
             del user_data["short_positions"][code]
             user_data.get("short_buy_prices", {}).pop(code, None)
-
         save_user(user_id)
         add_history(user_id, f"[COVER SHORT] Đóng {qty} {code} P&L {total_profit:+,}")
-
         color = discord.Color.green() if total_profit >= 0 else discord.Color.red()
-        profit_icon = "📈" if total_profit >= 0 else "📉"
-
         embed = discord.Embed(title="✅ ĐÓNG BÁN KHỐNG", color=color)
-        embed.add_field(name="Mã", value=code, inline=True)
-        embed.add_field(name="SL đóng", value=f"{qty:,} CP", inline=True)
-        embed.add_field(name="Giá bán khống", value=f"{short_price:,}", inline=True)
-        embed.add_field(name="Giá mua lại", value=f"{current_price:,}", inline=True)
-        embed.add_field(name=f"{profit_icon} P&L", value=f"**{total_profit:+,} 💰**", inline=True)
+        embed.add_field(name="P&L", value=f"**{total_profit:+,} 💰**", inline=True)
         embed.add_field(name="Hoàn ký quỹ", value=f"{collateral_return:,} 💰", inline=True)
         await ctx.reply(embed=embed, mention_author=False)
     finally:
@@ -1417,110 +1294,61 @@ async def covershort(ctx, code: str, qty: int):
 
 @chungkhoan.command()
 async def port(ctx, member: discord.Member = None):
-    """Xem portfolio đầu tư"""
     target = member or ctx.author
     user_data = load_user(target.id)
-
     stocks = user_data.get("stocks", {})
     shorts = user_data.get("short_positions", {})
     margin = user_data.get("margin_used", 0)
-    sl_prices = user_data.get("stop_loss", {})
-    tp_prices = user_data.get("take_profit", {})
-
     embed = discord.Embed(title=f"📊 PORTFOLIO - {target.name}", color=discord.Color.blue())
-
     total_long_value = 0
     if stocks:
-        long_lines = []
+        lines = []
         for code, qty in stocks.items():
             if qty <= 0: continue
-            curr = get_stock_price(code)
-            sell_p = get_stock_sell_price(code)
-            avg_buy = user_data.get("stock_buy_prices", {}).get(code, curr)
+            sell_p = get_stock_sell_price(code, qty)
+            avg_buy = user_data.get("stock_buy_prices", {}).get(code, sell_p)
             val = sell_p * qty
             pnl = (sell_p - avg_buy) * qty
-            pnl_pct = (sell_p - avg_buy) / avg_buy * 100 if avg_buy > 0 else 0
             total_long_value += val
-            sl_str = f" | SL:{sl_prices[code]:,}" if code in sl_prices else ""
-            tp_str = f" | TP:{tp_prices[code]:,}" if code in tp_prices else ""
-            icon = "📈" if pnl >= 0 else "📉"
-            long_lines.append(
-                f"{icon} **{code}** {qty:,}CP @ avg {avg_buy:,}\n"
-                f"    Giá hiện tại: {curr:,} | Giá trị: {val:,} | P&L: **{pnl:+,}** ({pnl_pct:+.1f}%){sl_str}{tp_str}"
-            )
-        embed.add_field(name=f"📦 CỔ PHIẾU NẮNG GIỮ (Tổng: {total_long_value:,} 💰)", value=truncate_field_value("\n".join(long_lines) or "Trống"), inline=False)
-
+            lines.append(f"**{code}** {qty:,}CP @ avg {avg_buy:,} | Giá trị: {val:,} | P&L: **{pnl:+,}**")
+        embed.add_field(name=f"📦 CỔ PHIẾU (Tổng: {total_long_value:,} 💰)", value=truncate_field_value("\n".join(lines)), inline=False)
     if shorts:
-        short_lines = []
-        total_short_pnl = 0
+        lines = []
         for code, qty in shorts.items():
             curr = get_stock_price(code)
             entry = user_data.get("short_buy_prices", {}).get(code, curr)
             pnl = (entry - curr) * qty
-            total_short_pnl += pnl
-            icon = "📈" if pnl >= 0 else "📉"
-            short_lines.append(f"{icon} **{code}** SHORT {qty:,}CP | Entry: {entry:,} | Hiện: {curr:,} | P&L: **{pnl:+,}**")
-        embed.add_field(name=f"📉 VỊ THẾ BÁN KHỐNG", value=truncate_field_value("\n".join(short_lines)), inline=False)
-
+            lines.append(f"**{code}** SHORT {qty:,}CP | Entry: {entry:,} | P&L: **{pnl:+,}**")
+        embed.add_field(name="📉 BÁN KHỐNG", value=truncate_field_value("\n".join(lines)), inline=False)
     if margin > 0:
-        daily_int = int(margin * MARGIN_INTEREST_RATE / 365)
-        embed.add_field(name="💳 KÝ QUỸ", value=f"Nợ: **{margin:,} 💰** | Lãi/ngày: **~{daily_int:,} 💰**", inline=False)
-
+        rate = get_base_interest_rate() + MARGIN_BASE_SPREAD
+        embed.add_field(name="💳 KÝ QUỸ", value=f"Nợ: **{margin:,} 💰** | Lãi: {rate*100:.1f}%/năm", inline=False)
     cash = user_data.get("money", 0)
-    bank = user_data.get("bank", 0)
-    net_assets = cash + bank + total_long_value - margin
-    embed.add_field(name="💰 TỔNG TÀI SẢN RÒNG", value=f"Tiền mặt: {cash:,} | Ngân hàng: {bank:,}\nCổ phiếu: {total_long_value:,} | Nợ ký quỹ: -{margin:,}\n**= {net_assets:,} 💰**", inline=False)
-
-    pending = [o for o in user_data.get("stock_orders", []) if o.get("status") == "pending"]
-    if pending:
-        embed.add_field(name=f"📋 LỆNH CHỜ ({len(pending)})", value="`k ck orders` để xem chi tiết", inline=False)
-
+    bank_bal = user_data.get("bank", 0)
+    net_assets = cash + bank_bal + total_long_value - margin
+    embed.add_field(name="💰 TỔNG TÀI SẢN RÒNG", value=f"**{net_assets:,} 💰**", inline=False)
     await ctx.reply(embed=embed, mention_author=False)
 
 
 @chungkhoan.command()
 async def chart(ctx, code: str):
-    """Xem biểu đồ giá 6 giờ qua"""
     code = code.upper()
-    if code not in get_all_stocks():
-        return await ctx.reply("⚠️ Mã không tồn tại!")
-
-    prices = []
-    for h in range(-5, 1):
-        p = get_stock_price(code, hour_offset=h)
-        prices.append(p)
-
-    min_p = min(prices)
-    max_p = max(prices)
+    if code not in get_all_stocks(): return await ctx.reply("⚠️ Mã không tồn tại!")
+    prices = [get_stock_price(code, hour_offset=h) for h in range(-5, 1)]
+    min_p, max_p = min(prices), max(prices)
     price_range = max_p - min_p if max_p != min_p else 1
-
-    chart_height = 6
     chart_lines = []
-    for row in range(chart_height, -1, -1):
-        threshold = min_p + (price_range * row / chart_height)
-        line = ""
-        for p in prices:
-            if p >= threshold:
-                line += "█"
-            else:
-                line += "░"
-        price_label = f"{threshold:,.0f}"
-        chart_lines.append(f"`{price_label:>10}` {line}")
-
-    hours_ago = ["6h", "5h", "4h", "3h", "2h", "1h", "Now"]
-    price_row = " | ".join([f"{p:,}" for p in prices])
-
+    for row in range(6, -1, -1):
+        threshold = min_p + (price_range * row / 6)
+        line = "".join("█" if p >= threshold else "░" for p in prices)
+        chart_lines.append(f"`{threshold:>10,.0f}` {line}")
     change = prices[-1] - prices[0]
     change_pct = change / prices[0] * 100 if prices[0] > 0 else 0
     color = discord.Color.green() if change >= 0 else discord.Color.red()
-
     embed = discord.Embed(title=f"📊 BIỂU ĐỒ GIÁ {code}", color=color)
     embed.add_field(name="Biểu đồ (6h)", value="```\n" + "\n".join(chart_lines) + "\n```", inline=False)
-    embed.add_field(name="Giá các mốc", value=f"`{price_row}`", inline=False)
     embed.add_field(name="Thay đổi 6h", value=f"**{change:+,}** ({change_pct:+.2f}%)", inline=True)
     embed.add_field(name="Hiện tại", value=f"**{prices[-1]:,}**", inline=True)
-    stock_info = STANDARD_STOCKS.get(code, {})
-    embed.add_field(name="Biến động", value=f"**{stock_info.get('volatility', 0)*100:.1f}%**", inline=True)
     await ctx.reply(embed=embed, mention_author=False)
 
 
@@ -1534,54 +1362,47 @@ async def ipo(ctx):
     if comp.get("is_ipo"): return await ctx.reply("⚠️ Đã niêm yết rồi!", mention_author=False)
     if comp["treasury"] < 50000000: return await ctx.reply("⚠️ Quỹ tối thiểu **50,000,000 💰** để IPO.", mention_author=False)
     comp["is_ipo"] = True
+    comp["last_earnings"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    comp["_fin_snapshot_treasury"] = comp.get("treasury", 0)
+    comp["_fin_snapshot_rep"] = comp.get("reputation", 100)
+    comp["earnings_drift"] = 0.0
     save_company(comp_id)
     code = comp["name"][:4].upper()
-    await ctx.reply(embed=discord.Embed(title="📈 CHÀO SÀN THÀNH CÔNG", description=f"**{comp['name']}** đã IPO!\nMã: **{code}** | Spread 0.1% | Thuế bán 0.1%", color=discord.Color.green()), mention_author=False)
+    await ctx.reply(embed=discord.Embed(title="📈 CHÀO SÀN THÀNH CÔNG",
+        description=f"**{comp['name']}** đã IPO!\nMã: **{code}** | Giá cổ phiếu sẽ dao động theo hiệu quả kinh doanh thật của công ty (báo cáo mỗi {EARNINGS_INTERVAL_HOURS}h)",
+        color=discord.Color.green()), mention_author=False)
 
 
 # =====================================================================
-# BACKGROUND TASK: Tự động khớp lệnh giá
+# BACKGROUND TASKS — giữ nguyên tên hàm để chỗ khởi động task không đổi
 # =====================================================================
-
 
 async def process_pending_orders():
-    """Tự động khớp lệnh giá mỗi 2 phút"""
     await bot.wait_until_ready()
     while not bot.is_closed():
         try:
             all_users = list(users_col.find({"stock_orders": {"$elemMatch": {"status": "pending"}}}))
             for doc in all_users:
                 user_id = doc["_id"]
-                if user_id not in DB_CACHE:
-                    DB_CACHE[user_id] = doc
+                if user_id not in DB_CACHE: DB_CACHE[user_id] = doc
                 user_data = DB_CACHE[user_id]
                 changed = False
-
                 for order in user_data.get("stock_orders", []):
-                    if order.get("status") != "pending":
-                        continue
+                    if order.get("status") != "pending": continue
                     code = order["code"]
                     current_price = get_stock_price(code)
                     is_buy = order["side"] == "buy"
-
-                    should_fill = (is_buy and current_price <= order["price"]) or \
-                                  (not is_buy and current_price >= order["price"])
-
+                    should_fill = (is_buy and current_price <= order["price"]) or (not is_buy and current_price >= order["price"])
                     if should_fill:
-                        order["status"] = "filled"
-                        changed = True
+                        order["status"] = "filled"; changed = True
                         qty = order["qty"]
-
                         if is_buy:
-                            # Tiền đã bị phong tỏa, chỉ cần nhận CP
                             old_qty = user_data["stocks"].get(code, 0)
                             old_avg = user_data.get("stock_buy_prices", {}).get(code, order["price"])
                             new_qty = old_qty + qty
                             new_avg = int((old_qty * old_avg + qty * order["price"]) / new_qty)
-                            if "stocks" not in user_data: user_data["stocks"] = {}
-                            if "stock_buy_prices" not in user_data: user_data["stock_buy_prices"] = {}
-                            user_data["stocks"][code] = new_qty
-                            user_data["stock_buy_prices"][code] = new_avg
+                            user_data.setdefault("stocks", {})[code] = new_qty
+                            user_data.setdefault("stock_buy_prices", {})[code] = new_avg
                             add_history(user_id, f"[LỆNH GIÁ] Mua {qty} {code} @ {order['price']:,}")
                         else:
                             owned = user_data.get("stocks", {}).get(code, 0)
@@ -1595,21 +1416,18 @@ async def process_pending_orders():
                                     del user_data["stocks"][code]
                                     user_data.get("stock_buy_prices", {}).pop(code, None)
                                 add_history(user_id, f"[LỆNH GIÁ] Bán {sell_qty} {code} @ {order['price']:,}")
-
-                if changed:
-                    save_user(user_id)
+                if changed: save_user(user_id)
         except Exception as e:
             print(f"[WARN] process_pending_orders error: {e}")
-
-        await asyncio.sleep(120)  # Mỗi 2 phút
+        await asyncio.sleep(120)
 
 
 async def process_margin_interest():
-    """Tính lãi vay ký quỹ hàng ngày"""
     await bot.wait_until_ready()
     while not bot.is_closed():
         try:
             now = datetime.now()
+            rate = get_base_interest_rate() + MARGIN_BASE_SPREAD
             all_users = list(users_col.find({"margin_used": {"$gt": 0}}))
             for doc in all_users:
                 user_id = doc["_id"]
@@ -1617,34 +1435,28 @@ async def process_margin_interest():
                 user_data = DB_CACHE[user_id]
                 margin = user_data.get("margin_used", 0)
                 if margin <= 0: continue
-
                 last_str = user_data.get("margin_interest_date", "2000-01-01 00:00:00")
                 try: last = datetime.strptime(last_str, "%Y-%m-%d %H:%M:%S")
                 except Exception: last = datetime(2000, 1, 1)
-
                 if now - last >= timedelta(days=1):
-                    daily_interest = int(margin * MARGIN_INTEREST_RATE / 365)
-                    # Trừ từ tiền mặt, nếu không đủ thì trừ vào bank
+                    daily_interest = int(margin * rate / 365)
                     if user_data.get("money", 0) >= daily_interest:
                         user_data["money"] -= daily_interest
                     elif user_data.get("bank", 0) >= daily_interest:
                         user_data["bank"] -= daily_interest
                     else:
-                        # Bị margin call
                         user_data["margin_used"] += daily_interest
                     user_data["margin_interest_date"] = now.strftime("%Y-%m-%d %H:%M:%S")
                     save_user(user_id)
         except Exception as e:
             print(f"[WARN] margin interest error: {e}")
-        await asyncio.sleep(3600)  # Mỗi giờ kiểm tra
+        await asyncio.sleep(3600)
 
 
 async def auto_sl_tp_monitor():
-    """Kiểm tra SL/TP mỗi 5 phút"""
     await bot.wait_until_ready()
     while not bot.is_closed():
         try:
-            # Lấy tất cả user có SL hoặc TP
             all_users = list(users_col.find({"$or": [
                 {"stop_loss": {"$exists": True, "$ne": {}}},
                 {"take_profit": {"$exists": True, "$ne": {}}}
@@ -1652,17 +1464,14 @@ async def auto_sl_tp_monitor():
             for doc in all_users:
                 user_id = doc["_id"]
                 if user_id not in DB_CACHE: DB_CACHE[user_id] = doc
-                # Không có channel cụ thể ở đây, chỉ update data
                 user_data = DB_CACHE[user_id]
                 changed = False
-
                 for code in list(user_data.get("stocks", {}).keys()):
                     qty = user_data["stocks"].get(code, 0)
                     if qty <= 0: continue
-                    current = get_stock_sell_price(code)
+                    current = get_stock_sell_price(code, qty)
                     sl = user_data.get("stop_loss", {}).get(code, 0)
                     tp = user_data.get("take_profit", {}).get(code, 0)
-
                     if (sl and current <= sl) or (tp and current >= tp):
                         gain = current * qty
                         user_data["money"] = user_data.get("money", 0) + gain
@@ -1673,13 +1482,10 @@ async def auto_sl_tp_monitor():
                         trigger = "SL" if (sl and current <= sl) else "TP"
                         add_history(user_id, f"[{trigger}] Auto-sell {qty} {code} @ {current:,} (+{gain:,})")
                         changed = True
-
-                if changed:
-                    save_user(user_id)
+                if changed: save_user(user_id)
         except Exception as e:
             print(f"[WARN] auto_sl_tp error: {e}")
-        await asyncio.sleep(300)  # Mỗi 5 phút
-
+        await asyncio.sleep(300)
 
 # =====================================================================
 # MINI-GAMES MỚI
@@ -2703,57 +2509,276 @@ class ExpView(discord.ui.View):
 # =====================================================================
 # LỆNH CÔNG TY (giữ nguyên từ gốc)
 # =====================================================================
+# =====================================================================
+# 🏢 HỆ THỐNG CÔNG TY v2 — PHÒNG BAN SINH LỜI, TÍN DỤNG, BCTC THẬT
+# =====================================================================
+
+DEPARTMENTS_INFO = {
+    "sales":     {"name": "🛒 Kinh Doanh", "base_cost": 300_000, "income_per_lv": 8_000},
+    "rd":        {"name": "🔬 R&D",        "base_cost": 500_000, "income_per_lv": 5_000, "rep_bonus": 1},
+    "marketing": {"name": "📢 Marketing",  "base_cost": 250_000, "income_per_lv": 4_000, "rep_bonus": 2},
+    "security":  {"name": "🛡️ An Ninh",    "base_cost": 400_000, "income_per_lv": 0},  # giảm rủi ro gián điệp/bóc phốt
+}
+DEPARTMENT_TICK_HOURS = 1
+
+def get_departments(comp):
+    return comp.setdefault("departments", {k: 0 for k in DEPARTMENTS_INFO})
+
+def get_credit_rating(comp):
+    """Xếp hạng tín dụng AAA -> D dựa trên danh tiếng và nợ/quỹ."""
+    rep = comp.get("reputation", 100)
+    debt = comp.get("debt", 0)
+    treasury = max(1, comp.get("treasury", 0))
+    debt_ratio = debt / treasury
+    score = rep - debt_ratio * 60
+    if score >= 90:  return "AAA", 0.00
+    if score >= 75:  return "AA",  0.02
+    if score >= 60:  return "A",   0.05
+    if score >= 45:  return "BBB", 0.09
+    if score >= 30:  return "BB",  0.15
+    if score >= 15:  return "B",   0.25
+    return "D", 0.40
+
+def compute_company_financials(comp):
+    """Doanh thu/chi phí/lợi nhuận thật của công ty theo phòng ban + nợ."""
+    deps = get_departments(comp)
+    revenue = sum(deps.get(k, 0) * v["income_per_lv"] for k, v in DEPARTMENTS_INFO.items())
+    debt = comp.get("debt", 0)
+    _, spread = get_credit_rating(comp)
+    daily_interest_expense = int(debt * (get_base_interest_rate() + spread) / 365)
+    member_count = len(comp.get("members", {}))
+    payroll_expense = member_count * 1000  # chi phí vận hành cơ bản/giờ mô phỏng
+    expenses = daily_interest_expense // 24 + payroll_expense
+    net_income = revenue - expenses
+    return {"revenue": revenue, "expenses": expenses, "net_income": net_income}
+
+async def process_department_income():
+    """Phòng ban tự sinh doanh thu mỗi giờ — CẦN được start ở nơi bot khởi động các task khác."""
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        try:
+            all_comps = list(companies_col.find({"departments": {"$exists": True}}))
+            for doc in all_comps:
+                comp_id = doc["_id"]
+                COMPANY_CACHE[comp_id] = doc
+                comp = COMPANY_CACHE[comp_id]
+                fin = compute_company_financials(comp)
+                comp["treasury"] = comp.get("treasury", 0) + max(0, fin["net_income"])
+                if fin["net_income"] < 0:
+                    comp["treasury"] = max(0, comp["treasury"] + fin["net_income"])
+                save_company(comp_id)
+        except Exception as e:
+            print(f"[WARN] process_department_income error: {e}")
+        await asyncio.sleep(DEPARTMENT_TICK_HOURS * 3600)
+
+
 @bot.group(invoke_without_command=True, aliases=['congty'])
 async def cty(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); comp_id = user_data.get("company")
-    if not comp_id: return await ctx.send(embed=discord.Embed(title="🏢 SÀN GIAO DỊCH DOANH NGHIỆP", description="Bạn chưa có công ty.\n`k cty tao <tên công ty>` (Phí: 500,000 💰)", color=discord.Color.red()))
-    
+    if not comp_id:
+        return await ctx.send(embed=discord.Embed(title="🏢 SÀN GIAO DỊCH DOANH NGHIỆP",
+            description="Bạn chưa có công ty.\n`k cty tao <tên công ty>` (Phí: 500,000 💰)", color=discord.Color.red()))
+
     comp = load_company(comp_id)
     if not comp:
         user_data["company"] = None; save_user(user_id)
         return await ctx.send("Công ty của bạn đã phá sản rồi!")
-        
+
     my_role = comp["members"].get(user_id, "nhanvien")
     role_name = comp["roles"].get(my_role, my_role)
     atk, df = comp.get("atk_level", 1), comp.get("def_level", 1)
-    
+    rating, spread = get_credit_rating(comp)
+    fin = compute_company_financials(comp)
+
     embed_db = discord.Embed(title=f"🏢 CÔNG TY: {comp['name']}", color=discord.Color.gold())
     embed_db.add_field(name="Quỹ Công Ty", value=f"**{comp['treasury']:,} 💰**", inline=True)
-    embed_db.add_field(name="Sức Mạnh", value=f"⚔️ Công: Lv{atk} | 🛡️ Thủ: Lv{df}", inline=True)
-    
+    embed_db.add_field(name="Sức Mạnh", value=f"⚔️ Lv{atk} | 🛡️ Lv{df}", inline=True)
+    embed_db.add_field(name="Xếp Hạng Tín Dụng", value=f"**{rating}** (lãi vay +{spread*100:.0f}%)", inline=True)
+
     rep = comp.get("reputation", 100)
     rep_status = "Tốt" if rep > 80 else "Trung Bình" if rep > 50 else "⚠️ Cảnh báo Đỏ"
     scandal_str = "\n🚨 **ĐANG DÍNH PHỐT!**" if comp.get("has_scandal") else ""
     embed_db.add_field(name="Danh Tiếng", value=f"**{rep}/100** ({rep_status}){scandal_str}", inline=True)
     embed_db.add_field(name="Nhân Sự", value=f"**{len(comp['members'])} người**", inline=True)
+    embed_db.add_field(name="Lợi Nhuận/giờ", value=f"**{fin['net_income']:+,} 💰** (DT {fin['revenue']:,} - CP {fin['expenses']:,})", inline=True)
     embed_db.add_field(name="Chức vụ của bạn", value=f"**{role_name}**", inline=False)
+
     cmds = (
         "`k cty gop <tiền>` | `k cty thulai` | `k cty dinhchinh` | `k cty nangcap <cong/thu>` | `k cty roi`\n"
+        "**Phòng ban:** `k cty phongban` — xây phòng ban sinh lời thụ động\n"
+        "**Tài chính:** `k cty baocaotaichinh` | `k cty codividend` — chia cổ tức thật từ lợi nhuận\n"
         "**Thương trường:** `k cty vaycty <tiền>` | `k cty tranocty` | `k cty quangcao <tiền>`\n"
-        "`k cty boicong <tên cty>` | `k cty giandiep <tên cty>` | `k cty anninh` | `k cty sapnhap <giá> <tên cty>` | `k cty cotuc <%>`"
+        "`k cty boicong <tên cty>` | `k cty giandiep <tên cty>` | `k cty anninh` | `k cty sapnhap <tên cty>`"
     )
-   
     if my_role in ["boss", "quanly"]: cmds += "\n**Quản Lý:** `k cty tuyen @user` | `k cty duoi @user`"
     if my_role == "boss": cmds += "\n**Chủ Tịch:** `k cty luong <tiền>` | `k ck ipo` | `k cty chucvu @user <role>` | `k cty doitenchuc <role> <tên>`"
-        
     embed_db.add_field(name="📋 Bảng Lệnh", value=cmds, inline=False)
     await ctx.send(embed=embed_db)
+
 
 @cty.command()
 async def tao(ctx, *, name: str):
     user_id = str(ctx.author.id); user_data = load_user(user_id)
     if user_data.get("company"): return await ctx.reply("Bạn đã có công ty rồi!", mention_author=False)
-    if user_data.get("money", 0) < 500000: return await ctx.reply("⚠️ Phí đăng ký **500,000 💰**. Cày thêm đi sếp!", mention_author=False)
-    
+    if user_data.get("money", 0) < 500000: return await ctx.reply("⚠️ Phí đăng ký **500,000 💰**.", mention_author=False)
     user_data["money"] -= 500000; user_data["company"] = user_id
     new_comp = {
-        "_id": user_id, "name": name, "treasury": 0, "members": {user_id: "boss"}, 
-        "roles": {"boss": "Chủ Tịch", "quanly": "Giám Đốc", "nhanvien": "Nhân Viên"}, 
+        "_id": user_id, "name": name, "treasury": 0, "members": {user_id: "boss"},
+        "roles": {"boss": "Chủ Tịch", "quanly": "Giám Đốc", "nhanvien": "Nhân Viên"},
         "reputation": 100, "has_scandal": False, "atk_level": 1, "def_level": 1,
-        "last_interest": "2000-01-01 00:00:00", "is_ipo": False
+        "last_interest": "2000-01-01 00:00:00", "is_ipo": False,
+        "departments": {k: 0 for k in DEPARTMENTS_INFO},
     }
     COMPANY_CACHE[user_id] = new_comp; save_company(user_id); save_user(user_id)
-    await ctx.send(embed=discord.Embed(title="🏢 KHAI TRƯƠNG HỒNG PHÁT", description=f"Chúc mừng {ctx.author.mention} đã thành lập **{name}**!\nGõ `k cty` để mở bảng điều khiển.", color=discord.Color.green()))
+    await ctx.send(embed=discord.Embed(title="🏢 KHAI TRƯƠNG", description=f"Chúc mừng {ctx.author.mention} đã thành lập **{name}**!\n`k cty` để mở bảng điều khiển.", color=discord.Color.green()))
+
+
+@cty.command()
+async def phongban(ctx, dept: str = None, levels: int = 1):
+    """Nâng cấp phòng ban để sinh doanh thu thụ động mỗi giờ."""
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
+    if not comp_id: return await ctx.reply("Bạn chưa có công ty!", mention_author=False)
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Chỉ Ban Giám Đốc mới quản lý phòng ban!", mention_author=False)
+
+    deps = get_departments(comp)
+    if not dept:
+        fin = compute_company_financials(comp)
+        embed = discord.Embed(title=f"🏭 PHÒNG BAN — {comp['name']}", color=discord.Color.teal())
+        for key, info in DEPARTMENTS_INFO.items():
+            lv = deps.get(key, 0)
+            cost = info["base_cost"] * (lv + 1)
+            embed.add_field(name=f"{info['name']} Lv{lv}", value=f"Thu nhập: **{lv*info['income_per_lv']:,}/giờ**\nNâng cấp: **{cost:,} 💰**\n`k cty phongban {key}`", inline=True)
+        embed.add_field(name="📊 Tổng lợi nhuận/giờ", value=f"**{fin['net_income']:+,} 💰**", inline=False)
+        return await ctx.reply(embed=embed, mention_author=False)
+
+    dept = dept.lower()
+    if dept not in DEPARTMENTS_INFO: return await ctx.reply(f"⚠️ Phòng ban gồm: {', '.join(DEPARTMENTS_INFO.keys())}", mention_author=False)
+    if levels < 1 or levels > 50: return await ctx.reply("⚠️ Nâng tối đa 50 cấp/lần!", mention_author=False)
+
+    cur_lv = deps.get(dept, 0)
+    info = DEPARTMENTS_INFO[dept]
+    total_cost = sum(info["base_cost"] * (cur_lv + i + 1) for i in range(levels))
+    if comp["treasury"] < total_cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{total_cost:,} 💰**!", mention_author=False)
+    comp["treasury"] -= total_cost
+    deps[dept] = cur_lv + levels
+    if info.get("rep_bonus"):
+        comp["reputation"] = min(100, comp.get("reputation", 100) + info["rep_bonus"] * levels)
+    save_company(comp_id)
+    await ctx.reply(embed=discord.Embed(description=f"✅ **{info['name']}** nâng lên **Lv{cur_lv+levels}**! (-{total_cost:,} 💰)", color=discord.Color.green()), mention_author=False)
+
+
+@cty.command()
+async def baocaotaichinh(ctx):
+    """Xem báo cáo tài chính thật của công ty."""
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
+    if not comp_id: return await ctx.reply("Bạn chưa có công ty!", mention_author=False)
+    comp = load_company(comp_id)
+    fin = compute_company_financials(comp)
+    rating, spread = get_credit_rating(comp)
+    equity = comp.get("treasury", 0) - comp.get("debt", 0)
+    embed = discord.Embed(title=f"📑 BÁO CÁO TÀI CHÍNH — {comp['name']}", color=discord.Color.dark_gold())
+    embed.add_field(name="💰 Doanh Thu/giờ", value=f"{fin['revenue']:,} 💰", inline=True)
+    embed.add_field(name="💸 Chi Phí/giờ", value=f"{fin['expenses']:,} 💰", inline=True)
+    embed.add_field(name="📈 Lợi Nhuận Ròng/giờ", value=f"**{fin['net_income']:+,} 💰**", inline=True)
+    embed.add_field(name="🏦 Tài Sản (Quỹ)", value=f"{comp.get('treasury',0):,} 💰", inline=True)
+    embed.add_field(name="📉 Nợ Phải Trả", value=f"{comp.get('debt',0):,} 💰", inline=True)
+    embed.add_field(name="🧮 Vốn Chủ Sở Hữu", value=f"**{equity:,} 💰**", inline=True)
+    embed.add_field(name="⭐ Xếp Hạng Tín Dụng", value=f"**{rating}** (phụ phí lãi vay +{spread*100:.0f}%)", inline=False)
+    if comp.get("is_ipo"):
+        embed.add_field(name="📊 Ảnh hưởng giá CP", value=f"Earnings drift: **{comp.get('earnings_drift',0)*100:+.1f}%** (cập nhật mỗi {EARNINGS_INTERVAL_HOURS}h)", inline=False)
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@cty.command()
+async def codividend(ctx):
+    """Chia cổ tức THẬT dựa trên lợi nhuận ròng, trả cho toàn bộ cổ đông đang nắm giữ mã CP công ty."""
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
+    if not comp_id: return await ctx.reply("Bạn chưa có công ty!", mention_author=False)
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ Tịch mới chia cổ tức!", mention_author=False)
+    if not comp.get("is_ipo"): return await ctx.reply("⚠️ Công ty chưa IPO, chưa có cổ đông ngoài!", mention_author=False)
+
+    fin = compute_company_financials(comp)
+    if fin["net_income"] <= 0:
+        return await ctx.reply("⚠️ Công ty đang lỗ, không có lợi nhuận để chia cổ tức!", mention_author=False)
+
+    code = comp["name"][:4].upper()
+    payout_pool = int(fin["net_income"] * 24 * 0.5)  # 50% lợi nhuận 1 ngày đem chia
+    if comp["treasury"] < payout_pool:
+        payout_pool = comp["treasury"]
+    if payout_pool <= 0:
+        return await ctx.reply("⚠️ Quỹ không đủ để chia cổ tức!", mention_author=False)
+
+    try:
+        holders = list(users_col.find({f"stocks.{code}": {"$gt": 0}}))
+    except Exception:
+        holders = []
+    if not holders:
+        return await ctx.reply("⚠️ Chưa có ai nắm giữ cổ phiếu công ty bạn!", mention_author=False)
+
+    total_shares = sum(h.get("stocks", {}).get(code, 0) for h in holders)
+    if total_shares <= 0:
+        return await ctx.reply("⚠️ Không có cổ phần nào đang lưu hành!", mention_author=False)
+
+    per_share = payout_pool / total_shares
+    comp["treasury"] -= payout_pool
+    save_company(comp_id)
+
+    paid_count = 0
+    for h in holders:
+        hid = h["_id"]
+        qty = h.get("stocks", {}).get(code, 0)
+        amount = int(qty * per_share)
+        if amount <= 0: continue
+        hdata = load_user(hid)
+        hdata["money"] = hdata.get("money", 0) + amount
+        save_user(hid)
+        add_history(hid, f"Nhận cổ tức {code} +{amount:,} 💰")
+        paid_count += 1
+
+    add_history(user_id, f"Chia cổ tức {code}: {payout_pool:,} 💰 cho {paid_count} cổ đông")
+    embed = discord.Embed(
+        title="💵 CHIA CỔ TỨC TỪ LỢI NHUẬN THẬT",
+        description=f"Mã: **{code}** | Tổng chi: **{payout_pool:,} 💰**\nCổ đông nhận: **{paid_count} người** | Mỗi CP: **{per_share:,.0f} 💰**",
+        color=discord.Color.gold()
+    )
+    await ctx.send(embed=embed)
+
+
+@cty.command()
+async def sapnhap(ctx, *, target_name: str):
+    """Đề nghị sáp nhập công ty khác, giá tính theo định giá vốn hóa thật."""
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
+    if not comp_id: return await ctx.reply("Bạn chưa có công ty!", mention_author=False)
+    comp = load_company(comp_id)
+    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ Tịch mới đề nghị sáp nhập!", mention_author=False)
+
+    try:
+        all_comps = list(companies_col.find())
+    except Exception:
+        all_comps = []
+    target = next((c for c in all_comps if target_name.lower() in c["name"].lower() and c["_id"] != comp_id), None)
+    if not target: return await ctx.reply("⚠️ Không tìm thấy công ty đối thủ!", mention_author=False)
+    COMPANY_CACHE[target["_id"]] = target
+
+    fin = compute_company_financials(target)
+    valuation = target.get("treasury", 0) + max(0, fin["net_income"]) * 24 * 10  # định giá = quỹ + 10 ngày lợi nhuận
+    if comp["treasury"] < valuation:
+        return await ctx.reply(embed=discord.Embed(description=f"⚠️ Cần **{valuation:,} 💰** để đề nghị (định giá theo vốn hóa thật), quỹ bạn chỉ có {comp['treasury']:,} 💰!", color=discord.Color.red()), mention_author=False)
+
+    target_boss_id = next((uid for uid, role in target["members"].items() if role == "boss"), None)
+    if not target_boss_id: return await ctx.reply("⚠️ Công ty kia không có Chủ Tịch!", mention_author=False)
+
+    embed = discord.Embed(
+        title="🤝 ĐỀ NGHỊ SÁP NHẬP",
+        description=(f"**{comp['name']}** đề nghị mua lại **{target['name']}**\n"
+                      f"💰 Định giá: **{valuation:,} 💰** (quỹ + 10 ngày lợi nhuận thật)\n\n<@{target_boss_id}> có đồng ý không?"),
+        color=discord.Color.gold()
+    )
+    view = SapNhapAcceptView(comp_id, target["_id"], target_boss_id, valuation)
+    await ctx.send(f"<@{target_boss_id}>", embed=embed, view=view)
+
 
 @cty.command()
 async def dinhchinh(ctx):
@@ -2762,14 +2787,15 @@ async def dinhchinh(ctx):
     comp = load_company(comp_id)
     if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Chỉ Ban Giám Đốc mới được đính chính!")
     if not comp.get("has_scandal") and comp.get("reputation", 100) >= 100: return await ctx.reply("Công ty đang trong sạch!")
-    cost = max(100000, int(comp["treasury"] * 0.05))
-    if comp["treasury"] < cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{cost:,} 💰** để thuê báo chí!")
+    rating, spread = get_credit_rating(comp)
+    cost = max(100000, int(comp["treasury"] * (0.05 + spread * 0.1)))
+    if comp["treasury"] < cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{cost:,} 💰**!")
     comp["treasury"] -= cost; comp["has_scandal"] = False
     recovered_rep = random.randint(15, 30)
     comp["reputation"] = min(100, comp.get("reputation", 50) + recovered_rep)
     save_company(comp_id)
-    embed = discord.Embed(title="📰 XỬ LÝ KHỦNG HOẢNG THÀNH CÔNG", description=f"Chi **{cost:,} 💰** dập tắt dư luận xấu!\n✅ **Đã gỡ bỏ Scandal!**\n📈 Danh tiếng hồi phục: **+{recovered_rep}**", color=discord.Color.green())
-    await ctx.reply(embed=embed, mention_author=False)
+    await ctx.reply(embed=discord.Embed(title="📰 XỬ LÝ KHỦNG HOẢNG THÀNH CÔNG", description=f"Chi **{cost:,} 💰** (xếp hạng {rating}).\n✅ Gỡ Scandal! +{recovered_rep} danh tiếng", color=discord.Color.green()), mention_author=False)
+
 
 @cty.command()
 async def nangcap(ctx, stat: str, levels: int = 1):
@@ -2778,37 +2804,33 @@ async def nangcap(ctx, stat: str, levels: int = 1):
     comp = load_company(comp_id)
     if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Chỉ Sếp mới được nâng cấp!")
     if levels < 1 or levels > 100: return await ctx.reply("⚠️ Nâng tối đa 100 cấp 1 lần!")
-
     if stat == "cong":
         current_lvl = comp.get("atk_level", 1)
-        # Tính tổng chi phí: lv1→2 + lv2→3 + ...
         total_cost = sum((current_lvl + i) * 500000 for i in range(levels))
         if comp["treasury"] < total_cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{total_cost:,} 💰**!")
-        comp["treasury"] -= total_cost
-        comp["atk_level"] = current_lvl + levels
-        msg = f"⚔️ Nâng CÔNG **Lv{current_lvl} → Lv{current_lvl+levels}**! (Trừ {total_cost:,} 💰 từ quỹ)"
-
+        comp["treasury"] -= total_cost; comp["atk_level"] = current_lvl + levels
+        msg = f"⚔️ Nâng CÔNG **Lv{current_lvl} → Lv{current_lvl+levels}**!"
     elif stat == "thu":
         current_lvl = comp.get("def_level", 1)
         total_cost = sum((current_lvl + i) * 300000 for i in range(levels))
         if comp["treasury"] < total_cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{total_cost:,} 💰**!")
-        comp["treasury"] -= total_cost
-        comp["def_level"] = current_lvl + levels
-        msg = f"🛡️ Nâng THỦ **Lv{current_lvl} → Lv{current_lvl+levels}**! (Trừ {total_cost:,} 💰 từ quỹ)"
-
-    else: return await ctx.reply("⚠️ Dùng `k cty nangcap cong <số lv>` hoặc `k cty nangcap thu <số lv>`.")
+        comp["treasury"] -= total_cost; comp["def_level"] = current_lvl + levels
+        msg = f"🛡️ Nâng THỦ **Lv{current_lvl} → Lv{current_lvl+levels}**!"
+    else: return await ctx.reply("⚠️ Dùng `k cty nangcap cong <lv>` hoặc `thu <lv>`.")
     save_company(comp_id)
     await ctx.reply(embed=discord.Embed(description=msg, color=discord.Color.green()), mention_author=False)
+
 
 @cty.command()
 async def tuyen(ctx, member: discord.Member):
     user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return await ctx.reply("Bạn có công ty đâu mà đòi tuyển người!", mention_author=False)
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Chỉ Giám đốc và Chủ tịch mới được tuyển người!", mention_author=False)
+    if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("Chỉ GĐ/CT mới được tuyển!", mention_author=False)
     if load_user(member.id).get("company"): return await ctx.reply("Người này đang làm việc cho công ty khác rồi.", mention_author=False)
     view = CompanyInviteView(comp_id, comp["name"], member)
     await ctx.send(f"🏢 {member.mention}, bạn có lá thư mời nhận việc tại **{comp['name']}**!", view=view)
+
 
 @cty.command()
 async def duoi(ctx, member: discord.Member):
@@ -2824,6 +2846,7 @@ async def duoi(ctx, member: discord.Member):
     save_company(comp_id); save_user(target_id)
     await ctx.reply(f"👢 Sa thải {member.mention} khỏi công ty!", mention_author=False)
 
+
 @cty.command()
 async def gop(ctx, amount: int):
     if amount <= 0: return
@@ -2833,7 +2856,8 @@ async def gop(ctx, amount: int):
     comp = load_company(comp_id)
     user_data["money"] -= amount; comp["treasury"] += amount
     save_user(user_id); save_company(comp_id)
-    await ctx.reply(f"💰 Bạn đã cống hiến **{amount:,} 💰** vào quỹ công ty.\nTổng quỹ: **{comp['treasury']:,} 💰**.", mention_author=False)
+    await ctx.reply(f"💰 Bạn đã cống hiến **{amount:,} 💰**.\nTổng quỹ: **{comp['treasury']:,} 💰**.", mention_author=False)
+
 
 @cty.command()
 async def thulai(ctx):
@@ -2842,318 +2866,231 @@ async def thulai(ctx):
     comp = load_company(comp_id)
     if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch mới được thu lãi!", mention_author=False)
     now = datetime.now()
-    try:
-        last = datetime.strptime(comp.get("last_interest", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
-    except Exception:
-        last = datetime(2000, 1, 1)
-
+    try: last = datetime.strptime(comp.get("last_interest", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
+    except Exception: last = datetime(2000, 1, 1)
     if now - last < timedelta(days=1): return await ctx.reply("⏳ Mỗi ngày chỉ được thu lãi 1 lần.", mention_author=False)
     lai_nhan_duoc = min(int(comp["treasury"] * 0.03), 80000)
     comp["treasury"] += lai_nhan_duoc; comp["last_interest"] = now.strftime("%Y-%m-%d %H:%M:%S")
     save_company(comp_id)
-    await ctx.reply(f"📈 Công ty nhận **{lai_nhan_duoc:,} 💰** lãi hôm nay!\nTổng quỹ: **{comp['treasury']:,} 💰**.", mention_author=False)
+    await ctx.reply(f"📈 Công ty nhận **{lai_nhan_duoc:,} 💰** lãi hôm nay!", mention_author=False)
 
-# ── VAY VỐN / TRẢ NỢ CÔNG TY ──────────────────────────────────────────
+
 @cty.command(name="vaycty")
 async def vaycty(ctx, amount: int):
-    user_id = str(ctx.author.id)
-    comp_id = load_user(user_id).get("company")
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return await ctx.reply("⚠️ Bạn chưa có công ty!", mention_author=False)
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) != "boss":
-        return await ctx.reply("⚠️ Chỉ Chủ Tịch mới được vay vốn cho công ty!", mention_author=False)
-    if comp.get("debt", 0) > 0:
-        return await ctx.reply(f"⚠️ Công ty đang nợ **{comp['debt']:,} 💰**! `k cty tranocty` trước.", mention_author=False)
+    if comp["members"].get(user_id) != "boss": return await ctx.reply("⚠️ Chỉ Chủ Tịch mới được vay vốn!", mention_author=False)
+    if comp.get("debt", 0) > 0: return await ctx.reply(f"⚠️ Đang nợ **{comp['debt']:,} 💰**! `k cty tranocty` trước.", mention_author=False)
 
-    max_loan = max(1000000, int(comp.get("treasury", 0) * COMPANY_LOAN_MAX_MULT))
+    rating, spread = get_credit_rating(comp)
+    max_loan = max(1000000, int(comp.get("treasury", 0) * 3.0))
     if amount <= 0 or amount > max_loan:
-        return await ctx.reply(f"⚠️ Vay từ 1 đến **{max_loan:,} 💰** (tối đa {COMPANY_LOAN_MAX_MULT}x quỹ hiện có).", mention_author=False)
+        return await ctx.reply(f"⚠️ Vay từ 1 đến **{max_loan:,} 💰**.", mention_author=False)
 
-    total_owed = int(amount * (1 + COMPANY_LOAN_INTEREST))
-    due = datetime.now() + timedelta(days=COMPANY_LOAN_DAYS)
+    interest_rate = get_base_interest_rate() + spread + 0.10
+    total_owed = int(amount * (1 + interest_rate))
+    due = datetime.now() + timedelta(days=5)
     comp["treasury"] += amount
     comp["debt"] = total_owed
     comp["debt_due"] = due.strftime("%Y-%m-%d %H:%M:%S")
     save_company(comp_id)
 
     embed = discord.Embed(title="🏦 VAY VỐN NGÂN HÀNG DOANH NGHIỆP", color=discord.Color.green())
-    embed.add_field(name="Số tiền vay", value=f"**{amount:,} 💰**", inline=True)
-    embed.add_field(name="Phải trả", value=f"**{total_owed:,} 💰** (+{int(COMPANY_LOAN_INTEREST*100)}%)", inline=True)
+    embed.add_field(name="Xếp hạng tín dụng", value=f"**{rating}**", inline=True)
+    embed.add_field(name="Lãi suất áp dụng", value=f"**{interest_rate*100:.1f}%** (5 ngày)", inline=True)
+    embed.add_field(name="Số tiền vay", value=f"{amount:,} 💰", inline=True)
+    embed.add_field(name="Phải trả", value=f"**{total_owed:,} 💰**", inline=True)
     embed.add_field(name="Hạn chót", value=f"<t:{int(due.timestamp())}:F>", inline=False)
-    embed.add_field(name="⚠️ Cảnh báo", value="Quá hạn = ngân hàng siết quỹ, công ty có thể **PHÁ SẢN**!", inline=False)
     await ctx.reply(embed=embed, mention_author=False)
 
 
 @cty.command(name="tranocty")
 async def tranocty(ctx):
-    user_id = str(ctx.author.id)
-    comp_id = load_user(user_id).get("company")
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return await ctx.reply("⚠️ Bạn chưa có công ty!", mention_author=False)
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) not in ["boss", "quanly"]:
-        return await ctx.reply("⚠️ Chỉ Ban Giám Đốc mới trả được nợ!", mention_author=False)
+    if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("⚠️ Chỉ Ban Giám Đốc mới trả được nợ!", mention_author=False)
     debt = comp.get("debt", 0)
-    if debt <= 0:
-        return await ctx.reply("✅ Công ty không có nợ!", mention_author=False)
-    if comp.get("treasury", 0) < debt:
-        return await ctx.reply(f"⚠️ Cần **{debt:,} 💰**, quỹ chỉ có **{comp['treasury']:,} 💰**.", mention_author=False)
-    comp["treasury"] -= debt
-    comp["debt"] = 0
-    comp["debt_due"] = None
+    if debt <= 0: return await ctx.reply("✅ Công ty không có nợ!", mention_author=False)
+    if comp.get("treasury", 0) < debt: return await ctx.reply(f"⚠️ Cần **{debt:,} 💰**!", mention_author=False)
+    comp["treasury"] -= debt; comp["debt"] = 0; comp["debt_due"] = None
     save_company(comp_id)
     await ctx.reply(embed=discord.Embed(description=f"✅ Đã trả hết nợ **{debt:,} 💰**!", color=discord.Color.green()), mention_author=False)
 
 
-# ── QUẢNG CÁO / PR ────────────────────────────────────────────────────
 @cty.command(name="quangcao")
 async def quangcao(ctx, amount: int):
-    user_id = str(ctx.author.id)
-    comp_id = load_user(user_id).get("company")
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return await ctx.reply("⚠️ Bạn chưa có công ty!", mention_author=False)
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) not in ["boss", "quanly"]:
-        return await ctx.reply("⚠️ Chỉ Ban Giám Đốc mới chạy quảng cáo!", mention_author=False)
-
+    if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("⚠️ Chỉ Ban Giám Đốc mới chạy quảng cáo!", mention_author=False)
     now = datetime.now()
     try: last = datetime.strptime(comp.get("last_pr", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
     except Exception: last = datetime(2000, 1, 1)
-    if now - last < timedelta(hours=PR_COOLDOWN_HOURS):
-        return await ctx.reply(f"⏳ Chiến dịch PR hồi: <t:{int((last+timedelta(hours=PR_COOLDOWN_HOURS)).timestamp())}:R>", mention_author=False)
-
-    if amount < 50000:
-        return await ctx.reply("⚠️ Tối thiểu **50,000 💰** cho 1 chiến dịch!", mention_author=False)
-    if comp.get("treasury", 0) < amount:
-        return await ctx.reply("⚠️ Quỹ không đủ!", mention_author=False)
-
-    comp["treasury"] -= amount
-    comp["last_pr"] = now.strftime("%Y-%m-%d %H:%M:%S")
-
+    if now - last < timedelta(hours=12): return await ctx.reply(f"⏳ Hồi: <t:{int((last+timedelta(hours=12)).timestamp())}:R>", mention_author=False)
+    if amount < 50000: return await ctx.reply("⚠️ Tối thiểu **50,000 💰**!", mention_author=False)
+    if comp.get("treasury", 0) < amount: return await ctx.reply("⚠️ Quỹ không đủ!", mention_author=False)
+    comp["treasury"] -= amount; comp["last_pr"] = now.strftime("%Y-%m-%d %H:%M:%S")
     if random.uniform(0, 100) <= 12:
         rep_change = -random.randint(5, 15)
         comp["reputation"] = max(0, comp.get("reputation", 100) + rep_change)
-        result = f"💀 **QUẢNG CÁO PHẢN CẢM!** Dư luận chỉ trích, danh tiếng **{rep_change}**!"
-        color = discord.Color.red()
+        result = f"💀 **PHẢN CẢM!** Danh tiếng **{rep_change}**!"; color = discord.Color.red()
     else:
         rep_gain = min(20, max(3, int(amount / 50000) * 3))
         comp["reputation"] = min(100, comp.get("reputation", 100) + rep_gain)
         bonus = int(amount * random.uniform(0.3, 0.8))
         comp["treasury"] += bonus
-        result = f"📢 **THÀNH CÔNG!** +{rep_gain} danh tiếng, doanh thu về **+{bonus:,} 💰**!"
-        color = discord.Color.green()
-
+        result = f"📢 **THÀNH CÔNG!** +{rep_gain} danh tiếng, +{bonus:,} 💰!"; color = discord.Color.green()
     save_company(comp_id)
-    embed = discord.Embed(title="📢 CHIẾN DỊCH MARKETING", description=result, color=color)
-    embed.set_footer(text=f"Chi: {amount:,} 💰 | Quỹ còn: {comp['treasury']:,} 💰 | Hồi sau {PR_COOLDOWN_HOURS}h")
-    await ctx.reply(embed=embed, mention_author=False)
+    await ctx.reply(embed=discord.Embed(title="📢 CHIẾN DỊCH MARKETING", description=result, color=color), mention_author=False)
 
 
-# ── BÓC PHỐT ĐỐI THỦ (SMEAR CAMPAIGN) ─────────────────────────────────
 @cty.command(name="boicong", aliases=["choixau"])
 async def boicong(ctx, *, target_name: str):
-    user_id = str(ctx.author.id)
-    comp_id = load_user(user_id).get("company")
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return await ctx.reply("⚠️ Bạn chưa có công ty!", mention_author=False)
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) != "boss":
-        return await ctx.reply("⚠️ Chỉ Chủ Tịch mới ra quyết định này!", mention_author=False)
-
+    if comp["members"].get(user_id) != "boss": return await ctx.reply("⚠️ Chỉ Chủ Tịch!", mention_author=False)
     now = datetime.now()
     try: last = datetime.strptime(comp.get("last_smear", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
     except Exception: last = datetime(2000, 1, 1)
-    if now - last < timedelta(hours=SMEAR_COOLDOWN_HOURS):
-        return await ctx.reply(f"⏳ Đội PR đen hồi: <t:{int((last+timedelta(hours=SMEAR_COOLDOWN_HOURS)).timestamp())}:R>", mention_author=False)
-
+    if now - last < timedelta(hours=18): return await ctx.reply(f"⏳ Hồi: <t:{int((last+timedelta(hours=18)).timestamp())}:R>", mention_author=False)
     cost = 80000
-    if comp.get("treasury", 0) < cost:
-        return await ctx.reply(f"⚠️ Cần **{cost:,} 💰**!", mention_author=False)
-
+    if comp.get("treasury", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} 💰**!", mention_author=False)
     try: all_comps = list(companies_col.find())
     except Exception: all_comps = []
     target = next((c for c in all_comps if target_name.lower() in c["name"].lower()), None)
-    if not target or target["_id"] == comp_id:
-        return await ctx.reply("⚠️ Không tìm thấy công ty đối thủ hợp lệ!", mention_author=False)
+    if not target or target["_id"] == comp_id: return await ctx.reply("⚠️ Không tìm thấy!", mention_author=False)
     COMPANY_CACHE[target["_id"]] = target
-
-    comp["treasury"] -= cost
-    comp["last_smear"] = now.strftime("%Y-%m-%d %H:%M:%S")
-
-    target_security = target.get("security_level", 1)
-    success_chance = max(20, 65 - target_security * 5)
-
+    comp["treasury"] -= cost; comp["last_smear"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    success_chance = max(20, 65 - target.get("security_level", 1) * 5)
     if random.uniform(0, 100) <= success_chance:
         rep_loss = random.randint(10, 25)
         target["reputation"] = max(0, target.get("reputation", 100) - rep_loss)
-        if target["reputation"] <= 30 and not target.get("has_scandal"):
-            target["has_scandal"] = True
-        save_company(target["_id"])
-        save_company(comp_id)
-        result = f"🕵️ **THÀNH CÔNG!** **{target['name']}** mất **{rep_loss}** danh tiếng!"
-        color = discord.Color.dark_red()
+        if target["reputation"] <= 30 and not target.get("has_scandal"): target["has_scandal"] = True
+        save_company(target["_id"]); save_company(comp_id)
+        result = f"🕵️ **THÀNH CÔNG!** **{target['name']}** mất **{rep_loss}** danh tiếng!"; color = discord.Color.dark_red()
     else:
-        comp["reputation"] = max(0, comp.get("reputation", 100) - SMEAR_CAUGHT_REP_LOSS)
-        comp["has_scandal"] = True
+        comp["reputation"] = max(0, comp.get("reputation", 100) - 25); comp["has_scandal"] = True
         save_company(comp_id)
-        result = f"🚨 **BỊ PHÁT HIỆN!** Tự dính scandal, mất **{SMEAR_CAUGHT_REP_LOSS}** danh tiếng!"
-        color = discord.Color.red()
-
-    embed = discord.Embed(title="🕵️ CHIẾN DỊCH BÓC PHỐT", description=result, color=color)
-    embed.set_footer(text=f"Chi: {cost:,} 💰 | Tỉ lệ thành công: {success_chance}% | Hồi sau {SMEAR_COOLDOWN_HOURS}h")
-    await ctx.reply(embed=embed, mention_author=False)
+        result = "🚨 **BỊ PHÁT HIỆN!** Tự dính scandal, -25 danh tiếng!"; color = discord.Color.red()
+    await ctx.reply(embed=discord.Embed(title="🕵️ BÓC PHỐT", description=result, color=color), mention_author=False)
 
 
-# ── GIÁN ĐIỆP CÔNG NGHIỆP (ăn cắp quỹ) ────────────────────────────────
 @cty.command(name="giandiep")
 async def giandiep(ctx, *, target_name: str):
-    user_id = str(ctx.author.id)
-    comp_id = load_user(user_id).get("company")
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return await ctx.reply("⚠️ Bạn chưa có công ty!", mention_author=False)
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) not in ["boss", "quanly"]:
-        return await ctx.reply("⚠️ Chỉ Ban Giám Đốc mới cử gián điệp!", mention_author=False)
-
+    if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("⚠️ Chỉ Ban Giám Đốc!", mention_author=False)
     now = datetime.now()
     try: last = datetime.strptime(comp.get("last_spy", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
     except Exception: last = datetime(2000, 1, 1)
-    if now - last < timedelta(hours=SPY_COOLDOWN_HOURS):
-        return await ctx.reply(f"⏳ Gián điệp hồi: <t:{int((last+timedelta(hours=SPY_COOLDOWN_HOURS)).timestamp())}:R>", mention_author=False)
-
+    if now - last < timedelta(hours=18): return await ctx.reply(f"⏳ Hồi: <t:{int((last+timedelta(hours=18)).timestamp())}:R>", mention_author=False)
     cost = 60000
-    if comp.get("treasury", 0) < cost:
-        return await ctx.reply(f"⚠️ Cần **{cost:,} 💰** chi phí!", mention_author=False)
-
+    if comp.get("treasury", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} 💰**!", mention_author=False)
     try: all_comps = list(companies_col.find())
     except Exception: all_comps = []
     target = next((c for c in all_comps if target_name.lower() in c["name"].lower()), None)
-    if not target or target["_id"] == comp_id:
-        return await ctx.reply("⚠️ Không tìm thấy công ty đối thủ hợp lệ!", mention_author=False)
+    if not target or target["_id"] == comp_id: return await ctx.reply("⚠️ Không tìm thấy!", mention_author=False)
     COMPANY_CACHE[target["_id"]] = target
-
-    comp["treasury"] -= cost
-    comp["last_spy"] = now.strftime("%Y-%m-%d %H:%M:%S")
-
-    target_security = target.get("security_level", 1)
-    success_chance = max(15, 55 - target_security * 6)
-
+    comp["treasury"] -= cost; comp["last_spy"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    success_chance = max(15, 55 - target.get("security_level", 1) * 6)
     if random.uniform(0, 100) <= success_chance:
         loot = int(target.get("treasury", 0) * random.uniform(0.05, 0.15))
         target["treasury"] = max(0, target.get("treasury", 0) - loot)
         comp["treasury"] += loot
-        save_company(target["_id"])
-        save_company(comp_id)
-        result = f"🕵️‍♂️ **THÀNH CÔNG!** Lấy được **{loot:,} 💰** từ quỹ **{target['name']}**!"
-        color = discord.Color.dark_green()
+        save_company(target["_id"]); save_company(comp_id)
+        result = f"🕵️‍♂️ **THÀNH CÔNG!** Lấy **{loot:,} 💰**!"; color = discord.Color.dark_green()
     else:
-        fine = int(comp.get("treasury", 0) * ESPIONAGE_CAUGHT_FINE_MULT)
+        fine = int(comp.get("treasury", 0) * 0.10)
         comp["treasury"] = max(0, comp.get("treasury", 0) - fine)
-        comp["reputation"] = max(0, comp.get("reputation", 100) - 15)
-        comp["has_scandal"] = True
+        comp["reputation"] = max(0, comp.get("reputation", 100) - 15); comp["has_scandal"] = True
         save_company(comp_id)
-        result = f"🚨 **BỊ BẮT!** Phạt **{fine:,} 💰** và dính scandal!"
-        color = discord.Color.red()
-
-    embed = discord.Embed(title="🕵️‍♂️ GIÁN ĐIỆP CÔNG NGHIỆP", description=result, color=color)
-    embed.set_footer(text=f"Chi: {cost:,} 💰 | Tỉ lệ thành công: {success_chance}% | Hồi sau {SPY_COOLDOWN_HOURS}h")
-    await ctx.reply(embed=embed, mention_author=False)
+        result = f"🚨 **BỊ BẮT!** Phạt **{fine:,} 💰**!"; color = discord.Color.red()
+    await ctx.reply(embed=discord.Embed(title="🕵️‍♂️ GIÁN ĐIỆP", description=result, color=color), mention_author=False)
 
 
-# ── NÂNG AN NINH (chống gián điệp / bóc phốt) ─────────────────────────
 @cty.command(name="anninh")
 async def anninh(ctx):
-    user_id = str(ctx.author.id)
-    comp_id = load_user(user_id).get("company")
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return await ctx.reply("⚠️ Bạn chưa có công ty!", mention_author=False)
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) not in ["boss", "quanly"]:
-        return await ctx.reply("⚠️ Chỉ Ban Giám Đốc mới nâng an ninh!", mention_author=False)
+    if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("⚠️ Chỉ Ban Giám Đốc!", mention_author=False)
     lvl = comp.get("security_level", 1)
-    if lvl >= 10:
-        return await ctx.reply("⚠️ An ninh đã max cấp!", mention_author=False)
+    if lvl >= 10: return await ctx.reply("⚠️ An ninh đã max!", mention_author=False)
     cost = (lvl + 1) * 200000
-    if comp.get("treasury", 0) < cost:
-        return await ctx.reply(f"⚠️ Cần **{cost:,} 💰**!", mention_author=False)
-    comp["treasury"] -= cost
-    comp["security_level"] = lvl + 1
+    if comp.get("treasury", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} 💰**!", mention_author=False)
+    comp["treasury"] -= cost; comp["security_level"] = lvl + 1
     save_company(comp_id)
-    await ctx.reply(embed=discord.Embed(
-        description=f"🛡️ Nâng AN NINH **Lv{lvl} → Lv{lvl+1}**! Giảm tỉ lệ bị hại từ gián điệp/bóc phốt.",
-        color=discord.Color.blue()
-    ), mention_author=False)
+    await ctx.reply(embed=discord.Embed(description=f"🛡️ AN NINH **Lv{lvl} → Lv{lvl+1}**!", color=discord.Color.blue()), mention_author=False)
 
 
-# ── CHIA CỔ TỨC ────────────────────────────────────────────────────────
 @cty.command(name="cotuc")
 async def cotuc(ctx, percent: int):
-    user_id = str(ctx.author.id)
-    comp_id = load_user(user_id).get("company")
+    """Chia thưởng nhanh cho nội bộ (khác với codividend là chia cho cổ đông ngoài sàn)."""
+    user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return await ctx.reply("⚠️ Bạn chưa có công ty!", mention_author=False)
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) != "boss":
-        return await ctx.reply("⚠️ Chỉ Chủ Tịch mới chia cổ tức!", mention_author=False)
-    if percent <= 0 or percent > 50:
-        return await ctx.reply("⚠️ Chia từ 1-50% quỹ!", mention_author=False)
-
+    if comp["members"].get(user_id) != "boss": return await ctx.reply("⚠️ Chỉ Chủ Tịch!", mention_author=False)
+    if percent <= 0 or percent > 50: return await ctx.reply("⚠️ Chia 1-50%!", mention_author=False)
     now = datetime.now()
     try: last = datetime.strptime(comp.get("last_dividend", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
     except Exception: last = datetime(2000, 1, 1)
-    if now - last < timedelta(days=1):
-        return await ctx.reply(f"⏳ 1 lần/ngày! Tiếp theo: <t:{int((last+timedelta(days=1)).timestamp())}:R>", mention_author=False)
-
-    total_pay = int(comp.get("treasury", 0) * percent / 100)
-    if total_pay <= 0:
-        return await ctx.reply("⚠️ Quỹ không đủ để chia!", mention_author=False)
-
+    if now - last < timedelta(days=1): return await ctx.reply(f"⏳ 1 lần/ngày! <t:{int((last+timedelta(days=1)).timestamp())}:R>", mention_author=False)
+    fin = compute_company_financials(comp)
+    base_for_split = max(0, fin["net_income"]) * 24 if fin["net_income"] > 0 else comp.get("treasury", 0)
+    total_pay = int(min(comp.get("treasury", 0), base_for_split) * percent / 100)
+    if total_pay <= 0: return await ctx.reply("⚠️ Không có gì để chia (công ty chưa có lợi nhuận)!", mention_author=False)
     members = comp.get("members", {})
     each = total_pay // max(1, len(members))
-    comp["treasury"] -= total_pay
-    comp["last_dividend"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    comp["treasury"] -= total_pay; comp["last_dividend"] = now.strftime("%Y-%m-%d %H:%M:%S")
     for m_id in members:
-        m_data = load_user(m_id)
-        m_data["money"] += each
-        save_user(m_id)
+        m_data = load_user(m_id); m_data["money"] += each; save_user(m_id)
     save_company(comp_id)
+    await ctx.send(embed=discord.Embed(title="💵 CHIA THƯỞNG NỘI BỘ", description=f"Chia **{percent}%** lợi nhuận (**{total_pay:,} 💰**) cho **{len(members)}** người! Mỗi người: **{each:,} 💰**", color=discord.Color.green()))
 
-    await ctx.send(embed=discord.Embed(
-        title="💵 CHIA CỔ TỨC",
-        description=f"Chia **{percent}%** quỹ (**{total_pay:,} 💰**) cho **{len(members)}** người!\nMỗi người: **{each:,} 💰**",
-        color=discord.Color.green()
-    ))
 
 @cty.command()
 async def luong(ctx, amount: int):
     user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch mới được ký quỹ phát lương!", mention_author=False)
+    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch mới phát lương!", mention_author=False)
     mem_count = len(comp["members"]); total_cost = amount * mem_count
-    if total_cost > comp["treasury"]: return await ctx.reply(f"Quỹ không đủ! Cần **{total_cost:,} 💰** cho {mem_count} người.", mention_author=False)
+    if total_cost > comp["treasury"]: return await ctx.reply(f"Quỹ không đủ! Cần **{total_cost:,} 💰**.", mention_author=False)
     comp["treasury"] -= total_cost
     for m_id in list(comp["members"].keys()):
         m_data = load_user(m_id); m_data["money"] += amount; save_user(m_id)
     save_company(comp_id)
-    await ctx.send(embed=discord.Embed(description=f"💸 Phát **{amount:,} 💰** lương cho mỗi nhân viên!\nTổng trừ quỹ: **{total_cost:,} 💰**", color=discord.Color.green()))
+    await ctx.send(embed=discord.Embed(description=f"💸 Phát **{amount:,} 💰**/người! Tổng trừ quỹ: **{total_cost:,} 💰**", color=discord.Color.green()))
+
 
 @cty.command()
 async def chucvu(ctx, member: discord.Member, role: str):
     user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch mới được set chức vụ!", mention_author=False)
+    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch!", mention_author=False)
     target_id = str(member.id)
     if target_id not in comp["members"]: return await ctx.reply("Người này không thuộc công ty.", mention_author=False)
-    if target_id == user_id: return await ctx.reply("Không thể tự đổi chức của bản thân!", mention_author=False)
-    if role not in ["quanly", "nhanvien"]: return await ctx.reply("Chức vụ phải là `quanly` hoặc `nhanvien`.", mention_author=False)
+    if target_id == user_id: return await ctx.reply("Không thể tự đổi chức!", mention_author=False)
+    if role not in ["quanly", "nhanvien"]: return await ctx.reply("Chức vụ: `quanly` hoặc `nhanvien`.", mention_author=False)
     comp["members"][target_id] = role; save_company(comp_id)
-    await ctx.reply(f"✅ Đã đặt chức vụ {member.mention} thành **{comp['roles'][role]}**.", mention_author=False)
+    await ctx.reply(f"✅ Đặt chức {member.mention} thành **{comp['roles'][role]}**.", mention_author=False)
+
 
 @cty.command()
 async def doitenchuc(ctx, role: str, *, name: str):
     user_id = str(ctx.author.id); comp_id = load_user(user_id).get("company")
     if not comp_id: return
     comp = load_company(comp_id)
-    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch mới được đổi tên chức vụ!", mention_author=False)
+    if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch!", mention_author=False)
     if role not in ["boss", "quanly", "nhanvien"]: return await ctx.reply("Phải là `boss`, `quanly` hoặc `nhanvien`.", mention_author=False)
     comp["roles"][role] = name; save_company(comp_id)
     await ctx.reply(f"✅ Đổi tên `{role}` thành **{name}**.", mention_author=False)
+
 
 @cty.command()
 async def roi(ctx):
@@ -3168,13 +3105,13 @@ async def roi(ctx):
         COMPANY_CACHE.pop(comp_id, None); companies_col.delete_one({"_id": comp_id})
         for m_id in list(comp["members"].keys()):
             m_data = load_user(m_id); m_data["company"] = None; save_user(m_id)
-        embed_bankrupt = discord.Embed(description="🏢 Chủ tịch bỏ trốn! Công ty **PHÁ SẢN**, toàn bộ nhân sự giải tán!", color=discord.Color.red())
+        embed_bankrupt = discord.Embed(description="🏢 Chủ tịch bỏ trốn! Công ty **PHÁ SẢN**!", color=discord.Color.red())
         embed_bankrupt.set_image(url=GIF_LINKS.get("bankrupt", ""))
         await ctx.reply(embed=embed_bankrupt, mention_author=False)
     else:
         if user_id in comp["members"]: del comp["members"][user_id]
         user_data["company"] = None; save_user(user_id); save_company(comp_id)
-        await ctx.reply(embed=discord.Embed(description="🎒 Bạn đã từ chức, thu dọn hành lý rời khỏi công ty.", color=discord.Color.dark_grey()), mention_author=False)
+        await ctx.reply(embed=discord.Embed(description="🎒 Bạn đã từ chức, rời khỏi công ty.", color=discord.Color.dark_grey()), mention_author=False)
 
 # =====================================================================
 # HỆ THỐNG NGÂN HÀNG
