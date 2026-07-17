@@ -5879,7 +5879,6 @@ async def on_message(message):
     handled = await handle_bridge_relay(message)
     if handled:
         return
-    await handle_prison_relay(message)          # 👈 THÊM DÒNG NÀY
     if message.author.bot: return
 
     # ═══════════════════════════════════════════
