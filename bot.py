@@ -180,6 +180,10 @@ def load_user(user_id):
         "solitary_until": None,      # thời điểm hết biệt giam
         "escape_fails": 0,           # số lần vượt ngục thất bại liên tiếp
         "kim_cuong": 0,              # 💎 Tiền cao cấp — sinh ra khi tiền thường vượt ngưỡng
+        "prison_exp": 0,              # Tu vi tích lũy trong tù (dùng để phá cảnh)
+        "prison_weapon": None,        # ID vũ khí tù nhân đang trang bị
+        "prison_armor": None,         # ID giáp tù nhân đang trang bị
+        "prison_materials": {},       # Nguyên liệu đào được trong tù {tên: số lượng}
     }
 
     for key, value in defaults.items():
@@ -457,6 +461,10 @@ async def global_check(ctx):
         "vuotngu", "escape", "vuotnguc",
         "laodongtu", "laodong",
         "nhatu", "jailinfo", "thongtinnhatu",
+        "danhnhau", "prisonfight", "daugiam",
+        "daomo", "daomotu", "digprison",
+        "phapbao", "phapbaotu", "prisonequip",
+        "phacanh", "breakthrough", "dotpha",
     }
     is_exempt = ctx.command and ctx.command.name in JAIL_EXEMPT_COMMANDS
     if not is_exempt:
@@ -4971,57 +4979,382 @@ async def cantin(ctx, item: str = None):
     ), mention_author=False)
 
 
+# ══════════════════════════════════════════════════════════════════════
+# ⚔️ HỆ THỐNG CHIẾN ĐẤU & TU LUYỆN TRONG TÙ v2
+# — Pháp bảo, đào mò nguyên liệu, phá cảnh nâng cấp sức mạnh
+# — TẤT CẢ lệnh dưới đây CHỈ dùng được tại kênh phòng giam tập thể
+# ══════════════════════════════════════════════════════════════════════
+
+PRISON_REALMS = [
+    {"name": "Phàm Nhân 🥉",  "req_exp": 0,      "atk": 0,   "def": 0,   "hp": 0},
+    {"name": "Luyện Thể 🥈",  "req_exp": 200,    "atk": 5,   "def": 5,   "hp": 20},
+    {"name": "Trúc Cơ 🥇",    "req_exp": 600,    "atk": 12,  "def": 10,  "hp": 50},
+    {"name": "Kim Đan 💠",    "req_exp": 1_500,  "atk": 22,  "def": 18,  "hp": 100},
+    {"name": "Nguyên Anh 🔮", "req_exp": 3_500,  "atk": 35,  "def": 28,  "hp": 180},
+    {"name": "Hóa Thần ✨",   "req_exp": 7_000,  "atk": 55,  "def": 42,  "hp": 300},
+    {"name": "Đại Thừa 🌟",   "req_exp": 15_000, "atk": 85,  "def": 65,  "hp": 500},
+    {"name": "Độ Kiếp ⚡",    "req_exp": 30_000, "atk": 130, "def": 95,  "hp": 800},
+    {"name": "Tán Tiên 🌌",   "req_exp": 60_000, "atk": 200, "def": 150, "hp": 1_300},
+]
+
+PRISON_WEAPONS = {
+    "dao_ri":       {"name": "🔪 Dao Gỉ Sét",             "atk": 5,  "price": 3_000,  "mats": {}},
+    "cui_sat":      {"name": "🪝 Cùi Sắt Vụn",             "atk": 12, "price": 12_000, "mats": {"Sắt Vụn Nhà Tù 🔩": 5}},
+    "dui_cui_tu":   {"name": "🥢 Dùi Cui Tự Chế",          "atk": 20, "price": 0,      "mats": {"Sắt Vụn Nhà Tù 🔩": 8, "Xích Sắt Cũ ⛓️": 3}},
+    "dao_tu_lam":   {"name": "🗡️ Dao Tự Làm Sắc Bén",     "atk": 32, "price": 0,      "mats": {"Mảnh Kính Vỡ 🔻": 6, "Xích Sắt Cũ ⛓️": 5, "Sắt Vụn Nhà Tù 🔩": 10}},
+    "thiet_truong": {"name": "⚔️ Thiết Trượng Trấn Ngục",  "atk": 50, "price": 0,      "mats": {"Tinh Thiết Ngục Tù 🌑": 3, "Xích Sắt Cũ ⛓️": 8}},
+}
+
+PRISON_ARMORS = {
+    "ao_tu":      {"name": "🥋 Áo Tù Rách",       "def": 3,  "price": 2_000, "mats": {}},
+    "giap_lot":   {"name": "🛡️ Giáp Lót Carton",  "def": 8,  "price": 8_000, "mats": {"Vải Vụn Nhà Tù 🧵": 5}},
+    "giap_xich":  {"name": "⛓️ Giáp Xích Tự Chế", "def": 16, "price": 0,     "mats": {"Xích Sắt Cũ ⛓️": 6, "Vải Vụn Nhà Tù 🧵": 4}},
+    "giap_thiet": {"name": "🛡️ Giáp Thiết Ngục",  "def": 28, "price": 0,     "mats": {"Sắt Vụn Nhà Tù 🔩": 12, "Tinh Thiết Ngục Tù 🌑": 2}},
+}
+
+PRISON_DIG_LOOT = [
+    {"item": "Sắt Vụn Nhà Tù 🔩",    "weight": 35, "min": 1, "max": 3},
+    {"item": "Vải Vụn Nhà Tù 🧵",    "weight": 30, "min": 1, "max": 2},
+    {"item": "Mảnh Kính Vỡ 🔻",      "weight": 20, "min": 1, "max": 2},
+    {"item": "Xích Sắt Cũ ⛓️",       "weight": 12, "min": 1, "max": 1},
+    {"item": "Tinh Thiết Ngục Tù 🌑","weight": 3,  "min": 1, "max": 1},
+]
+
+PRISON_DIG_COOLDOWN   = 600   # 10 phút
+PRISON_FIGHT_COOLDOWN = 300   # 5 phút
+prison_dig_cooldowns   = {}
+prison_fight_cooldowns = {}
+
+
+def is_in_prison_channel(ctx):
+    """Chỉ cho phép dùng lệnh khi đang ở đúng kênh phòng giam tập thể của server."""
+    if not ctx.guild:
+        return False
+    data = PRISON_GUILD_CACHE.get(ctx.guild.id)
+    return bool(data and ctx.channel.id == data.get("channel_id"))
+
+
+def get_prison_realm_index(exp):
+    idx = 0
+    for i, r in enumerate(PRISON_REALMS):
+        if exp >= r["req_exp"]:
+            idx = i
+        else:
+            break
+    return idx
+
+
+def get_prison_combat_stats(user_data):
+    exp   = user_data.get("prison_exp", 0)
+    ridx  = get_prison_realm_index(exp)
+    realm = PRISON_REALMS[ridx]
+
+    atk = 10 + realm["atk"]
+    df  = 5  + realm["def"]
+    hp  = 100 + realm["hp"]
+
+    wid = user_data.get("prison_weapon")
+    if wid and wid in PRISON_WEAPONS:
+        atk += PRISON_WEAPONS[wid]["atk"]
+    aid = user_data.get("prison_armor")
+    if aid and aid in PRISON_ARMORS:
+        df += PRISON_ARMORS[aid]["def"]
+
+    return {"atk": atk, "def": df, "hp": hp, "realm_idx": ridx, "realm": realm}
+
+
+@bot.command(aliases=['daomotu', 'digprison'])
+async def daomo(ctx):
+    """Đào mò tìm nguyên liệu chế pháp bảo trong tù. CHỈ dùng được ở phòng giam tập thể."""
+    if not is_in_prison_channel(ctx):
+        return await ctx.reply("⚠️ Lệnh này chỉ dùng được tại **phòng giam tập thể**!", mention_author=False)
+
+    uid = str(ctx.author.id)
+    ud  = load_user(uid)
+    js  = ud.get("jail_time")
+    now = datetime.now()
+    if not js or now >= datetime.strptime(js, "%Y-%m-%d %H:%M:%S"):
+        return await ctx.reply("⚠️ Bạn phải đang ở tù mới đào mò được!", mention_author=False)
+
+    last = prison_dig_cooldowns.get(uid)
+    if last and (now - last).total_seconds() < PRISON_DIG_COOLDOWN:
+        remain = int(PRISON_DIG_COOLDOWN - (now - last).total_seconds())
+        return await ctx.reply(embed=discord.Embed(
+            description=f"⏳ Cai ngục vừa đi tuần qua! Đợi **{remain//60}p {remain%60}s** nữa.",
+            color=discord.Color.orange()
+        ), mention_author=False)
+
+    prison_dig_cooldowns[uid] = now
+
+    if random.randint(1, 100) <= 12:
+        extra = random.randint(180, 420)
+        new_end = datetime.strptime(js, "%Y-%m-%d %H:%M:%S") + timedelta(seconds=extra)
+        ud["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
+        save_user(uid)
+        return await ctx.reply(embed=discord.Embed(
+            title="🚨 BỊ CAI NGỤC BẮT GẶP!",
+            description=f"Đào mò bị phát hiện! Án tù bị cộng thêm **{extra//60}p {extra%60}s**!",
+            color=discord.Color.dark_red()
+        ), mention_author=False)
+
+    total_weight = sum(l["weight"] for l in PRISON_DIG_LOOT)
+    roll = random.uniform(0, total_weight)
+    cum = 0
+    chosen = PRISON_DIG_LOOT[-1]
+    for l in PRISON_DIG_LOOT:
+        cum += l["weight"]
+        if roll <= cum:
+            chosen = l
+            break
+
+    qty = random.randint(chosen["min"], chosen["max"])
+    mats = ud.setdefault("prison_materials", {})
+    mats[chosen["item"]] = mats.get(chosen["item"], 0) + qty
+
+    exp_gain = random.randint(3, 10)
+    ud["prison_exp"] = ud.get("prison_exp", 0) + exp_gain
+
+    save_user(uid)
+    add_history(uid, f"Đào mò trong tù: +{qty} {chosen['item']}")
+
+    await ctx.reply(embed=discord.Embed(
+        title="⛏️ ĐÀO MÒ TRONG PHÒNG GIAM",
+        description=(
+            f"Cạy nền xi măng, bạn tìm thấy: **{chosen['item']} x{qty}**!\n"
+            f"✨ Tu vi: +{exp_gain} kinh nghiệm"
+        ),
+        color=discord.Color.dark_grey()
+    ), mention_author=False)
+
+
+@bot.group(invoke_without_command=True, aliases=['phapbaotu', 'prisonequip'])
+async def phapbao(ctx):
+    """Kho pháp bảo trong tù: mua/chế tạo vũ khí & giáp. CHỈ dùng được ở phòng giam tập thể."""
+    if not is_in_prison_channel(ctx):
+        return await ctx.reply("⚠️ Lệnh này chỉ dùng được tại **phòng giam tập thể**!", mention_author=False)
+
+    uid = str(ctx.author.id)
+    ud  = load_user(uid)
+    mats = ud.get("prison_materials", {})
+    stats = get_prison_combat_stats(ud)
+
+    wname = PRISON_WEAPONS.get(ud.get("prison_weapon"), {}).get("name", "Tay không")
+    aname = PRISON_ARMORS.get(ud.get("prison_armor"), {}).get("name", "Không giáp")
+
+    embed = discord.Embed(title="⚔️ KHO PHÁP BẢO NHÀ TÙ", color=discord.Color.dark_gold())
+    embed.add_field(
+        name="👤 Trang bị hiện tại",
+        value=f"🗡️ Vũ khí: **{wname}**\n🛡️ Giáp: **{aname}**\n⚔️ ATK: **{stats['atk']}** | 🛡️ DEF: **{stats['def']}** | ❤️ HP: **{stats['hp']}**",
+        inline=False
+    )
+
+    w_lines = []
+    for k, w in PRISON_WEAPONS.items():
+        cost = f"{w['price']:,} 💰" if w["price"] else " + ".join(f"{v}x {n}" for n, v in w["mats"].items())
+        w_lines.append(f"`{k}` **{w['name']}** (ATK+{w['atk']}) — {cost}")
+    embed.add_field(name="🗡️ Vũ Khí", value="\n".join(w_lines), inline=False)
+
+    a_lines = []
+    for k, a in PRISON_ARMORS.items():
+        cost = f"{a['price']:,} 💰" if a["price"] else " + ".join(f"{v}x {n}" for n, v in a["mats"].items())
+        a_lines.append(f"`{k}` **{a['name']}** (DEF+{a['def']}) — {cost}")
+    embed.add_field(name="🛡️ Giáp", value="\n".join(a_lines), inline=False)
+
+    mat_str = ", ".join(f"{n} x{v}" for n, v in mats.items()) or "Trống"
+    embed.add_field(name="📦 Nguyên liệu đang có", value=mat_str, inline=False)
+    embed.set_footer(text="k phapbao mua <id>  |  Đào nguyên liệu: k daomo")
+    await ctx.reply(embed=embed, mention_author=False)
+
+
+@phapbao.command(name="mua")
+async def phapbao_mua(ctx, item_id: str):
+    if not is_in_prison_channel(ctx):
+        return await ctx.reply("⚠️ Chỉ dùng được ở phòng giam tập thể!", mention_author=False)
+
+    uid = str(ctx.author.id)
+    ud  = load_user(uid)
+    item_id = item_id.lower()
+
+    is_weapon = item_id in PRISON_WEAPONS
+    is_armor  = item_id in PRISON_ARMORS
+    if not (is_weapon or is_armor):
+        return await ctx.reply("⚠️ Không có pháp bảo này! Xem `k phapbao`.", mention_author=False)
+
+    item = PRISON_WEAPONS[item_id] if is_weapon else PRISON_ARMORS[item_id]
+
+    if item["price"] > 0:
+        if ud.get("money", 0) < item["price"]:
+            return await ctx.reply(f"⚠️ Cần **{item['price']:,} 💰**!", mention_author=False)
+        ud["money"] -= item["price"]
+    else:
+        mats = ud.setdefault("prison_materials", {})
+        for mat_name, need in item["mats"].items():
+            if mats.get(mat_name, 0) < need:
+                return await ctx.reply(f"⚠️ Thiếu **{mat_name}** (cần {need}, có {mats.get(mat_name,0)})! Đào thêm bằng `k daomo`.", mention_author=False)
+        for mat_name, need in item["mats"].items():
+            mats[mat_name] -= need
+
+    slot_key = "prison_weapon" if is_weapon else "prison_armor"
+    ud[slot_key] = item_id
+    save_user(uid)
+    add_history(uid, f"Sở hữu pháp bảo tù: {item['name']}")
+
+    await ctx.reply(embed=discord.Embed(
+        title="✅ RÈN/MUA THÀNH CÔNG",
+        description=f"Đã sở hữu & trang bị **{item['name']}**!",
+        color=discord.Color.green()
+    ), mention_author=False)
+
+
+@bot.command(aliases=['breakthrough', 'dotpha'])
+async def phacanh(ctx):
+    """Phá cảnh tu luyện — nâng cấp sức mạnh chiến đấu trong tù. CHỈ dùng ở phòng giam tập thể."""
+    if not is_in_prison_channel(ctx):
+        return await ctx.reply("⚠️ Lệnh này chỉ dùng được tại **phòng giam tập thể**!", mention_author=False)
+
+    uid = str(ctx.author.id)
+    ud  = load_user(uid)
+    exp = ud.get("prison_exp", 0)
+    ridx = get_prison_realm_index(exp)
+
+    if ridx >= len(PRISON_REALMS) - 1:
+        return await ctx.reply(embed=discord.Embed(
+            description=f"🌌 Bạn đã đạt cảnh giới tối cao: **{PRISON_REALMS[ridx]['name']}**!",
+            color=discord.Color.gold()
+        ), mention_author=False)
+
+    next_realm = PRISON_REALMS[ridx + 1]
+    if exp < next_realm["req_exp"]:
+        need = next_realm["req_exp"] - exp
+        return await ctx.reply(embed=discord.Embed(
+            description=(
+                f"🧘 Tu vi chưa đủ để phá lên **{next_realm['name']}**!\n"
+                f"Cần thêm **{need}** kinh nghiệm — đào mò (`k daomo`) hoặc thắng đấu (`k danhnhau`) để tích lũy."
+            ),
+            color=discord.Color.orange()
+        ), mention_author=False)
+
+    success_rate = max(35, 85 - ridx * 6)
+    msg = await ctx.reply(embed=discord.Embed(
+        title="🧘 ĐANG PHÁ CẢNH...",
+        description=f"Vận chuyển chân khí, thử phá lên **{next_realm['name']}** (tỉ lệ {success_rate}%)...",
+        color=discord.Color.blue()
+    ), mention_author=False)
+    await asyncio.sleep(2.5)
+
+    if random.randint(1, 100) <= success_rate:
+        embed = discord.Embed(
+            title="🌟 PHÁ CẢNH THÀNH CÔNG!",
+            description=(
+                f"Chúc mừng! Bạn đã đột phá lên **{next_realm['name']}**!\n"
+                f"⚔️ ATK+{next_realm['atk']} | 🛡️ DEF+{next_realm['def']} | ❤️ HP+{next_realm['hp']}"
+            ),
+            color=discord.Color.gold()
+        )
+        add_history(uid, f"Phá cảnh thành công lên {next_realm['name']}")
+    else:
+        backlash = int(exp * 0.15)
+        ud["prison_exp"] = max(0, exp - backlash)
+        embed = discord.Embed(
+            title="💥 TẨU HỎA NHẬP MA!",
+            description=f"Phá cảnh thất bại! Chân khí phản phệ, mất **{backlash}** kinh nghiệm tu luyện.",
+            color=discord.Color.dark_red()
+        )
+        add_history(uid, f"Phá cảnh thất bại, mất {backlash} tu vi")
+
+    save_user(uid)
+    await msg.edit(embed=embed)
+
+
 @bot.command(aliases=['prisonfight', 'daugiam'])
 async def danhnhau(ctx, target: discord.Member):
-    """Đấu tay đôi với tù nhân khác (kể cả server khác nếu cùng ở phòng giam liên kết)."""
+    """Đấu tay đôi có trang bị + cảnh giới. Thắng giảm án tù + tăng tu vi. CHỈ dùng ở phòng giam tập thể."""
+    if not is_in_prison_channel(ctx):
+        return await ctx.reply("⚠️ Lệnh này chỉ dùng được tại **phòng giam tập thể**!", mention_author=False)
+
     uid = str(ctx.author.id)
     tid = str(target.id)
     if uid == tid:
         return await ctx.reply("⚠️ Tự đánh mình á?", mention_author=False)
 
-    ud = load_user(uid)
-    td = load_user(tid)
+    now = datetime.now()
 
-    def _in_jail(data):
+    def _jail_end(data):
         js = data.get("jail_time")
         if not js:
-            return False
+            return None
         try:
-            return datetime.now() < datetime.strptime(js, "%Y-%m-%d %H:%M:%S")
+            return datetime.strptime(js, "%Y-%m-%d %H:%M:%S")
         except Exception:
-            return False
+            return None
 
-    if not _in_jail(ud):
+    ud = load_user(uid)
+    td = load_user(tid)
+    my_end = _jail_end(ud)
+    opp_end = _jail_end(td)
+
+    if not my_end or now >= my_end:
         return await ctx.reply("⚠️ Bạn phải đang ở tù mới gây sự được!", mention_author=False)
-    if not _in_jail(td):
+    if not opp_end or now >= opp_end:
         return await ctx.reply(f"⚠️ **{target.name}** hiện không ở tù!", mention_author=False)
 
-    my_power  = ud.get("prison_rep", 50) + random.randint(1, 40)
-    opp_power = td.get("prison_rep", 50) + random.randint(1, 40)
+    last = prison_fight_cooldowns.get(uid)
+    if last and (now - last).total_seconds() < PRISON_FIGHT_COOLDOWN:
+        remain = int(PRISON_FIGHT_COOLDOWN - (now - last).total_seconds())
+        return await ctx.reply(embed=discord.Embed(
+            description=f"⏳ Vừa ẩu đả xong, nghỉ tay đã! Đợi **{remain//60}p {remain%60}s**.",
+            color=discord.Color.orange()
+        ), mention_author=False)
+    prison_fight_cooldowns[uid] = now
+
+    my_stats  = get_prison_combat_stats(ud)
+    opp_stats = get_prison_combat_stats(td)
+
+    my_power  = my_stats["atk"] * 1.3 + my_stats["def"] * 0.7 + my_stats["hp"] * 0.05 + random.randint(1, 30)
+    opp_power = opp_stats["atk"] * 1.3 + opp_stats["def"] * 0.7 + opp_stats["hp"] * 0.05 + random.randint(1, 30)
 
     if my_power >= opp_power:
         winner_id, loser_id, winner_name, loser_name = uid, tid, ctx.author.name, target.name
+        winner_realm, loser_realm = my_stats["realm"], opp_stats["realm"]
     else:
         winner_id, loser_id, winner_name, loser_name = tid, uid, target.name, ctx.author.name
+        winner_realm, loser_realm = opp_stats["realm"], my_stats["realm"]
 
     wd = load_user(winner_id)
     ld = load_user(loser_id)
+
     steal = min(ld.get("money", 0), random.randint(2_000, 10_000))
-    ld["money"]      = max(0, ld.get("money", 0) - steal)
-    wd["money"]       = wd.get("money", 0) + steal
-    wd["prison_rep"]  = min(100, wd.get("prison_rep", 50) + 5)
-    ld["prison_rep"]  = max(0, ld.get("prison_rep", 50) - 5)
+    ld["money"] = max(0, ld.get("money", 0) - steal)
+    wd["money"] = wd.get("money", 0) + steal
+
+    wd["prison_rep"] = min(100, wd.get("prison_rep", 50) + 5)
+    ld["prison_rep"] = max(0, ld.get("prison_rep", 50) - 5)
+
+    exp_gain = random.randint(15, 35)
+    wd["prison_exp"] = wd.get("prison_exp", 0) + exp_gain
+
+    reduce_note = ""
+    w_end = _jail_end(wd)
+    if w_end and now < w_end:
+        remain_secs = int((w_end - now).total_seconds())
+        reduce_secs = min(remain_secs - 60, int(remain_secs * 0.15))
+        if reduce_secs > 0:
+            new_end = w_end - timedelta(seconds=reduce_secs)
+            wd["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
+            reduce_note = f"\n⏳ Án tù của **{winner_name}** giảm **{reduce_secs//60}p {reduce_secs%60}s**!"
+
     save_user(winner_id)
     save_user(loser_id)
-    add_history(winner_id, f"Thắng đánh nhau trong tù vs {loser_name} (+{steal:,} 💰)")
+    add_history(winner_id, f"Thắng đánh nhau trong tù vs {loser_name} (+{steal:,} 💰, +{exp_gain} tu vi)")
     add_history(loser_id,  f"Thua đánh nhau trong tù vs {winner_name} (-{steal:,} 💰)")
 
     embed = discord.Embed(
         title="🥊 ẨU ĐẢ TRONG PHÒNG GIAM!",
         description=(
-            f"**{winner_name}** hạ gục **{loser_name}**!\n"
-            f"💰 Cướp được **{steal:,} 💰**\n"
+            f"**{winner_name}** [{winner_realm['name']}] hạ gục **{loser_name}** [{loser_realm['name']}]!\n"
+            f"💰 Cướp được **{steal:,} 💰** | ✨ +{exp_gain} tu vi\n"
             f"🍀 {winner_name}: +5 uy tín | {loser_name}: -5 uy tín"
+            f"{reduce_note}"
         ),
         color=discord.Color.dark_red()
     )
