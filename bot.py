@@ -465,8 +465,14 @@ async def global_check(ctx):
         "daomo", "daomotu", "digprison",
         "phapbao", "phapbaotu", "prisonequip",
         "phacanh", "breakthrough", "dotpha",
+        "cantin", "canteen",
     }
-    is_exempt = ctx.command and ctx.command.name in JAIL_EXEMPT_COMMANDS
+    # Dùng root_parent để lấy đúng tên lệnh GỐC (vd "phapbao mua" -> vẫn tính là "phapbao")
+    _root_cmd = (
+        ctx.command.root_parent.name if (ctx.command and ctx.command.root_parent)
+        else (ctx.command.name if ctx.command else None)
+    )
+    is_exempt = _root_cmd in JAIL_EXEMPT_COMMANDS
     if not is_exempt:
         user_id = str(ctx.author.id)
         user_data = load_user(user_id)
