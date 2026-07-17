@@ -4780,8 +4780,8 @@ async def get_or_create_prison_channel(guild: discord.Guild):
     return channel
 
 
-# ── CÁCH LY / THẢ ────────────────────────────────────────────────────
 async def isolate_prisoner(member: discord.Member):
+    """Chỉ cấp quyền vào phòng giam tập thể, KHÔNG ẩn bất kỳ kênh nào khác."""
     guild = member.guild
     channel = await get_or_create_prison_channel(guild)
     if not channel:
@@ -4795,17 +4795,7 @@ async def isolate_prisoner(member: discord.Member):
     except Exception as e:
         print(f"[PRISON] grant prison view error: {e}")
 
-    for ch in guild.channels:
-        if ch.id == channel.id or (channel.category and ch.id == channel.category.id):
-            continue
-        try:
-            existing = ch.overwrites_for(member)
-            if existing.view_channel is False:
-                continue
-            await ch.set_permissions(member, view_channel=False, reason="Cách ly tù nhân")
-            await asyncio.sleep(0.15)
-        except (discord.Forbidden, Exception):
-            continue
+    # ĐÃ BỎ vòng lặp ẩn toàn bộ kênh khác — tù nhân vẫn chat bình thường ở kênh thường
 
     data = PRISON_GUILD_CACHE.setdefault(guild.id, {
         "channel_id": channel.id,
@@ -4821,7 +4811,7 @@ async def isolate_prisoner(member: discord.Member):
 
     try:
         await channel.send(embed=discord.Embed(
-            description=f"⛓️ {member.mention} vừa bị áp giải vào phòng giam!",
+            description=f"⛓️ {member.mention} vừa bị áp giải vào phòng giam! (Vẫn chat được ở các kênh khác)",
             color=discord.Color.dark_red()
         ))
     except Exception:
@@ -4830,21 +4820,18 @@ async def isolate_prisoner(member: discord.Member):
 
 
 async def free_prisoner(member: discord.Member):
+    """Chỉ gỡ quyền riêng ở phòng giam (nếu cần), không phải khôi phục kênh nào khác."""
     guild = member.guild
     data = PRISON_GUILD_CACHE.get(guild.id)
     if not data:
         return
 
     channel = guild.get_channel(data["channel_id"])
-
-    for ch in guild.channels:
+    if channel:
         try:
-            if ch.overwrites_for(member).is_empty():
-                continue
-            await ch.set_permissions(member, overwrite=None, reason="Mãn hạn tù")
-            await asyncio.sleep(0.15)
-        except (discord.Forbidden, Exception):
-            continue
+            await channel.set_permissions(member, overwrite=None, reason="Mãn hạn tù")
+        except Exception:
+            pass
 
     data["prisoners"].discard(str(member.id))
     save_prison_guild(guild.id)
@@ -4929,70 +4916,6 @@ async def prison_watcher():
         except Exception as e:
             print(f"[PRISON] watcher error: {e}")
         await asyncio.sleep(20)
-
-
-# ── GIỮ TÙ NHÂN KHÔNG THẤY KÊNH MỚI TẠO SAU KHI ĐÃ BỊ GIAM ────────────
-@bot.event
-async def on_guild_channel_create(channel):
-    data = PRISON_GUILD_CACHE.get(channel.guild.id)
-    if not data or not data.get("prisoners"):
-        return
-    if channel.id == data.get("channel_id"):
-        return
-    for uid in list(data["prisoners"]):
-        member = channel.guild.get_member(int(uid))
-        if member:
-            try:
-                await channel.set_permissions(member, view_channel=False, reason="Tù nhân không được thấy kênh mới")
-            except Exception:
-                pass
-
-
-# ── RELAY CHAT LIÊN SERVER GIỮA CÁC PHÒNG GIAM ────────────────────────
-async def handle_prison_relay(message: discord.Message) -> bool:
-    if message.author.bot or not message.guild:
-        return False
-    if message.channel.id not in PRISON_CHANNEL_CACHE:
-        return False
-
-    content = message.content or ""
-    if not content and not message.attachments:
-        return False
-
-    username = f"⛓️ {message.author.display_name} [{message.guild.name}]"[:80]
-
-    for gid, data in list(PRISON_GUILD_CACHE.items()):
-        if gid == message.guild.id:
-            continue
-        target_guild = bot.get_guild(gid)
-        if not target_guild:
-            continue
-        target_channel = target_guild.get_channel(data["channel_id"])
-        if not target_channel:
-            continue
-
-        files = []
-        for att in message.attachments:
-            try:
-                files.append(await att.to_file())
-            except Exception:
-                pass
-
-        wh = await get_or_create_webhook(target_channel)
-        try:
-            if wh:
-                await wh.send(
-                    content=content[:2000] or "📎 (đính kèm)",
-                    username=username,
-                    avatar_url=message.author.display_avatar.url,
-                    files=files,
-                )
-            else:
-                await target_channel.send(f"**{username}**: {content}")
-        except Exception as e:
-            print(f"[PRISON] relay error to {gid}: {e}")
-    return False  # tin nhắn gốc vẫn hiển thị bình thường, không chặn gì thêm
-
 
 # =====================================================================
 # 🥫 TÍNH NĂNG "ĐỜI THỰC" TRONG TÙ
