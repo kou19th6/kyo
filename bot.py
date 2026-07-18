@@ -185,7 +185,7 @@ def load_user(user_id):
         "prison_armor": None,         # ID giáp tù nhân đang trang bị
         "prison_materials": {},       # Nguyên liệu đào được trong tù {tên: số lượng}
         "prison_learned_techniques": ["cuong_quyen"],  # Công pháp đã học
-        "prison_technique": "cuong_quyen",             # Công pháp đang trang bị
+        "prison_technique_loadout": ["cuong_quyen"],   # Chuỗi công pháp luân phiên khi đấu
     }
 
     for key, value in defaults.items():
@@ -5501,9 +5501,475 @@ class PrisonFightView(discord.ui.View):
                 c.disabled = True
 
 
+# ═══════════════════════════════════════════════════════════
+# CÔNG PHÁP TÙ NGỤC v2 — 24 CHIÊU, MỖI CHIÊU CƠ CHẾ RIÊNG
+# Trận đấu mô phỏng tự động tối đa 200 hiệp
+# ═══════════════════════════════════════════════════════════
+
+PRISON_FIGHT_MAX_ROUNDS = 200
+
+# type quyết định cơ chế:
+#  attack        - sát thương thường, có khắc chế vòng tròn (beats)
+#  heal          - hồi máu tức thì % máu tối đa
+#  regen         - hồi máu % máu tối đa mỗi hiệp trong N hiệp
+#  cleanse_heal  - hồi máu + xóa cháy/độc đang dính
+#  burn          - gây sát thương + đốt cháy (dmg/hiệp) trong N hiệp
+#  poison        - gây sát thương thấp hơn + nhiễm độc (dmg/hiệp) trong N hiệp
+#  freeze        - gây sát thương + tỉ lệ % gây choáng 1 hiệp
+#  true_dmg      - sát thương thật, xuyên qua Thủ hoàn toàn
+#  lifesteal     - gây sát thương, hồi lại % sát thương đã gây thành máu
+#  drain         - gây sát thương, hút vĩnh viễn 1 phần ATK đối thủ
+#  execute       - gây sát thương, nhân thêm nếu đối thủ máu dưới ngưỡng %
+#  multihit      - đánh nhiều đòn liên tiếp trong cùng 1 hiệp
+#  curse         - gây sát thương + giảm % Thủ đối thủ trong N hiệp
+#  shield_heal   - hồi máu + dựng khiên giảm % sát thương nhận trong 2 hiệp
+#  berserk_lowhp - sát thương tăng theo % máu đã mất của chính mình
+#  reflect       - gây sát thương + phản lại % sát thương nhận trong hiệp này
+#  evade         - né tránh hoàn toàn với xác suất %, có phản đòn nhẹ
+PRISON_TECHNIQUES = {
+    "cuong_quyen":        {"name": "👊 Cuồng Quyền",           "element": "💪 Thể Thuật", "type": "attack",       "beats": "thiet_giap", "atk_mult": 1.5,
+                            "desc": "Đấm liên hoàn dồn toàn lực, khắc chế Thiết Giáp Công."},
+    "thiet_giap":         {"name": "🛡️ Thiết Giáp Công",        "element": "💪 Thể Thuật", "type": "attack",       "beats": "linh_hoat",  "atk_mult": 1.0,
+                            "desc": "Gồng cứng như sắt, khắc chế Thân Pháp Linh Hoạt."},
+    "linh_hoat":          {"name": "🌀 Thân Pháp Linh Hoạt",    "element": "💪 Thể Thuật", "type": "attack",       "beats": "cuong_quyen","atk_mult": 1.2,
+                            "desc": "Né tránh rồi phản công, khắc chế Cuồng Quyền."},
+    "phach_son":          {"name": "⛰️ Phách Sơn Chưởng",       "element": "🏔️ Thổ",       "type": "attack",       "beats": None,         "atk_mult": 2.1,
+                            "desc": "Chưởng lực kinh thiên, sát thương cực cao nhưng không khắc chế ai."},
+    "an_tap":             {"name": "🌑 Ám Tập",                 "element": "🌑 Ám",        "type": "attack",       "beats": "phach_son",  "atk_mult": 1.7,
+                            "desc": "Đánh úp bất ngờ, khắc chế Phách Sơn Chưởng."},
+
+    "cuu_am_chan_kinh":   {"name": "❄️ Cửu Âm Chân Kinh",       "element": "❄️ Băng",      "type": "heal",         "value": 0.15,
+                            "desc": "Vận công điều tức, hồi ngay 15% sinh lực tối đa."},
+    "dich_can_kinh":      {"name": "🧘 Dịch Cân Kinh",           "element": "🌿 Mộc",       "type": "regen",        "value": 0.07, "value2": 3,
+                            "desc": "Đả thông kinh mạch, hồi 7% máu tối đa mỗi hiệp trong 3 hiệp."},
+    "cuu_duong_than_cong":{"name": "☀️ Cửu Dương Thần Công",     "element": "☀️ Dương",     "type": "cleanse_heal", "value": 0.18,
+                            "desc": "Dương khí cuồn cuộn, hồi 18% máu và giải trừ mọi cháy/độc đang dính."},
+
+    "hoa_diem_dao":       {"name": "🔥 Hỏa Diễm Đao",           "element": "🔥 Hỏa",       "type": "burn",         "atk_mult": 1.1, "value": 0.30, "value2": 3,
+                            "desc": "Đao mang theo lửa, gây sát thương và đốt cháy 3 hiệp."},
+    "han_ngoc_cong":      {"name": "❄️ Hàn Ngọc Công",          "element": "❄️ Băng",      "type": "freeze",       "atk_mult": 1.2, "value": 0.35,
+                            "desc": "Chưởng lực băng hàn, 35% cơ hội đóng băng đối thủ 1 hiệp."},
+    "loi_de_quyet":       {"name": "⚡ Lôi Đế Quyết",            "element": "⚡ Lôi",        "type": "freeze",       "atk_mult": 1.4, "value": 0.45,
+                            "desc": "Sấm sét giáng xuống, 45% cơ hội tê liệt đối thủ 1 hiệp."},
+    "doc_co_cuu_kiem":    {"name": "⚔️ Độc Cô Cửu Kiếm",        "element": "⚔️ Kiếm",      "type": "true_dmg",     "atk_mult": 1.3,
+                            "desc": "Kiếm ý vô chiêu, sát thương xuyên thẳng qua mọi phòng ngự."},
+    "cap_mo_cong":        {"name": "🐸 Cáp Mô Công",            "element": "☠️ Độc",       "type": "poison",       "atk_mult": 0.8, "value": 0.25, "value2": 4,
+                            "desc": "Độc chất thấm dần, gây độc kéo dài 4 hiệp."},
+    "hap_tinh_dai_phap":  {"name": "🌀 Hấp Tinh Đại Pháp",      "element": "🌀 Hút", "type": "lifesteal",   "atk_mult": 1.3, "value": 0.60,
+                            "desc": "Hút nội lực đối thủ, hồi 60% sát thương vừa gây thành máu."},
+    "bac_minh_than_cong": {"name": "🌊 Bắc Minh Thần Công",     "element": "🌊 Thủy",      "type": "drain",        "atk_mult": 1.0, "value": 0.20,
+                            "desc": "Hút chân khí đối thủ, cướp vĩnh viễn 20% ATK của đối thủ trong trận."},
+    "nhat_duong_chi":     {"name": "☝️ Nhất Dương Chỉ",         "element": "☀️ Dương",     "type": "execute",      "atk_mult": 1.2, "value": 0.30, "value2": 2.2,
+                            "desc": "Một chỉ định sinh tử, sát thương x2.2 nếu đối thủ dưới 30% máu."},
+    "luc_mach_than_kiem": {"name": "💫 Lục Mạch Thần Kiếm",     "element": "⚔️ Kiếm",      "type": "multihit",     "atk_mult": 1.4,
+                            "desc": "Kiếm khí vô hình bắn liên tiếp nhiều đòn trong 1 hiệp."},
+    "thien_ma_dai_phap":  {"name": "😈 Thiên Ma Đại Pháp",      "element": "🌑 Ám",        "type": "curse",        "atk_mult": 1.0, "value": 0.25, "value2": 3,
+                            "desc": "Ma khí xâm nhập, giảm 25% Thủ đối thủ trong 3 hiệp."},
+    "phat_quang_pho_chieu":{"name":"🌟 Phật Quang Phổ Chiếu",   "element": "🌟 Quang",     "type": "shield_heal",  "value": 0.12, "value2": 0.35,
+                            "desc": "Ánh sáng từ bi, hồi 12% máu và dựng khiên giảm 35% sát thương 2 hiệp."},
+    "cuong_phong_tram":   {"name": "🌪️ Cuồng Phong Trảm",       "element": "🌪️ Phong",     "type": "multihit",     "atk_mult": 1.15,
+                            "desc": "Kiếm phong cuồng loạn, chém liên tiếp nhanh như gió."},
+    "son_bang_dia_liet":  {"name": "🏔️ Sơn Băng Địa Liệt",      "element": "🏔️ Thổ",       "type": "freeze",       "atk_mult": 1.6, "value": 0.50,
+                            "desc": "Đất trời rung chuyển, sát thương cao + 50% cơ hội gây choáng."},
+    "huyet_anh_ma_cong":  {"name": "🩸 Huyết Ảnh Ma Công",      "element": "🩸 Huyết",     "type": "berserk_lowhp","atk_mult": 1.3, "value": 1.2,
+                            "desc": "Càng mất máu càng điên cuồng, sát thương tăng mạnh khi máu thấp."},
+    "cang_khon_dai_na_di":{"name": "🌀 Càn Khôn Đại Na Di",     "element": "🌀 Hút",       "type": "reflect",      "atk_mult": 1.0, "value": 0.50,
+                            "desc": "Chuyển di lực đạo, phản lại 50% sát thương nhận trong hiệp này."},
+    "lang_ba_vi_bo":      {"name": "🕊️ Lăng Ba Vi Bộ",          "element": "🌬️ Phong",     "type": "evade",        "atk_mult": 0.5, "value": 0.45,
+                            "desc": "Thân pháp ảo diệu, 45% né tránh hoàn toàn kèm phản đòn nhẹ."},
+}
+
+PRISON_TECHNIQUE_TYPE_LABELS = {
+    "attack": "⚔️ Sát thương (có khắc chế)", "heal": "💗 Hồi máu tức thì",
+    "regen": "🌿 Hồi máu theo hiệp", "cleanse_heal": "✨ Hồi máu + Giải độc/cháy",
+    "burn": "🔥 Gây cháy theo hiệp", "poison": "☠️ Gây độc theo hiệp",
+    "freeze": "❄️ Tỉ lệ gây choáng", "true_dmg": "💥 Sát thương thật (xuyên Thủ)",
+    "lifesteal": "🧛 Hút máu theo sát thương", "drain": "🌀 Hút ATK đối thủ",
+    "execute": "☝️ Xử tử khi đối thủ máu thấp", "multihit": "💫 Đánh nhiều đòn",
+    "curse": "😈 Giảm Thủ đối thủ", "shield_heal": "🌟 Hồi máu + Dựng khiên",
+    "berserk_lowhp": "🩸 Càng ít máu càng mạnh", "reflect": "🌀 Phản sát thương nhận vào",
+    "evade": "🕊️ Né tránh + phản đòn nhẹ",
+}
+
+# Học phí: nguyên liệu đào từ k daomo + yêu cầu cảnh giới tối thiểu (index PRISON_REALMS) + hao phí tu vi (nếu có)
+PRISON_TECHNIQUE_LEARN_COST = {
+    "cuong_quyen":         {"materials": {}, "min_realm": 0},
+    "thiet_giap":          {"materials": {"Sắt Vụn Nhà Tù 🔩": 4}, "min_realm": 0},
+    "linh_hoat":           {"materials": {"Vải Vụn Nhà Tù 🧵": 4}, "min_realm": 0},
+    "cuu_am_chan_kinh":    {"materials": {"Vải Vụn Nhà Tù 🧵": 6}, "min_realm": 0},
+    "hoa_diem_dao":        {"materials": {"Mảnh Kính Vỡ 🔻": 4}, "min_realm": 0},
+    "cap_mo_cong":         {"materials": {"Mảnh Kính Vỡ 🔻": 3, "Xích Sắt Cũ ⛓️": 2}, "min_realm": 0},
+    "lang_ba_vi_bo":       {"materials": {"Vải Vụn Nhà Tù 🧵": 5, "Sắt Vụn Nhà Tù 🔩": 2}, "min_realm": 0},
+
+    "phach_son":           {"materials": {"Xích Sắt Cũ ⛓️": 4}, "min_realm": 1},
+    "an_tap":              {"materials": {"Xích Sắt Cũ ⛓️": 3, "Mảnh Kính Vỡ 🔻": 3}, "min_realm": 1},
+    "han_ngoc_cong":       {"materials": {"Xích Sắt Cũ ⛓️": 4, "Sắt Vụn Nhà Tù 🔩": 3}, "min_realm": 1},
+    "doc_co_cuu_kiem":     {"materials": {"Xích Sắt Cũ ⛓️": 5}, "min_realm": 1},
+    "luc_mach_than_kiem":  {"materials": {"Sắt Vụn Nhà Tù 🔩": 6, "Vải Vụn Nhà Tù 🧵": 4}, "min_realm": 1},
+    "thien_ma_dai_phap":   {"materials": {"Mảnh Kính Vỡ 🔻": 5, "Xích Sắt Cũ ⛓️": 3}, "min_realm": 1},
+    "cuong_phong_tram":    {"materials": {"Vải Vụn Nhà Tù 🧵": 6, "Sắt Vụn Nhà Tù 🔩": 4}, "min_realm": 1},
+
+    "dich_can_kinh":       {"materials": {"Xích Sắt Cũ ⛓️": 5, "Vải Vụn Nhà Tù 🧵": 5}, "min_realm": 2},
+    "hap_tinh_dai_phap":   {"materials": {"Tinh Thiết Ngục Tù 🌑": 2, "Xích Sắt Cũ ⛓️": 4}, "min_realm": 2},
+    "nhat_duong_chi":      {"materials": {"Tinh Thiết Ngục Tù 🌑": 2, "Mảnh Kính Vỡ 🔻": 4}, "min_realm": 2},
+    "phat_quang_pho_chieu":{"materials": {"Tinh Thiết Ngục Tù 🌑": 2, "Vải Vụn Nhà Tù 🧵": 6}, "min_realm": 2},
+    "son_bang_dia_liet":   {"materials": {"Tinh Thiết Ngục Tù 🌑": 2, "Sắt Vụn Nhà Tù 🔩": 6}, "min_realm": 2},
+    "cang_khon_dai_na_di": {"materials": {"Tinh Thiết Ngục Tù 🌑": 3, "Xích Sắt Cũ ⛓️": 4}, "min_realm": 2},
+
+    "cuu_duong_than_cong": {"materials": {"Tinh Thiết Ngục Tù 🌑": 4}, "min_realm": 3, "exp_cost": 200},
+    "bac_minh_than_cong":  {"materials": {"Tinh Thiết Ngục Tù 🌑": 4, "Xích Sắt Cũ ⛓️": 5}, "min_realm": 3, "exp_cost": 200},
+    "huyet_anh_ma_cong":   {"materials": {"Tinh Thiết Ngục Tù 🌑": 5}, "min_realm": 3, "exp_cost": 250},
+    "loi_de_quyet":        {"materials": {"Tinh Thiết Ngục Tù 🌑": 5, "Sắt Vụn Nhà Tù 🔩": 6}, "min_realm": 3, "exp_cost": 250},
+}
+
+
+@bot.command(aliases=['congphaptu', 'techniques'])
+async def congphap(ctx, action: str = None, *tech_ids: str):
+    """Xem / học / xếp chuỗi Công Pháp dùng trong k danhnhau. CHỈ dùng ở phòng giam tập thể."""
+    if not is_in_prison_channel(ctx):
+        return await ctx.reply("⚠️ Lệnh này chỉ dùng được tại **phòng giam tập thể**!", mention_author=False)
+
+    uid = str(ctx.author.id)
+    ud  = load_user(uid)
+    learned  = ud.setdefault("prison_learned_techniques", ["cuong_quyen"])
+    loadout  = ud.setdefault("prison_technique_loadout", ["cuong_quyen"])
+    my_realm = get_prison_realm_index(ud.get("prison_exp", 0))
+
+    if not action:
+        embed = discord.Embed(
+            title="📖 CÔNG PHÁP TÙ NGỤC",
+            description=f"🍀 Cảnh giới: **{PRISON_REALMS[my_realm]['name']}**\n⭐ Đang dùng (luân phiên): {' → '.join(PRISON_TECHNIQUES[k]['name'] for k in loadout)}",
+            color=discord.Color.dark_purple()
+        )
+        lines = []
+        for key, t in PRISON_TECHNIQUES.items():
+            cost = PRISON_TECHNIQUE_LEARN_COST.get(key, {})
+            status = "✅" if key in learned else "🔒"
+            realm_req = PRISON_REALMS[cost.get("min_realm", 0)]["name"]
+            cost_str = " + ".join(f"{v}x {n}" for n, v in cost.get("materials", {}).items()) or "Miễn phí"
+            if cost.get("exp_cost"):
+                cost_str += f" + {cost['exp_cost']} tu vi"
+            lines.append(
+                f"{status} **{t['name']}** [{t['element']}]\n"
+                f"  {PRISON_TECHNIQUE_TYPE_LABELS.get(t['type'], t['type'])}\n"
+                f"  Yêu cầu: {realm_req} | Phí: {cost_str}\n"
+                f"  _{t['desc']}_"
+            )
+        # Discord field/description giới hạn ký tự -> chia làm 2 field
+        half = len(lines) // 2
+        embed.add_field(name="📜 Danh Sách (1/2)", value="\n\n".join(lines[:half])[:1024], inline=False)
+        embed.add_field(name="📜 Danh Sách (2/2)", value="\n\n".join(lines[half:])[:1024], inline=False)
+        embed.set_footer(text="k congphap hoc <id> | k congphap loadout <id1> <id2> <id3>")
+        return await ctx.reply(embed=embed, mention_author=False)
+
+    action = action.lower()
+
+    if action in ["hoc", "learn"]:
+        if not tech_ids:
+            return await ctx.reply("⚠️ Dùng: `k congphap hoc <id>`", mention_author=False)
+        key = tech_ids[0].lower()
+        if key not in PRISON_TECHNIQUES:
+            return await ctx.reply(f"⚠️ Công pháp không tồn tại! `k congphap` để xem danh sách.", mention_author=False)
+        if key in learned:
+            return await ctx.reply("✅ Bạn đã học công pháp này rồi!", mention_author=False)
+
+        cost = PRISON_TECHNIQUE_LEARN_COST.get(key, {"materials": {}, "min_realm": 0})
+        if my_realm < cost.get("min_realm", 0):
+            return await ctx.reply(
+                f"⚠️ Cần đạt cảnh giới **{PRISON_REALMS[cost['min_realm']]['name']}** mới lĩnh ngộ được! Dùng `k phacanh` để đột phá.",
+                mention_author=False
+            )
+        mats = ud.setdefault("prison_materials", {})
+        for mat_name, need in cost.get("materials", {}).items():
+            if mats.get(mat_name, 0) < need:
+                return await ctx.reply(
+                    f"⚠️ Thiếu **{mat_name}** (cần {need}, có {mats.get(mat_name,0)})! Đào thêm bằng `k daomo`.",
+                    mention_author=False
+                )
+        exp_cost = cost.get("exp_cost", 0)
+        if exp_cost and ud.get("prison_exp", 0) < exp_cost:
+            return await ctx.reply(f"⚠️ Cần **{exp_cost}** tu vi để lĩnh ngộ (hiện có {ud.get('prison_exp',0)})!", mention_author=False)
+
+        for mat_name, need in cost.get("materials", {}).items():
+            mats[mat_name] -= need
+        if exp_cost:
+            ud["prison_exp"] -= exp_cost
+        learned.append(key)
+        save_user(uid)
+        return await ctx.reply(embed=discord.Embed(
+            title="✅ LĨNH NGỘ THÀNH CÔNG",
+            description=f"Đã học **{PRISON_TECHNIQUES[key]['name']}**!\n_{PRISON_TECHNIQUES[key]['desc']}_",
+            color=discord.Color.green()
+        ), mention_author=False)
+
+    elif action == "loadout":
+        if not tech_ids:
+            return await ctx.reply("⚠️ Dùng: `k congphap loadout <id1> [id2] [id3]` (tối đa 3, phải học rồi)", mention_author=False)
+        keys = [k.lower() for k in tech_ids[:3]]
+        for k in keys:
+            if k not in PRISON_TECHNIQUES:
+                return await ctx.reply(f"⚠️ Công pháp `{k}` không tồn tại!", mention_author=False)
+            if k not in learned:
+                return await ctx.reply(f"⚠️ Bạn chưa học **{PRISON_TECHNIQUES[k]['name']}**! `k congphap hoc {k}`", mention_author=False)
+        ud["prison_technique_loadout"] = keys
+        save_user(uid)
+        return await ctx.reply(embed=discord.Embed(
+            description=f"⭐ Chuỗi công pháp mới: {' → '.join(PRISON_TECHNIQUES[k]['name'] for k in keys)}",
+            color=discord.Color.blue()
+        ), mention_author=False)
+
+    return await ctx.reply("⚠️ Dùng `k congphap`, `k congphap hoc <id>`, hoặc `k congphap loadout <id1> id2 id3>`.", mention_author=False)
+
+
+# ── ĐỘNG CƠ MÔ PHỎNG CHIẾN ĐẤU ────────────────────────────────────────
+
+def _build_prison_fighter(user_id, display_name):
+    ud = load_user(user_id)
+    stats = get_prison_combat_stats(ud)
+    loadout = ud.get("prison_technique_loadout") or ["cuong_quyen"]
+    loadout = [k for k in loadout if k in PRISON_TECHNIQUES] or ["cuong_quyen"]
+    return {
+        "id": user_id, "name": display_name,
+        "hp": stats["hp"], "max_hp": stats["hp"],
+        "atk": stats["atk"], "def": stats["def"],
+        "loadout": loadout, "statuses": {},
+    }
+
+
+def _prison_empty_action():
+    return {"type": "none", "name": "⏸️ (choáng)", "dmg_out": 0, "true_dmg": False, "crit": False,
+            "self_heal": 0, "shield_pct": 0, "shield_turns": 0, "reflect_pct": 0,
+            "evade_chance": 0, "stun_chance": 0, "lifesteal_pct": 0, "drain_pct": 0,
+            "execute_thres": 0, "execute_mult": 1, "burn": None, "poison": None,
+            "def_down": None, "regen": None, "cleanse": False}
+
+
+def _prison_prepare_action(fighter, tech_key):
+    t = PRISON_TECHNIQUES[tech_key]
+    ttype = t["type"]
+    atk = fighter["atk"]
+    mult = t.get("atk_mult", 1.0)
+    a = _prison_empty_action()
+    a["type"] = ttype
+    a["name"] = t["name"]
+
+    if ttype == "attack":
+        a["dmg_out"] = atk * mult
+    elif ttype == "heal":
+        a["self_heal"] = int(fighter["max_hp"] * t["value"])
+    elif ttype == "regen":
+        a["regen"] = {"turns": int(t["value2"]), "value": t["value"]}
+    elif ttype == "cleanse_heal":
+        a["self_heal"] = int(fighter["max_hp"] * t["value"])
+        a["cleanse"] = True
+    elif ttype == "burn":
+        a["dmg_out"] = atk * mult
+        a["burn"] = {"turns": int(t["value2"]), "value": max(1, int(atk * t["value"]))}
+    elif ttype == "poison":
+        a["dmg_out"] = atk * mult
+        a["poison"] = {"turns": int(t["value2"]), "value": max(1, int(atk * t["value"]))}
+    elif ttype == "freeze":
+        a["dmg_out"] = atk * mult
+        a["stun_chance"] = t["value"]
+    elif ttype == "true_dmg":
+        a["dmg_out"] = atk * mult
+        a["true_dmg"] = True
+    elif ttype == "lifesteal":
+        a["dmg_out"] = atk * mult
+        a["lifesteal_pct"] = t["value"]
+    elif ttype == "drain":
+        a["dmg_out"] = atk * mult
+        a["drain_pct"] = t["value"]
+    elif ttype == "execute":
+        a["dmg_out"] = atk * mult
+        a["execute_thres"] = t["value"]
+        a["execute_mult"] = t["value2"]
+    elif ttype == "multihit":
+        a["dmg_out"] = atk * mult
+    elif ttype == "curse":
+        a["dmg_out"] = atk * mult
+        a["def_down"] = {"turns": int(t["value2"]), "value": t["value"]}
+    elif ttype == "shield_heal":
+        a["self_heal"] = int(fighter["max_hp"] * t["value"])
+        a["shield_pct"] = t["value2"]
+        a["shield_turns"] = 2
+    elif ttype == "berserk_lowhp":
+        missing_pct = 1 - (fighter["hp"] / fighter["max_hp"])
+        a["dmg_out"] = atk * mult * (1 + missing_pct * t["value"])
+    elif ttype == "reflect":
+        a["dmg_out"] = atk * mult
+        a["reflect_pct"] = t["value"]
+    elif ttype == "evade":
+        a["dmg_out"] = atk * mult
+        a["evade_chance"] = t["value"]
+
+    return a
+
+
+def _prison_tick_statuses(fighter):
+    st = fighter["statuses"]
+    died = False
+    for eff in ("burn", "poison"):
+        s = st.get(eff)
+        if s and s["turns"] > 0:
+            fighter["hp"] -= s["value"]
+            s["turns"] -= 1
+            if s["turns"] <= 0:
+                st.pop(eff, None)
+            if fighter["hp"] <= 0:
+                died = True
+    s = st.get("regen")
+    if s and s["turns"] > 0:
+        fighter["hp"] = min(fighter["max_hp"], fighter["hp"] + int(fighter["max_hp"] * s["value"]))
+        s["turns"] -= 1
+        if s["turns"] <= 0:
+            st.pop("regen", None)
+    for eff in ("def_down", "shield"):
+        s = st.get(eff)
+        if s and s["turns"] > 0:
+            s["turns"] -= 1
+            if s["turns"] <= 0:
+                st.pop(eff, None)
+    return died
+
+
+def _prison_is_stunned(fighter):
+    s = fighter["statuses"].get("stunned")
+    return bool(s and s["turns"] > 0)
+
+
+def _prison_mitigate(defender, defender_action, attacker_action, rng):
+    dmg = attacker_action.get("dmg_out", 0)
+    note = ""
+    if dmg <= 0:
+        return 0, note
+    if defender_action.get("evade_chance") and rng.random() < defender_action["evade_chance"]:
+        return 0, " 💨NÉ!"
+    if not attacker_action.get("true_dmg"):
+        eff_def = defender["def"]
+        dd = defender["statuses"].get("def_down")
+        if dd and dd["turns"] > 0:
+            eff_def = int(eff_def * (1 - dd["value"]))
+        reduction = eff_def / (eff_def + 80)
+        dmg = dmg * (1 - reduction)
+    shield = defender["statuses"].get("shield")
+    if shield and shield["turns"] > 0:
+        dmg *= (1 - shield["value"])
+        note += " 🛡️"
+    return max(1, int(dmg)), note
+
+
+def run_prison_fight(f1, f2):
+    """Mô phỏng trận đấu tối đa PRISON_FIGHT_MAX_ROUNDS hiệp. Trả về (số hiệp, danh sách log nổi bật)."""
+    rng = random
+    highlights = []
+    round_num = 0
+
+    while round_num < PRISON_FIGHT_MAX_ROUNDS and f1["hp"] > 0 and f2["hp"] > 0:
+        round_num += 1
+
+        if _prison_tick_statuses(f1) or _prison_tick_statuses(f2):
+            if f1["hp"] <= 0 or f2["hp"] <= 0:
+                highlights.append(f"☠️ Hiệp {round_num}: hiệu ứng bào mòn kết liễu trận đấu!")
+                break
+
+        f1_stunned = _prison_is_stunned(f1)
+        f2_stunned = _prison_is_stunned(f2)
+        if f1_stunned:
+            f1["statuses"]["stunned"]["turns"] -= 1
+            if f1["statuses"]["stunned"]["turns"] <= 0:
+                f1["statuses"].pop("stunned", None)
+        if f2_stunned:
+            f2["statuses"]["stunned"]["turns"] -= 1
+            if f2["statuses"]["stunned"]["turns"] <= 0:
+                f2["statuses"].pop("stunned", None)
+
+        key1 = None if f1_stunned else f1["loadout"][(round_num - 1) % len(f1["loadout"])]
+        key2 = None if f2_stunned else f2["loadout"][(round_num - 1) % len(f2["loadout"])]
+
+        a1 = _prison_prepare_action(f1, key1) if key1 else _prison_empty_action()
+        a2 = _prison_prepare_action(f2, key2) if key2 else _prison_empty_action()
+
+        if key1 and key2 and a1["type"] == "attack" and a2["type"] == "attack":
+            if PRISON_TECHNIQUES[key1].get("beats") == key2:
+                a1["dmg_out"] *= 1.35
+            if PRISON_TECHNIQUES[key2].get("beats") == key1:
+                a2["dmg_out"] *= 1.35
+
+        for a in (a1, a2):
+            if a["dmg_out"] > 0 and rng.random() < 0.12:
+                a["dmg_out"] *= 1.5
+                a["crit"] = True
+
+        if a1.get("shield_pct"):
+            f1["statuses"]["shield"] = {"turns": a1["shield_turns"], "value": a1["shield_pct"]}
+        if a2.get("shield_pct"):
+            f2["statuses"]["shield"] = {"turns": a2["shield_turns"], "value": a2["shield_pct"]}
+
+        dmg_to_f2, note2 = _prison_mitigate(f2, a2, a1, rng)
+        dmg_to_f1, note1 = _prison_mitigate(f1, a1, a2, rng)
+
+        if a1.get("execute_thres") and f2["max_hp"] > 0 and (f2["hp"] / f2["max_hp"]) <= a1["execute_thres"]:
+            dmg_to_f2 = int(dmg_to_f2 * a1["execute_mult"]); note2 += " 💀XỬ TRẢM!"
+        if a2.get("execute_thres") and f1["max_hp"] > 0 and (f1["hp"] / f1["max_hp"]) <= a2["execute_thres"]:
+            dmg_to_f1 = int(dmg_to_f1 * a2["execute_mult"]); note1 += " 💀XỬ TRẢM!"
+
+        reflect_to_f2 = int(dmg_to_f1 * a1.get("reflect_pct", 0)) if a1.get("reflect_pct") else 0
+        reflect_to_f1 = int(dmg_to_f2 * a2.get("reflect_pct", 0)) if a2.get("reflect_pct") else 0
+
+        f2["hp"] -= dmg_to_f2 + reflect_to_f2
+        f1["hp"] -= dmg_to_f1 + reflect_to_f1
+
+        if a1.get("self_heal"):
+            f1["hp"] = min(f1["max_hp"], f1["hp"] + a1["self_heal"])
+        if a2.get("self_heal"):
+            f2["hp"] = min(f2["max_hp"], f2["hp"] + a2["self_heal"])
+        if a1.get("lifesteal_pct"):
+            f1["hp"] = min(f1["max_hp"], f1["hp"] + int(dmg_to_f2 * a1["lifesteal_pct"]))
+        if a2.get("lifesteal_pct"):
+            f2["hp"] = min(f2["max_hp"], f2["hp"] + int(dmg_to_f1 * a2["lifesteal_pct"]))
+        if a1.get("drain_pct"):
+            stolen = int(f2["atk"] * a1["drain_pct"]); f2["atk"] = max(5, f2["atk"] - stolen); f1["atk"] += stolen // 2
+        if a2.get("drain_pct"):
+            stolen = int(f1["atk"] * a2["drain_pct"]); f1["atk"] = max(5, f1["atk"] - stolen); f2["atk"] += stolen // 2
+        if a1.get("cleanse"):
+            f1["statuses"].pop("burn", None); f1["statuses"].pop("poison", None)
+        if a2.get("cleanse"):
+            f2["statuses"].pop("burn", None); f2["statuses"].pop("poison", None)
+
+        if a1.get("burn"): f2["statuses"]["burn"] = dict(a1["burn"])
+        if a1.get("poison"): f2["statuses"]["poison"] = dict(a1["poison"])
+        if a1.get("def_down"): f2["statuses"]["def_down"] = dict(a1["def_down"])
+        if a1.get("regen"): f1["statuses"]["regen"] = dict(a1["regen"])
+        if a1.get("stun_chance") and rng.random() < a1["stun_chance"]:
+            f2["statuses"]["stunned"] = {"turns": 1}; note2 += " 😵CHOÁNG!"
+
+        if a2.get("burn"): f1["statuses"]["burn"] = dict(a2["burn"])
+        if a2.get("poison"): f1["statuses"]["poison"] = dict(a2["poison"])
+        if a2.get("def_down"): f1["statuses"]["def_down"] = dict(a2["def_down"])
+        if a2.get("regen"): f2["statuses"]["regen"] = dict(a2["regen"])
+        if a2.get("stun_chance") and rng.random() < a2["stun_chance"]:
+            f1["statuses"]["stunned"] = {"turns": 1}; note1 += " 😵CHOÁNG!"
+
+        notable = (
+            a1.get("crit") or a2.get("crit") or round_num == 1 or
+            f1["hp"] <= 0 or f2["hp"] <= 0 or
+            (f1["hp"] > 0 and f1["hp"] / f1["max_hp"] <= 0.25) or
+            (f2["hp"] > 0 and f2["hp"] / f2["max_hp"] <= 0.25) or
+            "😵" in note1 or "😵" in note2 or "💀" in note1 or "💀" in note2
+        )
+        if notable:
+            highlights.append(
+                f"**Hiệp {round_num}:** {f1['name']} dùng {a1['name']}{note1} | {f2['name']} dùng {a2['name']}{note2}\n"
+                f"❤️ {f1['name']}: {max(0,f1['hp'])}/{f1['max_hp']} — {f2['name']}: {max(0,f2['hp'])}/{f2['max_hp']}"
+            )
+
+    return round_num, highlights[-14:]
+
+
 @bot.command(aliases=['prisonfight', 'daugiam'])
 async def danhnhau(ctx, target: discord.Member):
-    """Đấu công pháp tay đôi — chọn chiêu khắc chế nhau qua 3 hiệp. CHỈ dùng ở phòng giam tập thể."""
+    """Đấu công pháp — mô phỏng tự động tối đa 200 hiệp với hệ chiêu thức đa dạng. CHỈ dùng ở phòng giam tập thể."""
     if not is_in_prison_channel(ctx):
         return await ctx.reply("⚠️ Lệnh này chỉ dùng được tại **phòng giam tập thể**!", mention_author=False)
 
@@ -5542,21 +6008,77 @@ async def danhnhau(ctx, target: discord.Member):
         ), mention_author=False)
     prison_fight_cooldowns[uid] = now
 
-    my_stats  = get_prison_combat_stats(ud)
-    opp_stats = get_prison_combat_stats(td)
-    my_learned = ud.setdefault("prison_learned_techniques", ["cuong_quyen"])
-    save_user(uid)
+    f1 = _build_prison_fighter(uid, ctx.author.display_name)
+    f2 = _build_prison_fighter(tid, target.display_name)
+
+    msg = await ctx.reply(embed=discord.Embed(
+        title="🥊 ĐẤU CÔNG PHÁP BẮT ĐẦU",
+        description=f"{ctx.author.mention} 🆚 {target.mention}\nĐang mô phỏng trận đấu (tối đa {PRISON_FIGHT_MAX_ROUNDS} hiệp)...",
+        color=discord.Color.dark_red()
+    ), mention_author=False)
+    await asyncio.sleep(1.5)
+
+    rounds_fought, highlights = run_prison_fight(f1, f2)
+
+    if f1["hp"] <= 0 and f2["hp"] <= 0:
+        winner_f, loser_f = random.choice([(f1, f2), (f2, f1)])
+    elif f1["hp"] <= 0:
+        winner_f, loser_f = f2, f1
+    elif f2["hp"] <= 0:
+        winner_f, loser_f = f1, f2
+    else:
+        # Hết 200 hiệp mà chưa ai gục -> ai còn % máu cao hơn thắng
+        f1_pct = f1["hp"] / f1["max_hp"]
+        f2_pct = f2["hp"] / f2["max_hp"]
+        winner_f, loser_f = (f1, f2) if f1_pct >= f2_pct else (f2, f1)
+
+    winner_id, loser_id = winner_f["id"], loser_f["id"]
+    winner_name, loser_name = winner_f["name"], loser_f["name"]
+
+    wd, ld = load_user(winner_id), load_user(loser_id)
+    steal = min(ld.get("money", 0), random.randint(2_000, 10_000))
+    ld["money"] = max(0, ld.get("money", 0) - steal)
+    wd["money"] = wd.get("money", 0) + steal
+    wd["prison_rep"] = min(100, wd.get("prison_rep", 50) + 5)
+    ld["prison_rep"] = max(0, ld.get("prison_rep", 50) - 5)
+    exp_gain = random.randint(20, 45)
+    wd["prison_exp"] = wd.get("prison_exp", 0) + exp_gain
+
+    reduce_note = ""
+    jstr = wd.get("jail_time")
+    w_end = None
+    if jstr:
+        try:
+            w_end = datetime.strptime(jstr, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            w_end = None
+    if w_end and datetime.now() < w_end:
+        remain_secs = int((w_end - datetime.now()).total_seconds())
+        reduce_secs = min(remain_secs - 60, int(remain_secs * 0.15))
+        if reduce_secs > 0:
+            new_end = w_end - timedelta(seconds=reduce_secs)
+            wd["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
+            reduce_note = f"\n⏳ Án tù của **{winner_name}** giảm **{reduce_secs//60}p {reduce_secs%60}s**!"
+
+    save_user(winner_id)
+    save_user(loser_id)
+    add_history(winner_id, f"Thắng đấu công pháp vs {loser_name} ({rounds_fought} hiệp, +{steal:,} 💰)")
+    add_history(loser_id, f"Thua đấu công pháp vs {winner_name} ({rounds_fought} hiệp, -{steal:,} 💰)")
 
     embed = discord.Embed(
-        title="🥊 ĐẤU CÔNG PHÁP — Hiệp 1/3",
+        title="🏆 KẾT THÚC TRẬN ĐẤU CÔNG PHÁP",
         description=(
-            f"{ctx.author.mention} [{my_stats['realm']['name']}] thách đấu {target.mention} [{opp_stats['realm']['name']}]!\n\n"
-            f"👇 Chọn chiêu thức để ra đòn!"
-        ),
-        color=discord.Color.dark_red()
+            "\n\n".join(highlights) +
+            f"\n\n{'─'*24}\n"
+            f"⏱️ Tổng số hiệp: **{rounds_fought}/{PRISON_FIGHT_MAX_ROUNDS}**\n"
+            f"🏆 **{winner_name}** chiến thắng! Máu còn lại: {max(0,winner_f['hp'])}/{winner_f['max_hp']}\n"
+            f"💰 Cướp được **{steal:,} 💰** | ✨ +{exp_gain} tu vi\n"
+            f"🍀 {winner_name}: +5 uy tín | {loser_name}: -5 uy tín"
+            f"{reduce_note}"
+        )[:4000],
+        color=discord.Color.gold()
     )
-    view = PrisonFightView(ctx.author, target, my_stats, opp_stats, my_learned)
-    await ctx.reply(embed=embed, view=view, mention_author=False)
+    await msg.edit(embed=embed)
 
 @bot.command(aliases=['visit'])
 async def thamtu(ctx, target: discord.Member, amount: int):
