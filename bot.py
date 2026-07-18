@@ -5527,6 +5527,220 @@ class CongPhapLearnView(discord.ui.View):
         super().__init__(timeout=60)
         self.add_item(CongPhapLearnSelect(author))
 
+def _prison_channel_ok(interaction):
+    """Kiểm tra interaction có đang diễn ra trong phòng giam tập thể không."""
+    if not interaction.guild:
+        return False
+    data = PRISON_GUILD_CACHE.get(interaction.guild.id)
+    return bool(data and interaction.channel.id == data.get("channel_id"))
+
+
+def build_prison_hub_embed(user_data):
+    exp = user_data.get("prison_exp", 0)
+    ridx = get_prison_realm_index(exp)
+    realm = PRISON_REALMS[ridx]
+    stats = get_prison_combat_stats(user_data)
+    rep = user_data.get("prison_rep", 50)
+
+    if ridx + 1 < len(PRISON_REALMS):
+        next_realm = PRISON_REALMS[ridx + 1]
+        span = max(1, next_realm["req_exp"] - realm["req_exp"])
+        exp_bar = make_progress_bar(exp - realm["req_exp"], span, 14)
+        exp_str = f"{exp:,}/{next_realm['req_exp']:,}"
+        next_str = f"Tiến tới: **{next_realm['name']}**"
+    else:
+        exp_bar = "🟩" * 14
+        exp_str = f"{exp:,} (MAX)"
+        next_str = "✅ Đã đạt cảnh giới tối cao!"
+
+    jail_str = user_data.get("jail_time")
+    jail_note = "Không ở tù"
+    if jail_str:
+        try:
+            end = datetime.strptime(jail_str, "%Y-%m-%d %H:%M:%S")
+            if datetime.now() < end:
+                jail_note = f"Mãn hạn: <t:{int(end.timestamp())}:R>"
+        except Exception:
+            pass
+
+    embed = discord.Embed(title="🏯 BẢNG TU LUYỆN TÙ NHÂN", color=discord.Color.dark_gold())
+    embed.add_field(name="🥇 Cảnh Giới", value=f"**{realm['name']}**", inline=False)
+    embed.add_field(name="⭐ Tu Vi", value=f"{exp_bar}\n{exp_str}", inline=False)
+    embed.add_field(name="🍀 Uy Tín", value=f"{make_progress_bar(rep, 100, 14)}\n{rep}/100", inline=False)
+    embed.add_field(name="⚔️ Chỉ Số Chiến Đấu", value=f"ATK **{stats['atk']}** | DEF **{stats['def']}** | HP **{stats['hp']}**", inline=True)
+    embed.add_field(name="⛓️ Trạng Thái", value=jail_note, inline=True)
+    embed.add_field(name="📜 Điều Kiện Phá Cảnh", value=next_str, inline=False)
+    embed.set_footer(text="Bấm nút bên dưới để thao tác | Chỉ dùng được ở phòng giam tập thể")
+    return embed
+
+
+class PrisonHubView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=120)
+        self.author = author
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Quay Lại", emoji="🔙", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_back(self, interaction, button):
+        for c in self.children:
+            c.disabled = True
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+    @discord.ui.button(label="Làm Mới", emoji="🔄", style=discord.ButtonStyle.success, row=0)
+    async def btn_refresh(self, interaction, button):
+        ud = load_user(str(interaction.user.id))
+        await interaction.response.edit_message(embed=build_prison_hub_embed(ud), view=self)
+
+    @discord.ui.button(label="Căng Tin", emoji="🥫", style=discord.ButtonStyle.primary, row=0)
+    async def btn_canteen(self, interaction, button):
+        if not _prison_channel_ok(interaction):
+            return await interaction.response.send_message("⚠️ Chỉ dùng được ở phòng giam tập thể!", ephemeral=True)
+        embed = discord.Embed(title="🥫 CĂNG TIN NHÀ TÙ", description="Chọn món để mua!", color=discord.Color.orange())
+        await interaction.response.send_message(embed=embed, view=PrisonCanteenView(self.author), ephemeral=True)
+
+    @discord.ui.button(label="Pháp Bảo", emoji="🛡️", style=discord.ButtonStyle.primary, row=0)
+    async def btn_phapbao(self, interaction, button):
+        if not _prison_channel_ok(interaction):
+            return await interaction.response.send_message("⚠️ Chỉ dùng được ở phòng giam tập thể!", ephemeral=True)
+        embed = discord.Embed(title="⚔️ KHO PHÁP BẢO NHÀ TÙ", description="Chọn vũ khí/giáp để mua hoặc rèn!", color=discord.Color.dark_gold())
+        await interaction.response.send_message(embed=embed, view=PhapBaoView(self.author), ephemeral=True)
+
+    @discord.ui.button(label="Đào Mò", emoji="⛏️", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_daomo(self, interaction, button):
+        if not _prison_channel_ok(interaction):
+            return await interaction.response.send_message("⚠️ Chỉ dùng được ở phòng giam tập thể!", ephemeral=True)
+        uid = str(interaction.user.id)
+        ud = load_user(uid)
+        js = ud.get("jail_time")
+        now = datetime.now()
+        if not js or now >= datetime.strptime(js, "%Y-%m-%d %H:%M:%S"):
+            return await interaction.response.send_message("⚠️ Bạn phải đang ở tù mới đào mò được!", ephemeral=True)
+
+        last = prison_dig_cooldowns.get(uid)
+        if last and (now - last).total_seconds() < PRISON_DIG_COOLDOWN:
+            remain = int(PRISON_DIG_COOLDOWN - (now - last).total_seconds())
+            return await interaction.response.send_message(f"⏳ Đợi **{remain//60}p {remain%60}s** nữa!", ephemeral=True)
+        prison_dig_cooldowns[uid] = now
+
+        if random.randint(1, 100) <= 12:
+            extra = random.randint(180, 420)
+            new_end = datetime.strptime(js, "%Y-%m-%d %H:%M:%S") + timedelta(seconds=extra)
+            ud["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
+            save_user(uid)
+            return await interaction.response.send_message(embed=discord.Embed(
+                title="🚨 BỊ CAI NGỤC BẮT GẶP!",
+                description=f"Án tù bị cộng thêm **{extra//60}p {extra%60}s**!",
+                color=discord.Color.dark_red()
+            ), ephemeral=True)
+
+        total_weight = sum(l["weight"] for l in PRISON_DIG_LOOT)
+        roll = random.uniform(0, total_weight)
+        cum = 0
+        chosen = PRISON_DIG_LOOT[-1]
+        for l in PRISON_DIG_LOOT:
+            cum += l["weight"]
+            if roll <= cum:
+                chosen = l
+                break
+        qty = random.randint(chosen["min"], chosen["max"])
+        mats = ud.setdefault("prison_materials", {})
+        mats[chosen["item"]] = mats.get(chosen["item"], 0) + qty
+        exp_gain = random.randint(3, 10)
+        ud["prison_exp"] = ud.get("prison_exp", 0) + exp_gain
+        save_user(uid)
+        add_history(uid, f"Đào mò trong tù: +{qty} {chosen['item']}")
+
+        await interaction.response.send_message(embed=discord.Embed(
+            title="⛏️ ĐÀO MÒ",
+            description=f"Tìm thấy: **{chosen['item']} x{qty}**!\n✨ +{exp_gain} tu vi",
+            color=discord.Color.dark_grey()
+        ), ephemeral=True)
+
+    @discord.ui.button(label="Phá Cảnh", emoji="⚡", style=discord.ButtonStyle.danger, row=1)
+    async def btn_phacanh(self, interaction, button):
+        if not _prison_channel_ok(interaction):
+            return await interaction.response.send_message("⚠️ Chỉ dùng được ở phòng giam tập thể!", ephemeral=True)
+        uid = str(interaction.user.id)
+        ud = load_user(uid)
+        exp = ud.get("prison_exp", 0)
+        ridx = get_prison_realm_index(exp)
+
+        if ridx >= len(PRISON_REALMS) - 1:
+            return await interaction.response.send_message(
+                f"🌌 Đã đạt cảnh giới tối cao: **{PRISON_REALMS[ridx]['name']}**!", ephemeral=True
+            )
+        next_realm = PRISON_REALMS[ridx + 1]
+        if exp < next_realm["req_exp"]:
+            need = next_realm["req_exp"] - exp
+            return await interaction.response.send_message(
+                f"🧘 Cần thêm **{need}** tu vi để phá lên **{next_realm['name']}**! Dùng nút Đào Mò để tích lũy.",
+                ephemeral=True
+            )
+
+        success_rate = max(35, 85 - ridx * 6)
+        await interaction.response.send_message(
+            f"🧘 Đang phá cảnh lên **{next_realm['name']}** (tỉ lệ {success_rate}%)...", ephemeral=True
+        )
+        await asyncio.sleep(2)
+
+        if random.randint(1, 100) <= success_rate:
+            msg = (
+                f"🌟 **THÀNH CÔNG!** Đột phá lên **{next_realm['name']}**!\n"
+                f"⚔️ATK+{next_realm['atk']} 🛡️DEF+{next_realm['def']} ❤️HP+{next_realm['hp']}"
+            )
+            add_history(uid, f"Phá cảnh thành công lên {next_realm['name']}")
+            color = discord.Color.gold()
+        else:
+            backlash = int(exp * 0.15)
+            ud["prison_exp"] = max(0, exp - backlash)
+            msg = f"💥 **TẨU HỎA NHẬP MA!** Mất **{backlash}** tu vi."
+            add_history(uid, f"Phá cảnh thất bại, mất {backlash} tu vi")
+            color = discord.Color.dark_red()
+
+        save_user(uid)
+        await interaction.followup.send(embed=discord.Embed(description=msg, color=color), ephemeral=True)
+
+    @discord.ui.button(label="Công Pháp", emoji="📜", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_congphap(self, interaction, button):
+        if not _prison_channel_ok(interaction):
+            return await interaction.response.send_message("⚠️ Chỉ dùng được ở phòng giam tập thể!", ephemeral=True)
+        embed = discord.Embed(title="📖 HỌC CÔNG PHÁP", description="Chọn công pháp muốn học!", color=discord.Color.dark_purple())
+        await interaction.response.send_message(embed=embed, view=CongPhapLearnView(self.author), ephemeral=True)
+
+    @discord.ui.button(label="Hồ Sơ", emoji="📇", style=discord.ButtonStyle.secondary, row=2)
+    async def btn_hoso(self, interaction, button):
+        ud = load_user(str(interaction.user.id))
+        embed = discord.Embed(title=f"📇 HỒ SƠ TÙ NHÂN — {interaction.user.name}", color=discord.Color.blue())
+        embed.add_field(name="⚖️ Tiền Án", value=f"{ud.get('crime_record', 0)} lần", inline=True)
+        embed.add_field(name="🍀 Uy Tín", value=f"{ud.get('prison_rep', 50)}/100", inline=True)
+        embed.add_field(name="🏃 Vượt Ngục Thất Bại", value=f"{ud.get('escape_fails', 0)}/{MAX_ESCAPE_FAIL_STREAK}", inline=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="Trận Hình", emoji="⚔️", style=discord.ButtonStyle.secondary, row=2, disabled=True)
+    async def btn_tranhinh(self, interaction, button):
+        await interaction.response.send_message(
+            "⚔️ Đấu với người khác cần chọn đối thủ trực tiếp, dùng lệnh: `k danhnhau @user`",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="Họa Cảnh / Linh Căn / Thẻ Chat / Công Đức", emoji="🔒", style=discord.ButtonStyle.secondary, row=3, disabled=True)
+    async def btn_placeholder(self, interaction, button):
+        pass
+
+
+@bot.command(aliases=['phongiam', 'prisonhub'])
+async def nhatuchinh(ctx):
+    """Bảng điều khiển tù nhân — bấm nút thay vì gõ lệnh. Chỉ dùng ở phòng giam tập thể."""
+    ud = load_user(str(ctx.author.id))
+    embed = build_prison_hub_embed(ud)
+    await ctx.reply(embed=embed, view=PrisonHubView(ctx.author), mention_author=False)
+
 @bot.command(aliases=['congphaptu', 'techniques'])
 async def congphap(ctx, action: str = None, *tech_ids: str):
     """Xem / học / xếp chuỗi Công Pháp dùng trong k danhnhau. CHỈ dùng ở phòng giam tập thể."""
