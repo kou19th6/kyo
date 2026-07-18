@@ -4944,6 +4944,40 @@ PRISON_CANTEEN = {
     "radiocu":   {"name": "📻 Radio Cũ",          "price": 40_000, "rep": 8,  "desc": "Nghe tin tức bên ngoài, +8 uy tín"},
 }
 
+class PrisonCanteenSelect(discord.ui.Select):
+    def __init__(self, author):
+        self.author = author
+        options = [
+            discord.SelectOption(label=v["name"][:100], description=f"{v['price']:,} 💰 — {v['desc']}"[:100], value=k)
+            for k, v in PRISON_CANTEEN.items()
+        ]
+        super().__init__(placeholder="Chọn món để mua...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        uid = str(interaction.user.id)
+        ud = load_user(uid)
+        js = ud.get("jail_time")
+        if not js or datetime.now() >= datetime.strptime(js, "%Y-%m-%d %H:%M:%S"):
+            return await interaction.response.send_message("✅ Bạn không ở trong tù!", ephemeral=True)
+        good = PRISON_CANTEEN[self.values[0]]
+        if ud.get("money", 0) < good["price"]:
+            return await interaction.response.send_message(f"⚠️ Cần **{good['price']:,} 💰**!", ephemeral=True)
+        ud["money"] -= good["price"]
+        ud["prison_rep"] = min(100, ud.get("prison_rep", 50) + good["rep"])
+        save_user(uid)
+        add_history(uid, f"Mua {good['name']} ở căng tin (-{good['price']:,} 💰, +{good['rep']} uy tín)")
+        await interaction.response.send_message(embed=discord.Embed(
+            description=f"🥫 Mua **{good['name']}**!\n🍀 Uy tín: **{ud['prison_rep']}/100** (+{good['rep']})",
+            color=discord.Color.green()
+        ), ephemeral=True)
+
+
+class PrisonCanteenView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.add_item(PrisonCanteenSelect(author))
 
 @bot.command(aliases=['canteen'])
 async def cantin(ctx, item: str = None):
@@ -4961,12 +4995,11 @@ async def cantin(ctx, item: str = None):
         return await ctx.reply("✅ Bạn không ở trong tù!", mention_author=False)
 
     if not item:
-        lines = [f"`{k}` — {v['name']} — **{v['price']:,} 💰** ({v['desc']})" for k, v in PRISON_CANTEEN.items()]
         return await ctx.reply(embed=discord.Embed(
             title="🥫 CĂNG TIN NHÀ TÙ",
-            description="\n".join(lines) + "\n\n`k cantin <mã hàng>` để mua",
+            description="Chọn món ở menu dưới để mua!",
             color=discord.Color.orange()
-        ), mention_author=False)
+        ), view=PrisonCanteenView(ctx.author), mention_author=False)
 
     key = item.lower()
     if key not in PRISON_CANTEEN:
@@ -5134,6 +5167,53 @@ async def daomo(ctx):
         color=discord.Color.dark_grey()
     ), mention_author=False)
 
+class PhapBaoSelect(discord.ui.Select):
+    def __init__(self, author):
+        self.author = author
+        options = []
+        for k, w in PRISON_WEAPONS.items():
+            cost = f"{w['price']:,} 💰" if w["price"] else " + ".join(f"{v}x {n}" for n, v in w["mats"].items())
+            options.append(discord.SelectOption(label=f"🗡️ {w['name']}"[:100], description=cost[:100], value=k))
+        for k, a in PRISON_ARMORS.items():
+            cost = f"{a['price']:,} 💰" if a["price"] else " + ".join(f"{v}x {n}" for n, v in a["mats"].items())
+            options.append(discord.SelectOption(label=f"🛡️ {a['name']}"[:100], description=cost[:100], value=k))
+        super().__init__(placeholder="Chọn pháp bảo để mua/rèn...", min_values=1, max_values=1, options=options[:25])
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        uid = str(interaction.user.id)
+        ud = load_user(uid)
+        item_id = self.values[0]
+        is_weapon = item_id in PRISON_WEAPONS
+        item = PRISON_WEAPONS[item_id] if is_weapon else PRISON_ARMORS[item_id]
+
+        if item["price"] > 0:
+            if ud.get("money", 0) < item["price"]:
+                return await interaction.response.send_message(f"⚠️ Cần **{item['price']:,} 💰**!", ephemeral=True)
+            ud["money"] -= item["price"]
+        else:
+            mats = ud.setdefault("prison_materials", {})
+            for mat_name, need in item["mats"].items():
+                if mats.get(mat_name, 0) < need:
+                    return await interaction.response.send_message(
+                        f"⚠️ Thiếu **{mat_name}** (cần {need}, có {mats.get(mat_name,0)})!", ephemeral=True)
+            for mat_name, need in item["mats"].items():
+                mats[mat_name] -= need
+
+        ud["prison_weapon" if is_weapon else "prison_armor"] = item_id
+        save_user(uid)
+        add_history(uid, f"Sở hữu pháp bảo tù: {item['name']}")
+        await interaction.response.send_message(embed=discord.Embed(
+            title="✅ RÈN/MUA THÀNH CÔNG", description=f"Đã sở hữu & trang bị **{item['name']}**!",
+            color=discord.Color.green()
+        ), ephemeral=True)
+
+
+class PhapBaoView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.add_item(PhapBaoSelect(author))
 
 @bot.group(invoke_without_command=True, aliases=['phapbaotu', 'prisonequip'])
 async def phapbao(ctx):
@@ -5170,8 +5250,8 @@ async def phapbao(ctx):
 
     mat_str = ", ".join(f"{n} x{v}" for n, v in mats.items()) or "Trống"
     embed.add_field(name="📦 Nguyên liệu đang có", value=mat_str, inline=False)
-    embed.set_footer(text="k phapbao mua <id>  |  Đào nguyên liệu: k daomo")
-    await ctx.reply(embed=embed, mention_author=False)
+    embed.set_footer(text="Chọn ở menu dưới để mua/rèn  |  Đào nguyên liệu: k daomo")
+    await ctx.reply(embed=embed, view=PhapBaoView(ctx.author), mention_author=False)
 
 
 @phapbao.command(name="mua")
@@ -5272,235 +5352,6 @@ async def phacanh(ctx):
 
     save_user(uid)
     await msg.edit(embed=embed)
-
-# ═══════════════════════════════════════════════════════════
-# CÔNG PHÁP TÙ NGỤC — HỆ CHIÊU THỨC KHẮC CHẾ (nâng cấp danhnhau)
-# ═══════════════════════════════════════════════════════════
-PRISON_TECHNIQUES = {
-    "cuong_quyen": {"name": "👊 Cuồng Quyền",         "beats": "thiet_giap", "atk_mult": 1.5, "def_mult": 0.8, "desc": "Đấm liên hoàn dồn toàn lực"},
-    "thiet_giap":  {"name": "🛡️ Thiết Giáp Công",     "beats": "linh_hoat",  "atk_mult": 0.9, "def_mult": 1.6, "desc": "Gồng cứng như sắt, chịu đòn tốt"},
-    "linh_hoat":   {"name": "🌀 Thân Pháp Linh Hoạt",  "beats": "cuong_quyen","atk_mult": 1.2, "def_mult": 1.2, "desc": "Né tránh rồi phản công"},
-    "phach_son":   {"name": "⛰️ Phách Sơn Chưởng",     "beats": None,         "atk_mult": 2.0, "def_mult": 0.5, "desc": "Chưởng lực kinh thiên, mạo hiểm cao"},
-    "an_tap":      {"name": "🌑 Ám Tập",               "beats": "phach_son",  "atk_mult": 1.6, "def_mult": 1.0, "desc": "Đánh úp bất ngờ, khắc chế đòn liều"},
-}
-
-PRISON_TECHNIQUE_LEARN_COST = {
-    "cuong_quyen": {},  # miễn phí, có sẵn từ đầu
-    "thiet_giap":  {"Sắt Vụn Nhà Tù 🔩": 5},
-    "linh_hoat":   {"Vải Vụn Nhà Tù 🧵": 5},
-    "phach_son":   {"Xích Sắt Cũ ⛓️": 4, "Sắt Vụn Nhà Tù 🔩": 4},
-    "an_tap":      {"Mảnh Kính Vỡ 🔻": 4, "Tinh Thiết Ngục Tù 🌑": 1},
-}
-
-
-@bot.command(aliases=['congphaptu', 'techniques'])
-async def congphap(ctx, action: str = None, tech_id: str = None):
-    """Xem / học / trang bị Công Pháp dùng trong k danhnhau. CHỈ dùng ở phòng giam tập thể."""
-    if not is_in_prison_channel(ctx):
-        return await ctx.reply("⚠️ Lệnh này chỉ dùng được tại **phòng giam tập thể**!", mention_author=False)
-
-    uid = str(ctx.author.id)
-    ud  = load_user(uid)
-    learned  = ud.setdefault("prison_learned_techniques", ["cuong_quyen"])
-    equipped = ud.get("prison_technique") or "cuong_quyen"
-
-    if not action:
-        embed = discord.Embed(title="📖 CÔNG PHÁP TÙ NGỤC", color=discord.Color.dark_purple())
-        lines = []
-        for key, t in PRISON_TECHNIQUES.items():
-            status = "✅ Đã học" if key in learned else "🔒 Chưa học"
-            eq = " ⭐(đang dùng)" if key == equipped else ""
-            cost = PRISON_TECHNIQUE_LEARN_COST.get(key, {})
-            cost_str = " + ".join(f"{v}x {n}" for n, v in cost.items()) or "Miễn phí"
-            beats = PRISON_TECHNIQUES[t["beats"]]["name"] if t.get("beats") else "Không khắc chế cụ thể (liều mạng)"
-            lines.append(f"**{t['name']}**{eq} — {status}\n  Khắc chế: {beats}\n  Học phí: {cost_str}\n  _{t['desc']}_")
-        embed.description = "\n\n".join(lines)
-        embed.set_footer(text=f"k congphap hoc <id> | k congphap dung <id> — id: {', '.join(PRISON_TECHNIQUES.keys())}")
-        return await ctx.reply(embed=embed, mention_author=False)
-
-    action = action.lower()
-    key = (tech_id or "").lower()
-    if key not in PRISON_TECHNIQUES:
-        return await ctx.reply(f"⚠️ Công pháp không tồn tại! Chọn: {', '.join(PRISON_TECHNIQUES.keys())}", mention_author=False)
-
-    if action in ["hoc", "learn"]:
-        if key in learned:
-            return await ctx.reply("✅ Bạn đã học công pháp này rồi!", mention_author=False)
-        cost = PRISON_TECHNIQUE_LEARN_COST.get(key, {})
-        mats = ud.setdefault("prison_materials", {})
-        for mat_name, need in cost.items():
-            if mats.get(mat_name, 0) < need:
-                return await ctx.reply(f"⚠️ Thiếu **{mat_name}** (cần {need}, có {mats.get(mat_name,0)})! Đào thêm bằng `k daomo`.", mention_author=False)
-        for mat_name, need in cost.items():
-            mats[mat_name] -= need
-        learned.append(key)
-        save_user(uid)
-        return await ctx.reply(embed=discord.Embed(
-            description=f"✅ Đã học **{PRISON_TECHNIQUES[key]['name']}**!", color=discord.Color.green()
-        ), mention_author=False)
-
-    elif action in ["dung", "use", "equip"]:
-        if key not in learned:
-            return await ctx.reply("⚠️ Bạn chưa học công pháp này!", mention_author=False)
-        ud["prison_technique"] = key
-        save_user(uid)
-        return await ctx.reply(embed=discord.Embed(
-            description=f"⭐ Đang dùng **{PRISON_TECHNIQUES[key]['name']}**!", color=discord.Color.blue()
-        ), mention_author=False)
-
-    return await ctx.reply("⚠️ Dùng `k congphap`, `k congphap hoc <id>`, hoặc `k congphap dung <id>`.", mention_author=False)
-
-
-class PrisonFightView(discord.ui.View):
-    """Đấu công pháp 3 hiệp, mỗi hiệp người thách đấu chọn chiêu, đối thủ random trong số công pháp đã học."""
-    def __init__(self, challenger, target, my_stats, opp_stats, my_learned):
-        super().__init__(timeout=45)
-        self.challenger = challenger
-        self.target     = target
-        self.my_stats   = my_stats
-        self.opp_stats  = opp_stats
-        self.my_learned = my_learned
-        self.round      = 0
-        self.my_score   = 0
-        self.opp_score  = 0
-        self.log        = []
-        self.finished   = False
-        self._build_buttons()
-
-    def _build_buttons(self):
-        self.clear_items()
-        for key in self.my_learned:
-            t = PRISON_TECHNIQUES[key]
-            btn = discord.ui.Button(label=t["name"][:70], style=discord.ButtonStyle.primary)
-            btn.callback = self._make_cb(key)
-            self.add_item(btn)
-
-    def _make_cb(self, key):
-        async def cb(interaction: discord.Interaction):
-            if interaction.user.id != self.challenger.id:
-                return await interaction.response.send_message("Không phải trận của bạn!", ephemeral=True)
-            if self.finished:
-                return
-            await self._resolve_round(interaction, key)
-        return cb
-
-    async def _resolve_round(self, interaction, my_key):
-        opp_learned = load_user(str(self.target.id)).get("prison_learned_techniques", ["cuong_quyen"])
-        opp_key = random.choice(opp_learned)
-        my_t, opp_t = PRISON_TECHNIQUES[my_key], PRISON_TECHNIQUES[opp_key]
-
-        my_counter  = my_t.get("beats") == opp_key
-        opp_counter = opp_t.get("beats") == my_key
-
-        my_power  = self.my_stats["atk"]  * my_t["atk_mult"]  * (1.35 if my_counter  else 1.0) + random.randint(1, 20)
-        opp_power = self.opp_stats["atk"] * opp_t["atk_mult"] * (1.35 if opp_counter else 1.0) + random.randint(1, 20)
-        my_power  += self.my_stats["def"]  * my_t["def_mult"]  * 0.3
-        opp_power += self.opp_stats["def"] * opp_t["def_mult"] * 0.3
-
-        self.round += 1
-        if my_power > opp_power:
-            self.my_score += 1
-            result_note = f"✅ {self.challenger.name} thắng hiệp!"
-        elif opp_power > my_power:
-            self.opp_score += 1
-            result_note = f"❌ {self.target.name} thắng hiệp!"
-        else:
-            result_note = "🤝 Hòa hiệp!"
-
-        ctr_note = ""
-        if my_counter:
-            ctr_note = f" 🎯 {my_t['name']} khắc chế {opp_t['name']}!"
-        elif opp_counter:
-            ctr_note = f" 🎯 {opp_t['name']} khắc chế {my_t['name']}!"
-
-        self.log.append(
-            f"**Hiệp {self.round}:** {self.challenger.name} dùng {my_t['name']} vs "
-            f"{self.target.name} dùng {opp_t['name']}.{ctr_note}\n{result_note}"
-        )
-
-        if self.round >= 3 or self.my_score >= 2 or self.opp_score >= 2:
-            await self._finish(interaction)
-        else:
-            self._build_buttons()
-            embed = discord.Embed(
-                title=f"🥊 ĐẤU CÔNG PHÁP — Hiệp {self.round}/3",
-                description=(
-                    "\n\n".join(self.log) +
-                    f"\n\nTỉ số: {self.challenger.name} **{self.my_score}** - **{self.opp_score}** {self.target.name}\n\n"
-                    f"👇 Chọn chiêu tiếp theo!"
-                ),
-                color=discord.Color.dark_red()
-            )
-            await interaction.response.edit_message(embed=embed, view=self)
-
-    async def _finish(self, interaction):
-        self.finished = True
-        self.stop()
-        for c in self.children:
-            c.disabled = True
-
-        if self.my_score == self.opp_score:
-            winner, loser = random.choice([(self.challenger, self.target), (self.target, self.challenger)])
-        elif self.my_score > self.opp_score:
-            winner, loser = self.challenger, self.target
-        else:
-            winner, loser = self.target, self.challenger
-
-        wd, ld = load_user(str(winner.id)), load_user(str(loser.id))
-        steal = min(ld.get("money", 0), random.randint(2_000, 10_000))
-        ld["money"] = max(0, ld.get("money", 0) - steal)
-        wd["money"] = wd.get("money", 0) + steal
-        wd["prison_rep"] = min(100, wd.get("prison_rep", 50) + 5)
-        ld["prison_rep"] = max(0, ld.get("prison_rep", 50) - 5)
-        exp_gain = random.randint(20, 45)
-        wd["prison_exp"] = wd.get("prison_exp", 0) + exp_gain
-
-        reduce_note = ""
-        jstr = wd.get("jail_time")
-        w_end = None
-        if jstr:
-            try:
-                w_end = datetime.strptime(jstr, "%Y-%m-%d %H:%M:%S")
-            except Exception:
-                w_end = None
-        if w_end and datetime.now() < w_end:
-            remain_secs = int((w_end - datetime.now()).total_seconds())
-            reduce_secs = min(remain_secs - 60, int(remain_secs * 0.15))
-            if reduce_secs > 0:
-                new_end = w_end - timedelta(seconds=reduce_secs)
-                wd["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
-                reduce_note = f"\n⏳ Án tù của **{winner.name}** giảm **{reduce_secs//60}p {reduce_secs%60}s**!"
-
-        save_user(str(winner.id))
-        save_user(str(loser.id))
-        add_history(str(winner.id), f"Thắng đấu công pháp vs {loser.name} (+{steal:,} 💰, +{exp_gain} tu vi)")
-        add_history(str(loser.id), f"Thua đấu công pháp vs {winner.name} (-{steal:,} 💰)")
-
-        embed = discord.Embed(
-            title="🏆 KẾT THÚC TRẬN ĐẤU CÔNG PHÁP",
-            description=(
-                "\n\n".join(self.log) +
-                f"\n\n{'─'*24}\n"
-                f"🏆 **{winner.name}** chiến thắng chung cuộc "
-                f"({max(self.my_score, self.opp_score)}-{min(self.my_score, self.opp_score)})!\n"
-                f"💰 Cướp được **{steal:,} 💰** | ✨ +{exp_gain} tu vi\n"
-                f"🍀 {winner.name}: +5 uy tín | {loser.name}: -5 uy tín"
-                f"{reduce_note}"
-            ),
-            color=discord.Color.gold()
-        )
-        if interaction.response.is_done():
-            await interaction.message.edit(embed=embed, view=self)
-        else:
-            await interaction.response.edit_message(embed=embed, view=self)
-
-    async def on_timeout(self):
-        if not self.finished:
-            self.finished = True
-            for c in self.children:
-                c.disabled = True
-
-
 # ═══════════════════════════════════════════════════════════
 # CÔNG PHÁP TÙ NGỤC v2 — 24 CHIÊU, MỖI CHIÊU CƠ CHẾ RIÊNG
 # Trận đấu mô phỏng tự động tối đa 200 hiệp
@@ -5622,6 +5473,59 @@ PRISON_TECHNIQUE_LEARN_COST = {
     "loi_de_quyet":        {"materials": {"Tinh Thiết Ngục Tù 🌑": 5, "Sắt Vụn Nhà Tù 🔩": 6}, "min_realm": 3, "exp_cost": 250},
 }
 
+class CongPhapLearnSelect(discord.ui.Select):
+    def __init__(self, author):
+        self.author = author
+        ud = load_user(str(author.id))
+        learned = ud.get("prison_learned_techniques", ["cuong_quyen"])
+        options = []
+        for key, t in PRISON_TECHNIQUES.items():
+            if key in learned:
+                continue
+            cost = PRISON_TECHNIQUE_LEARN_COST.get(key, {"materials": {}, "min_realm": 0})
+            cost_str = " + ".join(f"{v}x {n}" for n, v in cost.get("materials", {}).items()) or "Miễn phí"
+            options.append(discord.SelectOption(label=t["name"][:100], description=cost_str[:100], value=key))
+        if not options:
+            options = [discord.SelectOption(label="Đã học hết", value="none")]
+        super().__init__(placeholder="Chọn công pháp để học...", min_values=1, max_values=1, options=options[:25])
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        if self.values[0] == "none":
+            return await interaction.response.send_message("Bạn đã học hết!", ephemeral=True)
+        uid = str(interaction.user.id)
+        ud = load_user(uid)
+        learned = ud.setdefault("prison_learned_techniques", ["cuong_quyen"])
+        key = self.values[0]
+        my_realm = get_prison_realm_index(ud.get("prison_exp", 0))
+        cost = PRISON_TECHNIQUE_LEARN_COST.get(key, {"materials": {}, "min_realm": 0})
+        if my_realm < cost.get("min_realm", 0):
+            return await interaction.response.send_message(
+                f"⚠️ Cần cảnh giới **{PRISON_REALMS[cost['min_realm']]['name']}**!", ephemeral=True)
+        mats = ud.setdefault("prison_materials", {})
+        for mat_name, need in cost.get("materials", {}).items():
+            if mats.get(mat_name, 0) < need:
+                return await interaction.response.send_message(f"⚠️ Thiếu **{mat_name}** (cần {need})!", ephemeral=True)
+        exp_cost = cost.get("exp_cost", 0)
+        if exp_cost and ud.get("prison_exp", 0) < exp_cost:
+            return await interaction.response.send_message(f"⚠️ Cần **{exp_cost}** tu vi!", ephemeral=True)
+        for mat_name, need in cost.get("materials", {}).items():
+            mats[mat_name] -= need
+        if exp_cost:
+            ud["prison_exp"] -= exp_cost
+        learned.append(key)
+        save_user(uid)
+        await interaction.response.send_message(embed=discord.Embed(
+            title="✅ LĨNH NGỘ THÀNH CÔNG", description=f"Đã học **{PRISON_TECHNIQUES[key]['name']}**!",
+            color=discord.Color.green()
+        ), ephemeral=True)
+
+
+class CongPhapLearnView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.add_item(CongPhapLearnSelect(author))
 
 @bot.command(aliases=['congphaptu', 'techniques'])
 async def congphap(ctx, action: str = None, *tech_ids: str):
@@ -5659,8 +5563,8 @@ async def congphap(ctx, action: str = None, *tech_ids: str):
         half = len(lines) // 2
         embed.add_field(name="📜 Danh Sách (1/2)", value="\n\n".join(lines[:half])[:1024], inline=False)
         embed.add_field(name="📜 Danh Sách (2/2)", value="\n\n".join(lines[half:])[:1024], inline=False)
-        embed.set_footer(text="k congphap hoc <id> | k congphap loadout <id1> <id2> <id3>")
-        return await ctx.reply(embed=embed, mention_author=False)
+        embed.set_footer(text="Chọn công pháp muốn học ở menu dưới | k congphap loadout <id1> <id2> <id3>")
+        return await ctx.reply(embed=embed, view=CongPhapLearnView(ctx.author), mention_author=False)
 
     action = action.lower()
 
