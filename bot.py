@@ -5722,17 +5722,6 @@ class PrisonHubView(discord.ui.View):
         embed.add_field(name="🏃 Vượt Ngục Thất Bại", value=f"{ud.get('escape_fails', 0)}/{MAX_ESCAPE_FAIL_STREAK}", inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @discord.ui.button(label="Trận Hình", emoji="⚔️", style=discord.ButtonStyle.secondary, row=2, disabled=True)
-    async def btn_tranhinh(self, interaction, button):
-        await interaction.response.send_message(
-            "⚔️ Đấu với người khác cần chọn đối thủ trực tiếp, dùng lệnh: `k danhnhau @user`",
-            ephemeral=True
-        )
-
-    @discord.ui.button(label="Họa Cảnh / Linh Căn / Thẻ Chat / Công Đức", emoji="🔒", style=discord.ButtonStyle.secondary, row=3, disabled=True)
-    async def btn_placeholder(self, interaction, button):
-        pass
-
 
 @bot.command(aliases=['phongiam', 'prisonhub'])
 async def nhatuchinh(ctx):
