@@ -184,6 +184,8 @@ def load_user(user_id):
         "prison_weapon": None,        # ID vũ khí tù nhân đang trang bị
         "prison_armor": None,         # ID giáp tù nhân đang trang bị
         "prison_materials": {},       # Nguyên liệu đào được trong tù {tên: số lượng}
+        "prison_learned_techniques": ["cuong_quyen"],  # Công pháp đã học
+        "prison_technique": "cuong_quyen",             # Công pháp đang trang bị
     }
 
     for key, value in defaults.items():
@@ -5271,10 +5273,237 @@ async def phacanh(ctx):
     save_user(uid)
     await msg.edit(embed=embed)
 
+# ═══════════════════════════════════════════════════════════
+# CÔNG PHÁP TÙ NGỤC — HỆ CHIÊU THỨC KHẮC CHẾ (nâng cấp danhnhau)
+# ═══════════════════════════════════════════════════════════
+PRISON_TECHNIQUES = {
+    "cuong_quyen": {"name": "👊 Cuồng Quyền",         "beats": "thiet_giap", "atk_mult": 1.5, "def_mult": 0.8, "desc": "Đấm liên hoàn dồn toàn lực"},
+    "thiet_giap":  {"name": "🛡️ Thiết Giáp Công",     "beats": "linh_hoat",  "atk_mult": 0.9, "def_mult": 1.6, "desc": "Gồng cứng như sắt, chịu đòn tốt"},
+    "linh_hoat":   {"name": "🌀 Thân Pháp Linh Hoạt",  "beats": "cuong_quyen","atk_mult": 1.2, "def_mult": 1.2, "desc": "Né tránh rồi phản công"},
+    "phach_son":   {"name": "⛰️ Phách Sơn Chưởng",     "beats": None,         "atk_mult": 2.0, "def_mult": 0.5, "desc": "Chưởng lực kinh thiên, mạo hiểm cao"},
+    "an_tap":      {"name": "🌑 Ám Tập",               "beats": "phach_son",  "atk_mult": 1.6, "def_mult": 1.0, "desc": "Đánh úp bất ngờ, khắc chế đòn liều"},
+}
+
+PRISON_TECHNIQUE_LEARN_COST = {
+    "cuong_quyen": {},  # miễn phí, có sẵn từ đầu
+    "thiet_giap":  {"Sắt Vụn Nhà Tù 🔩": 5},
+    "linh_hoat":   {"Vải Vụn Nhà Tù 🧵": 5},
+    "phach_son":   {"Xích Sắt Cũ ⛓️": 4, "Sắt Vụn Nhà Tù 🔩": 4},
+    "an_tap":      {"Mảnh Kính Vỡ 🔻": 4, "Tinh Thiết Ngục Tù 🌑": 1},
+}
+
+
+@bot.command(aliases=['congphaptu', 'techniques'])
+async def congphap(ctx, action: str = None, tech_id: str = None):
+    """Xem / học / trang bị Công Pháp dùng trong k danhnhau. CHỈ dùng ở phòng giam tập thể."""
+    if not is_in_prison_channel(ctx):
+        return await ctx.reply("⚠️ Lệnh này chỉ dùng được tại **phòng giam tập thể**!", mention_author=False)
+
+    uid = str(ctx.author.id)
+    ud  = load_user(uid)
+    learned  = ud.setdefault("prison_learned_techniques", ["cuong_quyen"])
+    equipped = ud.get("prison_technique") or "cuong_quyen"
+
+    if not action:
+        embed = discord.Embed(title="📖 CÔNG PHÁP TÙ NGỤC", color=discord.Color.dark_purple())
+        lines = []
+        for key, t in PRISON_TECHNIQUES.items():
+            status = "✅ Đã học" if key in learned else "🔒 Chưa học"
+            eq = " ⭐(đang dùng)" if key == equipped else ""
+            cost = PRISON_TECHNIQUE_LEARN_COST.get(key, {})
+            cost_str = " + ".join(f"{v}x {n}" for n, v in cost.items()) or "Miễn phí"
+            beats = PRISON_TECHNIQUES[t["beats"]]["name"] if t.get("beats") else "Không khắc chế cụ thể (liều mạng)"
+            lines.append(f"**{t['name']}**{eq} — {status}\n  Khắc chế: {beats}\n  Học phí: {cost_str}\n  _{t['desc']}_")
+        embed.description = "\n\n".join(lines)
+        embed.set_footer(text=f"k congphap hoc <id> | k congphap dung <id> — id: {', '.join(PRISON_TECHNIQUES.keys())}")
+        return await ctx.reply(embed=embed, mention_author=False)
+
+    action = action.lower()
+    key = (tech_id or "").lower()
+    if key not in PRISON_TECHNIQUES:
+        return await ctx.reply(f"⚠️ Công pháp không tồn tại! Chọn: {', '.join(PRISON_TECHNIQUES.keys())}", mention_author=False)
+
+    if action in ["hoc", "learn"]:
+        if key in learned:
+            return await ctx.reply("✅ Bạn đã học công pháp này rồi!", mention_author=False)
+        cost = PRISON_TECHNIQUE_LEARN_COST.get(key, {})
+        mats = ud.setdefault("prison_materials", {})
+        for mat_name, need in cost.items():
+            if mats.get(mat_name, 0) < need:
+                return await ctx.reply(f"⚠️ Thiếu **{mat_name}** (cần {need}, có {mats.get(mat_name,0)})! Đào thêm bằng `k daomo`.", mention_author=False)
+        for mat_name, need in cost.items():
+            mats[mat_name] -= need
+        learned.append(key)
+        save_user(uid)
+        return await ctx.reply(embed=discord.Embed(
+            description=f"✅ Đã học **{PRISON_TECHNIQUES[key]['name']}**!", color=discord.Color.green()
+        ), mention_author=False)
+
+    elif action in ["dung", "use", "equip"]:
+        if key not in learned:
+            return await ctx.reply("⚠️ Bạn chưa học công pháp này!", mention_author=False)
+        ud["prison_technique"] = key
+        save_user(uid)
+        return await ctx.reply(embed=discord.Embed(
+            description=f"⭐ Đang dùng **{PRISON_TECHNIQUES[key]['name']}**!", color=discord.Color.blue()
+        ), mention_author=False)
+
+    return await ctx.reply("⚠️ Dùng `k congphap`, `k congphap hoc <id>`, hoặc `k congphap dung <id>`.", mention_author=False)
+
+
+class PrisonFightView(discord.ui.View):
+    """Đấu công pháp 3 hiệp, mỗi hiệp người thách đấu chọn chiêu, đối thủ random trong số công pháp đã học."""
+    def __init__(self, challenger, target, my_stats, opp_stats, my_learned):
+        super().__init__(timeout=45)
+        self.challenger = challenger
+        self.target     = target
+        self.my_stats   = my_stats
+        self.opp_stats  = opp_stats
+        self.my_learned = my_learned
+        self.round      = 0
+        self.my_score   = 0
+        self.opp_score  = 0
+        self.log        = []
+        self.finished   = False
+        self._build_buttons()
+
+    def _build_buttons(self):
+        self.clear_items()
+        for key in self.my_learned:
+            t = PRISON_TECHNIQUES[key]
+            btn = discord.ui.Button(label=t["name"][:70], style=discord.ButtonStyle.primary)
+            btn.callback = self._make_cb(key)
+            self.add_item(btn)
+
+    def _make_cb(self, key):
+        async def cb(interaction: discord.Interaction):
+            if interaction.user.id != self.challenger.id:
+                return await interaction.response.send_message("Không phải trận của bạn!", ephemeral=True)
+            if self.finished:
+                return
+            await self._resolve_round(interaction, key)
+        return cb
+
+    async def _resolve_round(self, interaction, my_key):
+        opp_learned = load_user(str(self.target.id)).get("prison_learned_techniques", ["cuong_quyen"])
+        opp_key = random.choice(opp_learned)
+        my_t, opp_t = PRISON_TECHNIQUES[my_key], PRISON_TECHNIQUES[opp_key]
+
+        my_counter  = my_t.get("beats") == opp_key
+        opp_counter = opp_t.get("beats") == my_key
+
+        my_power  = self.my_stats["atk"]  * my_t["atk_mult"]  * (1.35 if my_counter  else 1.0) + random.randint(1, 20)
+        opp_power = self.opp_stats["atk"] * opp_t["atk_mult"] * (1.35 if opp_counter else 1.0) + random.randint(1, 20)
+        my_power  += self.my_stats["def"]  * my_t["def_mult"]  * 0.3
+        opp_power += self.opp_stats["def"] * opp_t["def_mult"] * 0.3
+
+        self.round += 1
+        if my_power > opp_power:
+            self.my_score += 1
+            result_note = f"✅ {self.challenger.name} thắng hiệp!"
+        elif opp_power > my_power:
+            self.opp_score += 1
+            result_note = f"❌ {self.target.name} thắng hiệp!"
+        else:
+            result_note = "🤝 Hòa hiệp!"
+
+        ctr_note = ""
+        if my_counter:
+            ctr_note = f" 🎯 {my_t['name']} khắc chế {opp_t['name']}!"
+        elif opp_counter:
+            ctr_note = f" 🎯 {opp_t['name']} khắc chế {my_t['name']}!"
+
+        self.log.append(
+            f"**Hiệp {self.round}:** {self.challenger.name} dùng {my_t['name']} vs "
+            f"{self.target.name} dùng {opp_t['name']}.{ctr_note}\n{result_note}"
+        )
+
+        if self.round >= 3 or self.my_score >= 2 or self.opp_score >= 2:
+            await self._finish(interaction)
+        else:
+            self._build_buttons()
+            embed = discord.Embed(
+                title=f"🥊 ĐẤU CÔNG PHÁP — Hiệp {self.round}/3",
+                description=(
+                    "\n\n".join(self.log) +
+                    f"\n\nTỉ số: {self.challenger.name} **{self.my_score}** - **{self.opp_score}** {self.target.name}\n\n"
+                    f"👇 Chọn chiêu tiếp theo!"
+                ),
+                color=discord.Color.dark_red()
+            )
+            await interaction.response.edit_message(embed=embed, view=self)
+
+    async def _finish(self, interaction):
+        self.finished = True
+        self.stop()
+        for c in self.children:
+            c.disabled = True
+
+        if self.my_score == self.opp_score:
+            winner, loser = random.choice([(self.challenger, self.target), (self.target, self.challenger)])
+        elif self.my_score > self.opp_score:
+            winner, loser = self.challenger, self.target
+        else:
+            winner, loser = self.target, self.challenger
+
+        wd, ld = load_user(str(winner.id)), load_user(str(loser.id))
+        steal = min(ld.get("money", 0), random.randint(2_000, 10_000))
+        ld["money"] = max(0, ld.get("money", 0) - steal)
+        wd["money"] = wd.get("money", 0) + steal
+        wd["prison_rep"] = min(100, wd.get("prison_rep", 50) + 5)
+        ld["prison_rep"] = max(0, ld.get("prison_rep", 50) - 5)
+        exp_gain = random.randint(20, 45)
+        wd["prison_exp"] = wd.get("prison_exp", 0) + exp_gain
+
+        reduce_note = ""
+        jstr = wd.get("jail_time")
+        w_end = None
+        if jstr:
+            try:
+                w_end = datetime.strptime(jstr, "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                w_end = None
+        if w_end and datetime.now() < w_end:
+            remain_secs = int((w_end - datetime.now()).total_seconds())
+            reduce_secs = min(remain_secs - 60, int(remain_secs * 0.15))
+            if reduce_secs > 0:
+                new_end = w_end - timedelta(seconds=reduce_secs)
+                wd["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
+                reduce_note = f"\n⏳ Án tù của **{winner.name}** giảm **{reduce_secs//60}p {reduce_secs%60}s**!"
+
+        save_user(str(winner.id))
+        save_user(str(loser.id))
+        add_history(str(winner.id), f"Thắng đấu công pháp vs {loser.name} (+{steal:,} 💰, +{exp_gain} tu vi)")
+        add_history(str(loser.id), f"Thua đấu công pháp vs {winner.name} (-{steal:,} 💰)")
+
+        embed = discord.Embed(
+            title="🏆 KẾT THÚC TRẬN ĐẤU CÔNG PHÁP",
+            description=(
+                "\n\n".join(self.log) +
+                f"\n\n{'─'*24}\n"
+                f"🏆 **{winner.name}** chiến thắng chung cuộc "
+                f"({max(self.my_score, self.opp_score)}-{min(self.my_score, self.opp_score)})!\n"
+                f"💰 Cướp được **{steal:,} 💰** | ✨ +{exp_gain} tu vi\n"
+                f"🍀 {winner.name}: +5 uy tín | {loser.name}: -5 uy tín"
+                f"{reduce_note}"
+            ),
+            color=discord.Color.gold()
+        )
+        if interaction.response.is_done():
+            await interaction.message.edit(embed=embed, view=self)
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
+
+    async def on_timeout(self):
+        if not self.finished:
+            self.finished = True
+            for c in self.children:
+                c.disabled = True
+
 
 @bot.command(aliases=['prisonfight', 'daugiam'])
 async def danhnhau(ctx, target: discord.Member):
-    """Đấu tay đôi có trang bị + cảnh giới. Thắng giảm án tù + tăng tu vi. CHỈ dùng ở phòng giam tập thể."""
+    """Đấu công pháp tay đôi — chọn chiêu khắc chế nhau qua 3 hiệp. CHỈ dùng ở phòng giam tập thể."""
     if not is_in_prison_channel(ctx):
         return await ctx.reply("⚠️ Lệnh này chỉ dùng được tại **phòng giam tập thể**!", mention_author=False)
 
@@ -5315,57 +5544,19 @@ async def danhnhau(ctx, target: discord.Member):
 
     my_stats  = get_prison_combat_stats(ud)
     opp_stats = get_prison_combat_stats(td)
-
-    my_power  = my_stats["atk"] * 1.3 + my_stats["def"] * 0.7 + my_stats["hp"] * 0.05 + random.randint(1, 30)
-    opp_power = opp_stats["atk"] * 1.3 + opp_stats["def"] * 0.7 + opp_stats["hp"] * 0.05 + random.randint(1, 30)
-
-    if my_power >= opp_power:
-        winner_id, loser_id, winner_name, loser_name = uid, tid, ctx.author.name, target.name
-        winner_realm, loser_realm = my_stats["realm"], opp_stats["realm"]
-    else:
-        winner_id, loser_id, winner_name, loser_name = tid, uid, target.name, ctx.author.name
-        winner_realm, loser_realm = opp_stats["realm"], my_stats["realm"]
-
-    wd = load_user(winner_id)
-    ld = load_user(loser_id)
-
-    steal = min(ld.get("money", 0), random.randint(2_000, 10_000))
-    ld["money"] = max(0, ld.get("money", 0) - steal)
-    wd["money"] = wd.get("money", 0) + steal
-
-    wd["prison_rep"] = min(100, wd.get("prison_rep", 50) + 5)
-    ld["prison_rep"] = max(0, ld.get("prison_rep", 50) - 5)
-
-    exp_gain = random.randint(15, 35)
-    wd["prison_exp"] = wd.get("prison_exp", 0) + exp_gain
-
-    reduce_note = ""
-    w_end = _jail_end(wd)
-    if w_end and now < w_end:
-        remain_secs = int((w_end - now).total_seconds())
-        reduce_secs = min(remain_secs - 60, int(remain_secs * 0.15))
-        if reduce_secs > 0:
-            new_end = w_end - timedelta(seconds=reduce_secs)
-            wd["jail_time"] = new_end.strftime("%Y-%m-%d %H:%M:%S")
-            reduce_note = f"\n⏳ Án tù của **{winner_name}** giảm **{reduce_secs//60}p {reduce_secs%60}s**!"
-
-    save_user(winner_id)
-    save_user(loser_id)
-    add_history(winner_id, f"Thắng đánh nhau trong tù vs {loser_name} (+{steal:,} 💰, +{exp_gain} tu vi)")
-    add_history(loser_id,  f"Thua đánh nhau trong tù vs {winner_name} (-{steal:,} 💰)")
+    my_learned = ud.setdefault("prison_learned_techniques", ["cuong_quyen"])
+    save_user(uid)
 
     embed = discord.Embed(
-        title="🥊 ẨU ĐẢ TRONG PHÒNG GIAM!",
+        title="🥊 ĐẤU CÔNG PHÁP — Hiệp 1/3",
         description=(
-            f"**{winner_name}** [{winner_realm['name']}] hạ gục **{loser_name}** [{loser_realm['name']}]!\n"
-            f"💰 Cướp được **{steal:,} 💰** | ✨ +{exp_gain} tu vi\n"
-            f"🍀 {winner_name}: +5 uy tín | {loser_name}: -5 uy tín"
-            f"{reduce_note}"
+            f"{ctx.author.mention} [{my_stats['realm']['name']}] thách đấu {target.mention} [{opp_stats['realm']['name']}]!\n\n"
+            f"👇 Chọn chiêu thức để ra đòn!"
         ),
         color=discord.Color.dark_red()
     )
-    await ctx.reply(embed=embed, mention_author=False)
-
+    view = PrisonFightView(ctx.author, target, my_stats, opp_stats, my_learned)
+    await ctx.reply(embed=embed, view=view, mention_author=False)
 
 @bot.command(aliases=['visit'])
 async def thamtu(ctx, target: discord.Member, amount: int):
@@ -5665,7 +5856,8 @@ HELP_PAGES = [
             "`k cuopnguc @user` (`rescue`) — Rủ nhiều người đột kích giải cứu tù nhân khác\n"
             "   ❌ Thất bại: TOÀN ĐỘI bị biệt giam + cấm chat tại kênh\n"
             "`k cantin [mã hàng]` (`canteen`) — Mua đồ trong tù để tăng Uy Tín\n"
-            "`k danhnhau @user` (`prisonfight`) — Ẩu đả với tù nhân khác, cướp tiền\n"
+            "`k danhnhau @user` (`prisonfight`) — Đấu công pháp 3 hiệp, khắc chế chiêu thức\n"
+            "`k congphap` — Xem/học/trang bị công pháp dùng trong danhnhau\n"
             "`k thamtu @user <tiền>` (`visit`) — Người tự do gửi tiền thăm nuôi cho tù nhân\n\n"
             "**Tu Luyện & Pháp Bảo (chỉ dùng ở phòng giam tập thể):**\n"
             "`k daomo` (`daomotu`/`digprison`) — Đào mò tìm nguyên liệu chế pháp bảo | CD 10p\n"
