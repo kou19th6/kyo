@@ -6620,6 +6620,21 @@ HELP_PAGES = [
             "🎰 **Perk:** Sở hữu 💎 tự tăng giới hạn cược casino (tối đa +1,000,000 💰)."
         ),
     },
+    {
+        "title": "⚙️ CÀI ĐẶT & TIỆN ÍCH NHANH (k caidat / k menu)",
+        "color": discord.Color.purple(),
+        "desc": (
+            "`k caidat` (`settings`) — Bảng cài đặt hồ sơ cá nhân bằng nút bấm:\n"
+            "   🖼️ Đổi Avatar | 🎨 Đổi Ảnh Bìa | 📝 Đổi Bio | 🏷️ Đổi Danh Hiệu\n"
+            "   🗑️ Xóa Avatar/Ảnh Bìa — không cần gõ lệnh riêng lẻ nữa!\n\n"
+            "`k menu` (`bangdieukhien`/`quickmenu`) — Bảng điều khiển nhanh:\n"
+            "   🏦 Ngân Hàng | 🎁 Điểm Danh | 🏪 Cửa Hàng | ⚖️ Cầm Đồ\n"
+            "   🌾 Nông Trại | 💪 Gym | 🏆 Top | ⚙️ Cài Đặt | 💳 Xem Căn Cước\n"
+            "   → Tất cả thao tác chỉ bằng 1 cú bấm, không cần nhớ lệnh!\n\n"
+            "`k rank [@user]` — Căn cước giờ hiển thị **avatar + ảnh bìa tùy chỉnh** "
+            "nếu bạn đã đặt qua `k caidat`."
+        ),
+    },
 ]
 
 
@@ -6713,6 +6728,9 @@ class HelpPaginatorView(discord.ui.View):
 
         if bot.user.avatar:
             embed.set_thumbnail(url=bot.user.avatar.url)
+
+        if HELP_BANNER_URL:
+            embed.set_image(url=HELP_BANNER_URL)
 
         dots = "".join("🔘" if i == self.page else "⚪" for i in range(len(HELP_PAGES)))
         embed.add_field(name="\u200b", value=f"**{dots}**", inline=False)
@@ -12522,8 +12540,11 @@ async def dsadmin(ctx):
     await ctx.reply(embed=embed, mention_author=False)
 
 
+HELP_BANNER_URL = None  # Ảnh bìa hiển thị trong bảng k help — chỉ Admin Tối Cao (OWNER_IDS) đổi được
+
 def load_bot_assets():
-    """Nạp cấu hình GIF/Emoji đã lưu trong DB khi bot khởi động."""
+    """Nạp cấu hình GIF/Emoji/Help Banner đã lưu trong DB khi bot khởi động."""
+    global HELP_BANNER_URL
     try:
         doc = bot_assets_col.find_one({"_id": "config"})
     except Exception as e:
@@ -12537,8 +12558,40 @@ def load_bot_assets():
         GIF_LINKS[k] = v
     for k, v in doc.get("emojis", {}).items():
         CUSTOM_EMOJIS[k] = v
+    HELP_BANNER_URL = doc.get("help_banner")
 
 load_bot_assets()
+
+
+def save_help_banner(url):
+    global HELP_BANNER_URL
+    HELP_BANNER_URL = url
+    try:
+        bot_assets_col.update_one({"_id": "config"}, {"$set": {"help_banner": url}}, upsert=True)
+    except Exception as e:
+        print(f"[WARN] save_help_banner error: {e}")
+
+
+@bot.command(aliases=['sethelpimg', 'helpanh'])
+async def sethelpbanner(ctx, url: str = None):
+    """Đặt/gỡ ảnh bìa cho bảng k help. CHỈ Admin Tối Cao (chủ bot) mới dùng được."""
+    if ctx.author.id not in OWNER_IDS:
+        return await ctx.reply("⛔ Chỉ **Admin Tối Cao** mới được đổi ảnh bìa bảng help!", mention_author=False)
+
+    if not url or url.lower() in ["clear", "xoa", "none"]:
+        save_help_banner(None)
+        return await ctx.reply(embed=discord.Embed(
+            description="✅ Đã gỡ ảnh bìa bảng help.", color=discord.Color.orange()
+        ), mention_author=False)
+
+    if not (url.startswith("http://") or url.startswith("https://")):
+        return await ctx.reply("⚠️ URL không hợp lệ!", mention_author=False)
+
+    save_help_banner(url)
+    embed = discord.Embed(title="✅ ĐÃ ĐẶT ẢNH BÌA HELP", color=discord.Color.green())
+    embed.set_image(url=url)
+    embed.set_footer(text="Gõ k help để xem thử ngay!")
+    await ctx.reply(embed=embed, mention_author=False)
 
 
 def save_gif(key, url):
