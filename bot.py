@@ -7624,37 +7624,29 @@ def make_hp_bar(current, total, length=12):
 
 
 # ════════════════════════════════════════════════════════════════════
-# LỆNH CHÍNH: k daichien
+# HELPER: XÂY EMBED CHO DAICHIEN (dùng chung cho cả nút bấm lẫn text cmd)
 # ════════════════════════════════════════════════════════════════════
-@bot.group(invoke_without_command=True, aliases=['dc', 'war'])
-async def daichien(ctx):
-    """Bảng thông tin đại chiến + xem bảng xếp hạng công ty."""
+def build_daichien_main_embed():
     try:
         all_comps = list(companies_col.find())
     except Exception:
         all_comps = []
-
-    # Sắp xếp theo treasury
     ranked = sorted(all_comps, key=lambda c: c.get("treasury", 0), reverse=True)
 
     embed = discord.Embed(
         title="⚔️ ĐẠI CHIẾN CÔNG TY",
         description=(
-            "**Cách chơi:**\n"
-            "`k daichien tan <@user hoặc tên cty>` — Thách đấu\n"
-            "`k daichien info` — Thống kê công ty bạn\n"
-            "`k daichien lichsu` — Lịch sử trận đánh\n\n"
             "**Cơ chế:**\n"
             "• 3 vòng, mỗi vòng 2 bên chọn kỹ năng\n"
             "• Kỹ năng có quan hệ counter (⚔️>🛡️>🔄>⚔️, 🌑>🎯)\n"
             "• Sự kiện ngẫu nhiên xảy ra mỗi vòng\n"
             "• Thắng: cướp 12% quỹ + +15 danh tiếng\n"
             "• Thua: mất tiền + -20 danh tiếng\n"
-            "• CD: 6 giờ / lần tấn công\n"
+            "• CD: 6 giờ / lần tấn công\n\n"
+            "👇 Bấm nút bên dưới để thao tác"
         ),
         color=discord.Color.red()
     )
-
     if ranked:
         top_str = ""
         for i, comp in enumerate(ranked[:8]):
@@ -7669,8 +7661,189 @@ async def daichien(ctx):
                 f"   💰 {comp.get('treasury',0):,} | ⚔️Lv{atk} 🛡️Lv{df} | 🌟{rep}/100\n"
             )
         embed.add_field(name="🏆 BXH CÔNG TY", value=top_str or "Chưa có", inline=False)
+    return embed
 
-    await ctx.reply(embed=embed, mention_author=False)
+
+def build_daichien_info_embed(user_id):
+    comp_id = load_user(user_id).get("company")
+    if not comp_id:
+        return None
+    comp = load_company(comp_id)
+    if not comp:
+        return None
+
+    atk_lvl = comp.get("atk_level", 1)
+    def_lvl = comp.get("def_level", 1)
+    members = len(comp.get("members", {}))
+    treasury = comp.get("treasury", 0)
+    rep = comp.get("reputation", 100)
+    scandal = "🚨 ĐANG DÍNH PHỐT" if comp.get("has_scandal") else "✅ Trong sạch"
+
+    atk_power = atk_lvl * 100 + members * 20 + treasury // 100000
+    def_power = def_lvl * 100 + members * 20 + treasury // 100000
+
+    last_war = daichien_cooldowns.get(comp_id)
+    if last_war:
+        remain = max(0, 21600 - int((datetime.now() - last_war).total_seconds()))
+        h, m = divmod(remain, 3600)
+        cd_str = f"**{h}h {m//60}m** nữa" if remain > 0 else "Sẵn sàng!"
+    else:
+        cd_str = "Sẵn sàng!"
+
+    embed = discord.Embed(title=f"🏢 THÔNG TIN CHIẾN ĐẤU — {comp['name']}", color=discord.Color.blue())
+    embed.add_field(name="⚔️ Chỉ số tấn công", value=f"**{atk_power}** (ATK Lv{atk_lvl})", inline=True)
+    embed.add_field(name="🛡️ Chỉ số phòng thủ", value=f"**{def_power}** (DEF Lv{def_lvl})", inline=True)
+    embed.add_field(name="👥 Nhân sự", value=f"**{members}** người", inline=True)
+    embed.add_field(name="🌟 Danh tiếng", value=f"**{rep}/100**", inline=True)
+    embed.add_field(name="🚨 Trạng thái", value=scandal, inline=True)
+    embed.add_field(name="⏳ Cooldown chiến", value=cd_str, inline=True)
+    embed.add_field(
+        name="📈 Nâng cấp",
+        value=(
+            f"ATK Lv{atk_lvl} → Lv{atk_lvl+1}: **{atk_lvl*500000:,} 💰**\n"
+            f"DEF Lv{def_lvl} → Lv{def_lvl+1}: **{def_lvl*300000:,} 💰**\n"
+            f"`k cty nangcap cong` | `k cty nangcap thu`"
+        ),
+        inline=False
+    )
+    return embed
+
+
+def build_daichien_history_embed(user_id):
+    user_data = load_user(user_id)
+    history = [h for h in user_data.get("history", []) if "chiến" in h.lower() or "Đại chiến" in h]
+    if not history:
+        return discord.Embed(description="📜 Chưa có lịch sử đại chiến.", color=discord.Color.light_grey())
+    return discord.Embed(title="📜 LỊCH SỬ ĐẠI CHIẾN", description="\n".join(history[:10]), color=discord.Color.blue())
+
+
+# ════════════════════════════════════════════════════════════════════
+# VIEW: CHỌN CÔNG TY ĐỐI THỦ (thay cho gõ tay k daichien tan <tên>)
+# ════════════════════════════════════════════════════════════════════
+class DaichienTargetSelect(discord.ui.Select):
+    def __init__(self, atk_comp, targets):
+        self.atk_comp = atk_comp
+        options = []
+        for c in targets[:25]:
+            rep = c.get("reputation", 100)
+            options.append(discord.SelectOption(
+                label=c["name"][:100],
+                description=f"💰{c.get('treasury',0):,} | ⚔️Lv{c.get('atk_level',1)} 🛡️Lv{c.get('def_level',1)} | 🌟{rep}/100"[:100],
+                value=c["_id"]
+            ))
+        super().__init__(placeholder="Chọn công ty đối thủ...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        target_id = self.values[0]
+        def_comp = load_company(target_id)
+        if not def_comp:
+            return await interaction.response.send_message("⚠️ Công ty này không còn tồn tại!", ephemeral=True)
+
+        def_boss_id = next((uid for uid, role in def_comp["members"].items() if role == "boss"), None)
+        if not def_boss_id:
+            return await interaction.response.send_message("⚠️ Công ty kia không có Chủ Tịch!", ephemeral=True)
+
+        atk_comp = self.atk_comp
+        atk_power = atk_comp.get("atk_level", 1) * 100 + len(atk_comp.get("members", {})) * 20
+        def_power = def_comp.get("def_level", 1) * 100 + len(def_comp.get("members", {})) * 20
+        loot_preview = int(def_comp.get("treasury", 0) * PRIZE_STEAL_RATE)
+
+        embed = discord.Embed(
+            title="⚔️ TUYÊN CHIẾN!",
+            description=(
+                f"**{atk_comp['name']}** tuyên chiến với **{def_comp['name']}**!\n\n"
+                f"⚔️ Công: **{atk_power}** vs 🛡️ Thủ: **{def_power}**\n"
+                f"💰 Tiền thưởng nếu thắng: **~{loot_preview:,} 💰**\n\n"
+                f"<@{def_boss_id}> — **Chủ Tịch {def_comp['name']}**, bạn có nhận chiến không?"
+            ),
+            color=discord.Color.red()
+        )
+        embed.set_footer(text="Timeout: 2 phút | 3 vòng | Chọn kỹ năng mỗi vòng")
+
+        view = ChallengeAcceptView(interaction, atk_comp, def_comp, interaction.user, def_boss_id)
+        await interaction.response.send_message(f"<@{def_boss_id}>", embed=embed, view=view)
+
+
+class DaichienTargetSelectView(discord.ui.View):
+    def __init__(self, author, atk_comp, targets):
+        super().__init__(timeout=60)
+        self.author = author
+        self.add_item(DaichienTargetSelect(atk_comp, targets))
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+
+class DaichienMainView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=120)
+        self.author = author
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="⚔️ Thách Đấu", style=discord.ButtonStyle.danger, row=0)
+    async def btn_challenge(self, interaction: discord.Interaction, button):
+        user_id = str(self.author.id)
+        user_data = load_user(user_id)
+        atk_comp_id = user_data.get("company")
+        if not atk_comp_id:
+            return await interaction.response.send_message("⚠️ Bạn chưa có công ty!", ephemeral=True)
+        atk_comp = load_company(atk_comp_id)
+        if not atk_comp:
+            return await interaction.response.send_message("⚠️ Công ty bạn không tồn tại!", ephemeral=True)
+        if atk_comp["members"].get(user_id) != "boss":
+            return await interaction.response.send_message("⚠️ Chỉ Chủ Tịch mới được phát động chiến tranh!", ephemeral=True)
+
+        last_war = daichien_cooldowns.get(atk_comp_id)
+        if last_war and (datetime.now() - last_war).total_seconds() < 21600:
+            remain = int(21600 - (datetime.now() - last_war).total_seconds())
+            h, m = divmod(remain, 3600); m //= 60
+            return await interaction.response.send_message(
+                f"⏳ Quân lính cần nghỉ ngơi! Tấn công lại sau **{h}h {m}m**.", ephemeral=True
+            )
+
+        try:
+            all_comps = list(companies_col.find())
+        except Exception:
+            all_comps = []
+        targets = [c for c in all_comps if c["_id"] != atk_comp_id]
+        if not targets:
+            return await interaction.response.send_message("⚠️ Không có công ty nào khác để thách đấu!", ephemeral=True)
+
+        view = DaichienTargetSelectView(self.author, atk_comp, targets)
+        await interaction.response.send_message(
+            embed=discord.Embed(description="🎯 Chọn công ty muốn thách đấu:", color=discord.Color.red()),
+            view=view, ephemeral=True
+        )
+
+    @discord.ui.button(label="📊 Thông Tin", style=discord.ButtonStyle.primary, row=0)
+    async def btn_info(self, interaction: discord.Interaction, button):
+        embed = build_daichien_info_embed(str(self.author.id))
+        if embed is None:
+            return await interaction.response.send_message("⚠️ Bạn chưa có công ty!", ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="📜 Lịch Sử", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_history(self, interaction: discord.Interaction, button):
+        await interaction.response.send_message(embed=build_daichien_history_embed(str(self.author.id)), ephemeral=True)
+
+    @discord.ui.button(label="🔄 Làm Mới", style=discord.ButtonStyle.success, row=1)
+    async def btn_refresh(self, interaction: discord.Interaction, button):
+        await interaction.response.edit_message(embed=build_daichien_main_embed(), view=self)
+
+
+@bot.group(invoke_without_command=True, aliases=['dc', 'war'])
+async def daichien(ctx):
+    """Bảng điều khiển đại chiến — bấm nút thay vì gõ lệnh."""
+    view = DaichienMainView(ctx.author)
+    await ctx.reply(embed=build_daichien_main_embed(), view=view, mention_author=False)
 
 
 @daichien.command(aliases=['thachdan', 'attack'])
