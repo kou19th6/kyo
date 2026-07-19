@@ -186,6 +186,10 @@ def load_user(user_id):
         "prison_materials": {},       # Nguyên liệu đào được trong tù {tên: số lượng}
         "prison_learned_techniques": ["cuong_quyen"],  # Công pháp đã học
         "prison_technique_loadout": ["cuong_quyen"],   # Chuỗi công pháp luân phiên khi đấu
+        # === PROFILE TÙY CHỈNH ===
+        "profile_avatar": None,   # URL ảnh đại diện tùy chỉnh
+        "profile_banner": None,   # URL ảnh bìa tùy chỉnh
+        "profile_bio": "",        # Tiểu sử ngắn
     }
 
     for key, value in defaults.items():
@@ -6774,14 +6778,22 @@ async def help(ctx):
     msg = await ctx.reply(embed=view.make_embed(), view=view, mention_author=False)
     view.message = msg
 
-@bot.command()
-async def rank(ctx, member: discord.Member = None):
-    target = member or ctx.author; user_data = load_user(target.id)
+def build_rank_embed(target, user_data):
     lv = user_data.get("level",1); xp = user_data.get("xp",0); money = user_data.get("money",0)
     bank_bal = user_data.get("bank",0); stock_val = sum(get_stock_sell_price(c)*q for c,q in user_data.get("stocks",{}).items())
     total = money + bank_bal + stock_val
     embed = discord.Embed(title=f"💳 CĂN CƯỚC: {target.name}", color=discord.Color.gold() if total > 1000000 else discord.Color.teal())
-    embed.set_thumbnail(url=target.display_avatar.url)
+
+    avatar_url = user_data.get("profile_avatar") or target.display_avatar.url
+    banner_url = user_data.get("profile_banner")
+    embed.set_thumbnail(url=avatar_url)
+    if banner_url:
+        embed.set_image(url=banner_url)
+
+    bio = user_data.get("profile_bio", "")
+    if bio:
+        embed.description = f"*{bio[:200]}*"
+
     embed.add_field(name="🏷️ Danh hiệu", value=f"**{user_data.get('title')}**", inline=False)
     embed.add_field(name="🌟 Cấp", value=f"**LV {lv}**", inline=True)
     embed.add_field(name="💰 Ví", value=f"**{money:,} 💰**", inline=True)
@@ -6789,14 +6801,40 @@ async def rank(ctx, member: discord.Member = None):
     embed.add_field(name="📈 CK", value=f"**{stock_val:,} 💰**", inline=True)
     embed.add_field(name="💎 Tổng", value=f"**{total:,} 💰**", inline=True)
     embed.add_field(name="🔥 Streak", value=f"**{user_data.get('streak',0)} ngày**", inline=True)
-    if user_data.get("loan_amount",0) > 0: embed.add_field(name="⚠️ Đang nợ", value=f"**{user_data['loan_amount']:,} 💰**", inline=True)
-    if user_data.get("spouse"):
-        try: sname = (await bot.fetch_user(int(user_data["spouse"]))).name
-        except Exception: sname = "???"
-        embed.add_field(name="💍 Vợ/Chồng", value=f"**{sname}**", inline=True)
+    if user_data.get("loan_amount",0) > 0:
+        embed.add_field(name="⚠️ Đang nợ", value=f"**{user_data['loan_amount']:,} 💰**", inline=True)
     embed.add_field(name="✨ XP", value=f"`{make_progress_bar(xp, lv*100)}`\n{xp}/{lv*100} XP", inline=False)
     embed.add_field(name="💪 Gym", value=f"Lv{user_data.get('gym_level',0)}", inline=True)
-    await ctx.reply(embed=embed, mention_author=False)
+    embed.set_footer(text="k caidat để chỉnh sửa avatar/ảnh bìa/bio")
+    return embed
+
+
+class RankSettingsButtonView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.author = author
+
+    @discord.ui.button(label="⚙️ Cài Đặt Hồ Sơ", style=discord.ButtonStyle.secondary)
+    async def open_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Đây không phải hồ sơ của bạn!", ephemeral=True)
+        await interaction.response.send_message(
+            embed=build_settings_embed(str(self.author.id)),
+            view=SettingsMainView(self.author),
+            ephemeral=True
+        )
+
+    async def interaction_check(self, interaction):
+        return True  # cho phép ai cũng bấm xem, nhưng chặn trong callback
+
+
+@bot.command()
+async def rank(ctx, member: discord.Member = None):
+    target = member or ctx.author
+    user_data = load_user(target.id)
+    embed = build_rank_embed(target, user_data)
+    view = RankSettingsButtonView(target) if member is None else None
+    await ctx.reply(embed=embed, view=view, mention_author=False)
 
 TOP_CATEGORIES = {
     "tien":  {"label": "💰 Tài Sản",   "emoji": "💰", "color": discord.Color.gold()},
@@ -13823,6 +13861,236 @@ async def kc_shop(ctx):
     for key, item in KC_SHOP_ITEMS.items():
         embed.add_field(name=f"{item['emoji']} {item['name']}", value=f"Giá: **{item['price']} 💎**", inline=True)
     await ctx.reply(embed=embed, view=KCShopView(ctx.author), mention_author=False)
+
+# =====================================================================
+# ⚙️ CÀI ĐẶT HỒ SƠ CÁ NHÂN (avatar / ảnh bìa / bio / danh hiệu)
+# =====================================================================
+
+def build_settings_embed(user_id):
+    ud = load_user(user_id)
+    embed = discord.Embed(
+        title="⚙️ CÀI ĐẶT HỒ SƠ",
+        description=(
+            f"🖼️ Avatar: {'✅ Đã đặt' if ud.get('profile_avatar') else '⚪ Mặc định Discord'}\n"
+            f"🎨 Ảnh bìa: {'✅ Đã đặt' if ud.get('profile_banner') else '⚪ Chưa có'}\n"
+            f"📝 Bio: {ud.get('profile_bio') or '⚪ Chưa có'}\n"
+            f"🏷️ Danh hiệu: **{ud.get('title')}**"
+        ),
+        color=discord.Color.blurple()
+    )
+    if ud.get("profile_avatar"):
+        embed.set_thumbnail(url=ud["profile_avatar"])
+    if ud.get("profile_banner"):
+        embed.set_image(url=ud["profile_banner"])
+    return embed
+
+
+class SetAvatarModal(discord.ui.Modal, title="Đặt Ảnh Đại Diện"):
+    url_input = discord.ui.TextInput(label="URL ảnh (jpg/png/gif)", placeholder="https://...", required=True)
+
+    def __init__(self, author):
+        super().__init__()
+        self.author = author
+
+    async def on_submit(self, interaction: discord.Interaction):
+        url = self.url_input.value.strip()
+        if not (url.startswith("http://") or url.startswith("https://")):
+            return await interaction.response.send_message("⚠️ URL không hợp lệ!", ephemeral=True)
+        ud = load_user(str(self.author.id))
+        ud["profile_avatar"] = url
+        save_user(str(self.author.id))
+        await interaction.response.edit_message(embed=build_settings_embed(str(self.author.id)), view=SettingsMainView(self.author))
+
+
+class SetBannerModal(discord.ui.Modal, title="Đặt Ảnh Bìa"):
+    url_input = discord.ui.TextInput(label="URL ảnh bìa", placeholder="https://...", required=True)
+
+    def __init__(self, author):
+        super().__init__()
+        self.author = author
+
+    async def on_submit(self, interaction: discord.Interaction):
+        url = self.url_input.value.strip()
+        if not (url.startswith("http://") or url.startswith("https://")):
+            return await interaction.response.send_message("⚠️ URL không hợp lệ!", ephemeral=True)
+        ud = load_user(str(self.author.id))
+        ud["profile_banner"] = url
+        save_user(str(self.author.id))
+        await interaction.response.edit_message(embed=build_settings_embed(str(self.author.id)), view=SettingsMainView(self.author))
+
+
+class SetBioModal(discord.ui.Modal, title="Đặt Bio"):
+    bio_input = discord.ui.TextInput(label="Bio (tối đa 150 ký tự)", style=discord.TextStyle.paragraph, max_length=150, required=True)
+
+    def __init__(self, author):
+        super().__init__()
+        self.author = author
+
+    async def on_submit(self, interaction: discord.Interaction):
+        ud = load_user(str(self.author.id))
+        ud["profile_bio"] = self.bio_input.value.strip()
+        save_user(str(self.author.id))
+        await interaction.response.edit_message(embed=build_settings_embed(str(self.author.id)), view=SettingsMainView(self.author))
+
+
+class TitleSelect(discord.ui.Select):
+    """Chọn danh hiệu trong số các danh hiệu đã sở hữu (assets)."""
+    def __init__(self, author, owned_titles):
+        self.author = author
+        options = [discord.SelectOption(label=t[:100], value=t[:100]) for t in owned_titles[:25]]
+        if not options:
+            options = [discord.SelectOption(label="Chưa sở hữu danh hiệu nào", value="none")]
+        super().__init__(placeholder="Chọn danh hiệu để trang bị...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        if self.values[0] == "none":
+            return await interaction.response.send_message("⚠️ Bạn chưa sở hữu danh hiệu nào (mua ở `k cuahang`)!", ephemeral=True)
+        ud = load_user(str(self.author.id))
+        ud["title"] = self.values[0]
+        save_user(str(self.author.id))
+        await interaction.response.edit_message(embed=build_settings_embed(str(self.author.id)), view=SettingsMainView(self.author))
+
+
+class SettingsMainView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=120)
+        self.author = author
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="🖼️ Đổi Avatar", style=discord.ButtonStyle.primary, row=0)
+    async def btn_avatar(self, interaction, button):
+        await interaction.response.send_modal(SetAvatarModal(self.author))
+
+    @discord.ui.button(label="🎨 Đổi Ảnh Bìa", style=discord.ButtonStyle.primary, row=0)
+    async def btn_banner(self, interaction, button):
+        await interaction.response.send_modal(SetBannerModal(self.author))
+
+    @discord.ui.button(label="📝 Đổi Bio", style=discord.ButtonStyle.primary, row=0)
+    async def btn_bio(self, interaction, button):
+        await interaction.response.send_modal(SetBioModal(self.author))
+
+    @discord.ui.button(label="🏷️ Đổi Danh Hiệu", style=discord.ButtonStyle.success, row=1)
+    async def btn_title(self, interaction, button):
+        ud = load_user(str(self.author.id))
+        owned_titles = [a for a in ud.get("assets", []) if "🏷️" in a or "👑" in a] or [ud.get("title", "")]
+        view = discord.ui.View(timeout=60)
+        view.add_item(TitleSelect(self.author, owned_titles))
+        await interaction.response.send_message("Chọn danh hiệu:", view=view, ephemeral=True)
+
+    @discord.ui.button(label="🗑️ Xóa Avatar", style=discord.ButtonStyle.danger, row=2)
+    async def btn_reset_avatar(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        ud = load_user(str(self.author.id))
+        ud["profile_avatar"] = None
+        save_user(str(self.author.id))
+        await interaction.response.edit_message(embed=build_settings_embed(str(self.author.id)), view=self)
+
+    @discord.ui.button(label="🗑️ Xóa Ảnh Bìa", style=discord.ButtonStyle.danger, row=2)
+    async def btn_reset_banner(self, interaction, button):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        ud = load_user(str(self.author.id))
+        ud["profile_banner"] = None
+        save_user(str(self.author.id))
+        await interaction.response.edit_message(embed=build_settings_embed(str(self.author.id)), view=self)
+
+
+@bot.command(aliases=['settings', 'profile_settings', 'settingprofile'])
+async def caidat(ctx):
+    """Bảng cài đặt hồ sơ cá nhân — đổi avatar, ảnh bìa, bio, danh hiệu bằng nút bấm."""
+    embed = build_settings_embed(str(ctx.author.id))
+    await ctx.reply(embed=embed, view=SettingsMainView(ctx.author), mention_author=False)
+
+# =====================================================================
+# 🧭 MENU NHANH — gom các lệnh hay dùng vào nút bấm, đỡ phải gõ tay
+# =====================================================================
+
+class QuickMenuView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=120)
+        self.author = author
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="🏦 Ngân Hàng", style=discord.ButtonStyle.primary, row=0)
+    async def btn_bank(self, interaction, button):
+        ud = load_user(str(self.author.id))
+        embed = discord.Embed(title="🏦 NGÂN HÀNG TRUNG ƯƠNG", description="📥 `k bank gui <số/all>` | 📤 `k bank rut <số/all>` | 📈 `k bank laisuat`", color=discord.Color.blue())
+        embed.add_field(name="💳 Ví", value=f"**{ud.get('money',0):,} 💰**", inline=True)
+        embed.add_field(name="🏦 Két sắt", value=f"**{ud.get('bank',0):,} 💰**", inline=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="🎁 Điểm Danh", style=discord.ButtonStyle.success, row=0)
+    async def btn_daily(self, interaction, button):
+        await interaction.response.send_message("👉 Gõ `k daily` để nhận thưởng điểm danh!", ephemeral=True)
+
+    @discord.ui.button(label="🏪 Cửa Hàng", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_shop(self, interaction, button):
+        await interaction.response.send_message(embed=discord.Embed(title="🏪 ĐẠI SIÊU THỊ", color=discord.Color.brand_green()), view=ShopCategoryMenu(self.author), ephemeral=True)
+
+    @discord.ui.button(label="⚖️ Cầm Đồ", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_pawn(self, interaction, button):
+        await interaction.response.send_message(embed=discord.Embed(title="⚖️ CHỢ ĐEN CẦM ĐỒ", color=discord.Color.dark_orange()), view=SellCategoryMenu(self.author), ephemeral=True)
+
+    @discord.ui.button(label="🌾 Nông Trại", style=discord.ButtonStyle.primary, row=1)
+    async def btn_farm(self, interaction, button):
+        ud = load_user(str(self.author.id))
+        farm = ud.get("farm", {"seed": None, "plant_time": None})
+        seeds_str = "\n".join([f"`{k}`: {v['name']} | {v['cost']:,}💰 | {v['time_hours']}h" for k, v in FARM_SEEDS.items()])
+        desc = f"Đất trống.\n\n{seeds_str}\n\n`k farm mua <tên>` | `k farm trong <tên>`"
+        if farm.get("seed"):
+            desc = f"🌱 Đang trồng: **{FARM_SEEDS.get(farm['seed'], {}).get('name','?')}**\nGõ `k farm thuhoach` khi chín."
+        await interaction.response.send_message(embed=discord.Embed(title="🏡 NÔNG TRẠI", description=desc, color=discord.Color.green()), ephemeral=True)
+
+    @discord.ui.button(label="💪 Gym", style=discord.ButtonStyle.primary, row=1)
+    async def btn_gym(self, interaction, button):
+        ud = load_user(str(self.author.id))
+        lvl = ud.get("gym_level", 0)
+        cost = (lvl + 1) * 50000
+        embed = discord.Embed(title="💪 PHÒNG GYM", color=discord.Color.orange())
+        embed.add_field(name="Level hiện tại", value=f"**Lv{lvl}** (+{lvl*5}% ATK Duel)", inline=False)
+        embed.add_field(name="Nâng cấp", value=f"Lv{lvl+1}: **{cost:,} 💰** — `k gym nangcap`", inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="🏆 Top", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_top(self, interaction, button):
+        view = TopBoardView(interaction, "tien")
+        msg_embed = view.make_embed()
+        await interaction.response.send_message(embed=msg_embed, view=view, ephemeral=True)
+
+    @discord.ui.button(label="⚙️ Cài Đặt Hồ Sơ", style=discord.ButtonStyle.danger, row=2)
+    async def btn_settings(self, interaction, button):
+        await interaction.response.send_message(embed=build_settings_embed(str(self.author.id)), view=SettingsMainView(self.author), ephemeral=True)
+
+    @discord.ui.button(label="💳 Xem Căn Cước", style=discord.ButtonStyle.danger, row=2)
+    async def btn_rank(self, interaction, button):
+        ud = load_user(str(self.author.id))
+        embed = build_rank_embed(self.author, ud)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@bot.command(aliases=['menu', 'quickmenu', 'bang'])
+async def bangdieukhien(ctx):
+    """Bảng menu nhanh — thao tác các chức năng hay dùng chỉ bằng nút bấm."""
+    embed = discord.Embed(
+        title="🧭 BẢNG ĐIỀU KHIỂN NHANH",
+        description="Bấm nút bên dưới để thao tác nhanh, không cần gõ lệnh!",
+        color=discord.Color.purple()
+    )
+    await ctx.reply(embed=embed, view=QuickMenuView(ctx.author), mention_author=False)
+
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
