@@ -1710,7 +1710,7 @@ class BlackjackView(discord.ui.View):
         embed = self.make_embed(reveal_dealer=True)
         embed.color = color
         embed.add_field(name="Kết quả", value=desc, inline=False)
-        embed.set_footer(text=f"Bạn: {ph} | Nhà cái: {dh} | Ví: {self.user_data['money']:,} <:Money_kyo:1528673432613552188>")
+        embed.set_footer(text=f"Bạn: {ph} | Nhà cái: {dh} | Ví: {self.user_data['money']:,}")
         if interaction.response.is_done():
             await interaction.message.edit(embed=embed, view=self)
         else:
@@ -1751,8 +1751,8 @@ class BlackjackView(discord.ui.View):
         elif ph == dh: await self.end_game(interaction, "tie")
         else: await self.end_game(interaction, "lose")
 
-    @discord.ui.button(label="<:Money_kyo:1528673432613552188> Gấp Đôi (Double)", style=discord.ButtonStyle.success)
-    async def double_down(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Gấp Đôi (Double)", emoji="<:Money_kyo:1528673432613552188>", style=discord.ButtonStyle.success)
+    async def double_down(self, interaction, button):
         if interaction.user.id != self.player.id: return await interaction.response.send_message("Không phải ván của bạn!", ephemeral=True)
         if self.finished or self.doubled: return
         if len(self.player_hand) != 2: return await interaction.response.send_message("Chỉ Double khi có đúng 2 bài!", ephemeral=True)
@@ -6811,7 +6811,7 @@ HELP_PAGES = [
         ),
     },
     {
-        "title": "🎮 CASINO (cược tối đa 300,000 <:Money_kyo:1528673432613552188>, CD 6s)",
+        "title": "🎮 CASINO (cược tối đa 200,000)",
         "color": discord.Color.gold(),
         "desc": (
             "`k coin <tiền/all>` — Tung xu\n"
