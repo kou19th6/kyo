@@ -808,13 +808,18 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
         await refresh_message(channel, game)
 
     # ── ĐĂNG KÝ VIEW VĨNH VIỄN (chạy 1 lần lúc bot sẵn sàng) ──────────
-    async def _register_persistent_views():
-        await bot.wait_until_ready()
+    # Dùng bot.listen thay vì bot.loop.create_task, vì lúc setup_monopoly()
+    # được gọi (trước bot.run()), bot.loop CHƯA tồn tại -> AttributeError.
+    _monopoly_views_registered = {"done": False}
+
+    @bot.listen('on_ready')
+    async def _monopoly_register_persistent_views():
+        if _monopoly_views_registered["done"]:
+            return
+        _monopoly_views_registered["done"] = True
         bot.add_view(MonopolyLobbyView())
         bot.add_view(MonopolyGameView())
         print(">>> [MONOPOLY] Đã đăng ký View vĩnh viễn cho Cờ Tỷ Phú.")
-
-    bot.loop.create_task(_register_persistent_views())
 
     # ── COMMANDS ───────────────────────────────────────────────────────
     @bot.group(invoke_without_command=True, aliases=['monopoly', 'cotyphu', 'cty_phu'])
