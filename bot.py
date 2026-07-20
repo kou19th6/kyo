@@ -932,6 +932,121 @@ async def check_stop_loss_take_profit(user_id, channel):
         except Exception:
             pass
 
+# ═══════════════════════════════════════════════════════════
+# 📈 CHỨNG KHOÁN — HUB GIAO DIỆN NÚT BẤM (thay cho gõ subcommand)
+# ═══════════════════════════════════════════════════════════
+
+class CKAmountModal(discord.ui.Modal):
+    def __init__(self, title, code_default=""):
+        super().__init__(title=title)
+        self.code = discord.ui.TextInput(label="Mã CK", default=code_default, max_length=6)
+        self.qty  = discord.ui.TextInput(label="Số lượng", placeholder="VD: 100")
+        self.add_item(self.code)
+        self.add_item(self.qty)
+
+
+class CKBuyModal(CKAmountModal):
+    def __init__(self):
+        super().__init__("📈 Mua Cổ Phiếu")
+
+    async def on_submit(self, interaction: discord.Interaction):
+        code = self.code.value.upper()
+        try:
+            qty = int(self.qty.value)
+        except ValueError:
+            return await interaction.response.send_message("⚠️ Số lượng không hợp lệ!", ephemeral=True)
+
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+
+        await buy.callback(FakeCtx(), code, qty)
+
+
+class CKSellModal(CKAmountModal):
+    def __init__(self):
+        super().__init__("📉 Bán Cổ Phiếu")
+
+    async def on_submit(self, interaction: discord.Interaction):
+        code = self.code.value.upper()
+        qty_str = self.qty.value
+
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+
+        await sell.callback(FakeCtx(), code, qty_str)
+
+
+class ChungKhoanHubView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=120)
+        self.author = author
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Mua", emoji="📈", style=discord.ButtonStyle.success, row=0)
+    async def btn_buy(self, interaction, button):
+        await interaction.response.send_modal(CKBuyModal())
+
+    @discord.ui.button(label="Bán", emoji="📉", style=discord.ButtonStyle.danger, row=0)
+    async def btn_sell(self, interaction, button):
+        await interaction.response.send_modal(CKSellModal())
+
+    @discord.ui.button(label="Portfolio", emoji="💼", style=discord.ButtonStyle.primary, row=0)
+    async def btn_port(self, interaction, button):
+        ud = load_user(str(self.author.id))
+        stocks = ud.get("stocks", {})
+        if not stocks:
+            return await interaction.response.send_message("📭 Bạn chưa có cổ phiếu nào.", ephemeral=True)
+        lines = []
+        total = 0
+        for code, qty in stocks.items():
+            val = get_stock_sell_price(code, qty) * qty
+            total += val
+            lines.append(f"**{code}** {qty:,}CP — {val:,} 💰")
+        embed = discord.Embed(title="💼 Portfolio", description="\n".join(lines), color=discord.Color.blue())
+        embed.set_footer(text=f"Tổng: {total:,} 💰")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="Thị trường", emoji="📊", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_market(self, interaction, button):
+        embed = discord.Embed(title="📊 CHỈ SỐ NGÀNH", color=discord.Color.teal())
+        for sec, name in SECTOR_NAMES.items():
+            idx = get_sector_index(sec)
+            icon = "🟢" if idx > 0 else "🔴" if idx < 0 else "⚪"
+            embed.add_field(name=f"{icon} {name}", value=f"{idx:+.2f}%", inline=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @discord.ui.button(label="Làm mới", emoji="🔄", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_refresh(self, interaction, button):
+        await interaction.response.edit_message(embed=build_ck_hub_embed(), view=self)
+
+
+def build_ck_hub_embed():
+    embed = discord.Embed(
+        title="📈 SÀN GIAO DỊCH CHỨNG KHOÁN",
+        description=(
+            f"⏱️ Cập nhật mỗi 15 phút | Tiếp theo: <t:{get_next_15min_timestamp()}:R>\n"
+            f"👇 Bấm nút để mua/bán — không cần gõ lệnh con nữa"
+        ),
+        color=discord.Color.blue()
+    )
+    for code in list(STANDARD_STOCKS.keys())[:6]:
+        cur = get_stock_price(code)
+        chg = get_price_change_pct(code)
+        trend = "🟢" if chg > 0 else "🔴" if chg < 0 else "⚪"
+        embed.add_field(name=f"{trend} {code}", value=f"{cur:,} 💰 ({chg:+.2f}%)", inline=True)
+    return embed
+
 # =====================================================================
 # LỆNH CHỨNG KHOÁN v3
 # =====================================================================
@@ -970,7 +1085,8 @@ async def chungkhoan(ctx):
             value=f"Giá: **{current:,}** | Mua(100cp): {buy_p:,} | Bán(100cp): {sell_p:,}\nThay đổi: **{change_pct:+.2f}%**",
             inline=True
         )
-    await ctx.reply(embed=embed, mention_author=False)
+    embed.set_footer(text="👇 Bấm nút bên dưới")
+    await ctx.reply(embed=embed, view=ChungKhoanHubView(ctx.author), mention_author=False)
 
 
 @chungkhoan.command()
@@ -1961,22 +2077,46 @@ async def tranno(ctx):
         color=discord.Color.green()
     ), mention_author=False)
 
+class GymHubView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=60)
+        self.author = author
 
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Nâng Cấp", emoji="⬆️", style=discord.ButtonStyle.success)
+    async def btn_upgrade(self, interaction, button):
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+        await gym.callback(FakeCtx(), "nangcap")
+
+    @discord.ui.button(label="Tập Luyện", emoji="💪", style=discord.ButtonStyle.primary)
+    async def btn_train(self, interaction, button):
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+        await gym.callback(FakeCtx(), "tap")
 # ===== GYM (BUFF DUEL) =====
 @bot.command()
 async def gym(ctx, action: str = ""):
     """Tập gym để tăng sức mạnh trong duel"""
-    user_id = str(ctx.author.id)
-    user_data = load_user(user_id)
-    gym_level = user_data.get("gym_level", 0)
+    user_id = str(ctx.author.id); user_data = load_user(user_id); gym_level = user_data.get("gym_level", 0)
 
     if not action:
         embed = discord.Embed(title="💪 PHÒNG GYM", color=discord.Color.orange())
         embed.add_field(name="Level hiện tại", value=f"**Lv{gym_level}** (+{gym_level*5}% ATK trong Duel)", inline=False)
         upgrade_cost = (gym_level + 1) * 50000
-        embed.add_field(name="Nâng cấp", value=f"Lv{gym_level+1}: **{upgrade_cost:,} 💰**\n`k gym nangcap`", inline=False)
-        embed.add_field(name="Tập luyện hàng ngày", value="`k gym tap` - nhận XP + giảm CD duel", inline=False)
-        return await ctx.reply(embed=embed, mention_author=False)
+        embed.add_field(name="Nâng cấp tiếp theo", value=f"Lv{gym_level+1} — **{upgrade_cost:,} 💰**", inline=False)
+        return await ctx.reply(embed=embed, view=GymHubView(ctx.author), mention_author=False)
 
     action = action.lower()
     if action == "nangcap":
@@ -2528,7 +2668,95 @@ class ExpView(discord.ui.View):
     def __init__(self, author):
         super().__init__(timeout=60); self.author = author; self.add_item(ExpSelect())
     async def interaction_check(self, interaction): return interaction.user.id == self.author.id
+class CtyAmountModal(discord.ui.Modal):
+    amount = discord.ui.TextInput(label="Số tiền", placeholder="VD: 100000")
+    def __init__(self, title, callback_fn):
+        super().__init__(title=title)
+        self.callback_fn = callback_fn
 
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            amt = int(self.amount.value)
+        except ValueError:
+            return await interaction.response.send_message("⚠️ Số không hợp lệ!", ephemeral=True)
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+            async def send(self, *a, **kw):
+                await interaction.response.send_message(*a, **kw)
+        await self.callback_fn(FakeCtx(), amt)
+
+
+class CtyHubView(discord.ui.View):
+    def __init__(self, author, comp, role):
+        super().__init__(timeout=120)
+        self.author = author
+        self.role = role
+
+        if role in ["boss", "quanly"]:
+            self.add_item(self._btn("Phòng Ban", "🏭", discord.ButtonStyle.primary, self._phongban))
+            self.add_item(self._btn("Vay Vốn", "🏦", discord.ButtonStyle.danger, self._vaycty))
+        if role == "boss":
+            self.add_item(self._btn("IPO", "📈", discord.ButtonStyle.success, self._ipo))
+            self.add_item(self._btn("Báo Cáo TC", "📑", discord.ButtonStyle.secondary, self._baocao))
+
+    def _btn(self, label, emoji, style, handler):
+        btn = discord.ui.Button(label=label, emoji=emoji, style=style)
+        btn.callback = handler
+        return btn
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+    async def _phongban(self, interaction):
+        class FakeCtx:
+            author = interaction.user
+            guild = interaction.guild
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+        await phongban.callback(FakeCtx(), None, 1)
+
+    async def _vaycty(self, interaction):
+        async def do_vay(ctx, amt):
+            await vaycty.callback(ctx, amt)
+        await interaction.response.send_modal(CtyAmountModal("🏦 Vay Vốn Ngân Hàng", do_vay))
+
+    async def _ipo(self, interaction):
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+        await ipo.callback(FakeCtx())
+
+    async def _baocao(self, interaction):
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+        await baocaotaichinh.callback(FakeCtx())
+
+    @discord.ui.button(label="Góp Quỹ", emoji="💰", style=discord.ButtonStyle.success, row=1)
+    async def btn_gop(self, interaction, button):
+        async def do_gop(ctx, amt):
+            await gop.callback(ctx, amt)
+        await interaction.response.send_modal(CtyAmountModal("💰 Góp Quỹ Công Ty", do_gop))
+
+    @discord.ui.button(label="Thu Lãi", emoji="📈", style=discord.ButtonStyle.primary, row=1)
+    async def btn_thulai(self, interaction, button):
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+        await thulai.callback(FakeCtx())
 # =====================================================================
 # LỆNH CÔNG TY (giữ nguyên từ gốc)
 # =====================================================================
@@ -2633,10 +2861,8 @@ async def cty(ctx):
         "**Thương trường:** `k cty vaycty <tiền>` | `k cty tranocty` | `k cty quangcao <tiền>`\n"
         "`k cty boicong <tên cty>` | `k cty giandiep <tên cty>` | `k cty anninh` | `k cty sapnhap <tên cty>`"
     )
-    if my_role in ["boss", "quanly"]: cmds += "\n**Quản Lý:** `k cty tuyen @user` | `k cty duoi @user`"
-    if my_role == "boss": cmds += "\n**Chủ Tịch:** `k cty luong <tiền>` | `k ck ipo` | `k cty chucvu @user <role>` | `k cty doitenchuc <role> <tên>`"
-    embed_db.add_field(name="📋 Bảng Lệnh", value=cmds, inline=False)
-    await ctx.send(embed=embed_db)
+    embed_db.set_footer(text="👇 Dùng nút bên dưới")
+    await ctx.send(embed=embed_db, view=CtyHubView(ctx.author, comp, my_role))
 
 
 @cty.command()
@@ -3135,7 +3361,67 @@ async def roi(ctx):
         if user_id in comp["members"]: del comp["members"][user_id]
         user_data["company"] = None; save_user(user_id); save_company(comp_id)
         await ctx.reply(embed=discord.Embed(description="🎒 Bạn đã từ chức, rời khỏi công ty.", color=discord.Color.dark_grey()), mention_author=False)
+class BankNapModal(discord.ui.Modal, title="📥 Gửi Tiền Vào Ngân Hàng"):
+    amount = discord.ui.TextInput(label="Số tiền (hoặc gõ 'all')", placeholder="VD: 50000 hoặc all")
 
+    async def on_submit(self, interaction: discord.Interaction):
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+        await gui.callback(FakeCtx(), self.amount.value)
+
+
+class BankRutModal(discord.ui.Modal, title="📤 Rút Tiền Ra Ví"):
+    amount = discord.ui.TextInput(label="Số tiền (hoặc gõ 'all')", placeholder="VD: 50000 hoặc all")
+
+    async def on_submit(self, interaction: discord.Interaction):
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+        await rut.callback(FakeCtx(), self.amount.value)
+
+
+class BankHubView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=90)
+        self.author = author
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Gửi Tiền", emoji="📥", style=discord.ButtonStyle.success)
+    async def btn_gui(self, interaction, button):
+        await interaction.response.send_modal(BankNapModal())
+
+    @discord.ui.button(label="Rút Tiền", emoji="📤", style=discord.ButtonStyle.danger)
+    async def btn_rut(self, interaction, button):
+        await interaction.response.send_modal(BankRutModal())
+
+    @discord.ui.button(label="Nhận Lãi", emoji="📈", style=discord.ButtonStyle.primary)
+    async def btn_lai(self, interaction, button):
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+        await laisuat.callback(FakeCtx())
+
+    @discord.ui.button(label="Làm Mới", emoji="🔄", style=discord.ButtonStyle.secondary)
+    async def btn_refresh(self, interaction, button):
+        ud = load_user(str(self.author.id))
+        embed = discord.Embed(title="🏦 NGÂN HÀNG TRUNG ƯƠNG", color=discord.Color.blue())
+        embed.add_field(name="💳 Ví", value=f"**{ud.get('money',0):,} 💰**", inline=True)
+        embed.add_field(name="🏦 Két sắt", value=f"**{ud.get('bank',0):,} 💰**", inline=True)
+        if ud.get("loan_amount", 0) > 0:
+            embed.add_field(name="⚠️ Đang nợ", value=f"**{ud['loan_amount']:,} 💰**", inline=False)
+        await interaction.response.edit_message(embed=embed, view=self)
 # =====================================================================
 # HỆ THỐNG NGÂN HÀNG
 # =====================================================================
@@ -3147,7 +3433,15 @@ async def bank(ctx):
     embed.add_field(name="🏦 Két sắt", value=f"**{user_data.get('bank', 0):,} 💰**", inline=True)
     if user_data.get("loan_amount", 0) > 0:
         embed.add_field(name="⚠️ Đang nợ", value=f"**{user_data['loan_amount']:,} 💰** | `k tranno`", inline=False)
-    await ctx.reply(embed=embed, mention_author=False)
+@bot.group(invoke_without_command=True, aliases=['nganhang', 'nh'])
+async def bank(ctx):
+    user_data = load_user(ctx.author.id)
+    embed = discord.Embed(title="🏦 NGÂN HÀNG TRUNG ƯƠNG", color=discord.Color.blue())
+    embed.add_field(name="💳 Ví", value=f"**{user_data.get('money', 0):,} 💰**", inline=True)
+    embed.add_field(name="🏦 Két sắt", value=f"**{user_data.get('bank', 0):,} 💰**", inline=True)
+    if user_data.get("loan_amount", 0) > 0:
+        embed.add_field(name="⚠️ Đang nợ", value=f"**{user_data['loan_amount']:,} 💰**", inline=False)
+    await ctx.reply(embed=embed, view=BankHubView(ctx.author), mention_author=False)
 
 @bank.command()
 async def laisuat(ctx):
@@ -3180,7 +3474,93 @@ async def rut(ctx, amount: str):
     if w <= 0 or w > bb: return await ctx.reply("⚠️ Số dư không đủ!")
     user_data["bank"] -= w; user_data["money"] += w; save_user(user_id)
     await ctx.reply(embed=discord.Embed(description=f"✅ Rút **{w:,} 💰** ra ví!", color=discord.Color.green()), mention_author=False)
+class FarmSeedSelect(discord.ui.Select):
+    """Dùng chung cho cả Mua và Trồng — action quyết định gọi hàm nào."""
+    def __init__(self, action: str):
+        self.action = action  # "mua" hoặc "trong"
+        options = [
+            discord.SelectOption(
+                label=v["name"],
+                description=f"{v['cost']:,}💰 | {v['time_hours']}h | Lãi {v['profit_min']:,}-{v['profit_max']:,}",
+                value=k
+            )
+            for k, v in FARM_SEEDS.items()
+        ]
+        placeholder = "Chọn hạt giống để mua..." if action == "mua" else "Chọn hạt giống để trồng..."
+        super().__init__(placeholder=placeholder, options=options)
 
+    async def callback(self, interaction: discord.Interaction):
+        seed_key = self.values[0]
+
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+
+        if self.action == "mua":
+            await mua.callback(FakeCtx(), seed_key)
+        else:
+            await trong.callback(FakeCtx(), seed_key)
+
+
+class FarmHubView(discord.ui.View):
+    def __init__(self, author):
+        super().__init__(timeout=120)
+        self.author = author
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Mua Hạt Giống", emoji="🛒", style=discord.ButtonStyle.success, row=0)
+    async def btn_mua(self, interaction, button):
+        view = discord.ui.View(timeout=60)
+        view.add_item(FarmSeedSelect("mua"))
+        await interaction.response.send_message("Chọn hạt để mua:", view=view, ephemeral=True)
+
+    @discord.ui.button(label="Gieo Trồng", emoji="🌱", style=discord.ButtonStyle.primary, row=0)
+    async def btn_trong(self, interaction, button):
+        view = discord.ui.View(timeout=60)
+        view.add_item(FarmSeedSelect("trong"))
+        await interaction.response.send_message("Chọn hạt để gieo (phải mua trước):", view=view, ephemeral=True)
+
+    @discord.ui.button(label="Thu Hoạch", emoji="🌾", style=discord.ButtonStyle.danger, row=0)
+    async def btn_thuhoach(self, interaction, button):
+        class FakeCtx:
+            author = interaction.user
+            async def reply(self, *a, **kw):
+                kw.pop("mention_author", None)
+                await interaction.response.send_message(*a, **kw, ephemeral=True)
+        await thuhoach.callback(FakeCtx())
+
+    @discord.ui.button(label="Làm Mới", emoji="🔄", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_refresh(self, interaction, button):
+        embed = build_farm_embed(str(self.author.id))
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
+def build_farm_embed(user_id):
+    ud = load_user(user_id)
+    farm = ud.get("farm", {"seed": None, "plant_time": None})
+    embed = discord.Embed(title="🏡 NÔNG TRẠI VUI VẺ", color=discord.Color.green())
+
+    if not farm.get("seed"):
+        embed.description = "🟫 Đất trống — bấm **Mua Hạt Giống** rồi **Gieo Trồng**."
+    else:
+        si = FARM_SEEDS.get(farm["seed"])
+        if si:
+            ht = datetime.strptime(farm["plant_time"], "%Y-%m-%d %H:%M:%S") + timedelta(hours=si["time_hours"])
+            if datetime.now() >= ht:
+                embed.description = f"🌾 **{si['name']}** đã chín! Bấm **Thu Hoạch**."
+            else:
+                embed.description = f"🌱 Đang trồng **{si['name']}**\nThu hoạch: <t:{int(ht.timestamp())}:R>"
+
+    seeds_str = "\n".join([f"**{v['name']}** — {v['cost']:,}💰 | {v['time_hours']}h" for v in FARM_SEEDS.values()])
+    embed.add_field(name="🌾 Các loại hạt giống", value=seeds_str, inline=False)
+    return embed
 # =====================================================================
 # HỆ THỐNG NÔNG TRẠI
 # =====================================================================
@@ -3192,21 +3572,8 @@ async def lichsu(ctx):
 
 @bot.group(invoke_without_command=True, aliases=['farm'])
 async def nongtrai(ctx):
-    user_data = load_user(ctx.author.id)
-    farm = user_data.get("farm", {"seed": None, "plant_time": None})
-    embed = discord.Embed(title="🏡 NÔNG TRẠI VUI VẺ", color=discord.Color.green())
-    seeds_str = "\n".join([f"`{k}`: {v['name']} | {v['cost']:,}💰 | {v['time_hours']}h" for k, v in FARM_SEEDS.items()])
-    if not farm.get("seed"):
-        embed.description = f"Đất trống.\n\n{seeds_str}\n\n`k farm mua <tên>` | `k farm trong <tên>`"
-    else:
-        si = FARM_SEEDS.get(farm["seed"])
-        if si:
-            ht = datetime.strptime(farm["plant_time"], "%Y-%m-%d %H:%M:%S") + timedelta(hours=si["time_hours"])
-            if datetime.now() >= ht:
-                embed.description = "🌾 Chín rồi! `k farm thuhoach`"
-            else:
-                embed.description = f"🌱 **{si['name']}** | Thu hoạch: <t:{int(ht.timestamp())}:R>"
-    await ctx.reply(embed=embed)
+    embed = build_farm_embed(str(ctx.author.id))
+    await ctx.reply(embed=embed, view=FarmHubView(ctx.author), mention_author=False)
 
 @nongtrai.command()
 async def mua(ctx, seed: str):
@@ -6797,10 +7164,16 @@ async def help(ctx):
     view.message = msg
 
 def build_rank_embed(target, user_data):
-    lv = user_data.get("level",1); xp = user_data.get("xp",0); money = user_data.get("money",0)
-    bank_bal = user_data.get("bank",0); stock_val = sum(get_stock_sell_price(c)*q for c,q in user_data.get("stocks",{}).items())
+    lv = user_data.get("level", 1)
+    xp = user_data.get("xp", 0)
+    money = user_data.get("money", 0)
+    bank_bal = user_data.get("bank", 0)
+    stock_val = sum(get_stock_sell_price(c) * q for c, q in user_data.get("stocks", {}).items())
     total = money + bank_bal + stock_val
-    embed = discord.Embed(title=f"💳 CĂN CƯỚC: {target.name}", color=discord.Color.gold() if total > 1000000 else discord.Color.teal())
+    kc = user_data.get("kim_cuong", 0)
+
+    color = discord.Color.gold() if total > 1_000_000 else discord.Color.teal()
+    embed = discord.Embed(color=color)
 
     avatar_url = user_data.get("profile_avatar") or target.display_avatar.url
     banner_url = user_data.get("profile_banner")
@@ -6808,42 +7181,71 @@ def build_rank_embed(target, user_data):
     if banner_url:
         embed.set_image(url=banner_url)
 
+    embed.set_author(name=f"{target.display_name}  •  {user_data.get('title')}", icon_url=target.display_avatar.url)
+
     bio = user_data.get("profile_bio", "")
     if bio:
-        embed.description = f"*{bio[:200]}*"
+        embed.description = f"*{bio[:150]}*"
 
-    embed.add_field(name="🏷️ Danh hiệu", value=f"**{user_data.get('title')}**", inline=False)
-    embed.add_field(name="🌟 Cấp", value=f"**LV {lv}**", inline=True)
-    embed.add_field(name="💰 Ví", value=f"**{money:,} 💰**", inline=True)
-    embed.add_field(name="🏦 NH", value=f"**{bank_bal:,} 💰**", inline=True)
-    embed.add_field(name="📈 CK", value=f"**{stock_val:,} 💰**", inline=True)
-    embed.add_field(name="💎 Tổng", value=f"**{total:,} 💰**", inline=True)
-    embed.add_field(name="🔥 Streak", value=f"**{user_data.get('streak',0)} ngày**", inline=True)
-    if user_data.get("loan_amount",0) > 0:
-        embed.add_field(name="⚠️ Đang nợ", value=f"**{user_data['loan_amount']:,} 💰**", inline=True)
-    embed.add_field(name="✨ XP", value=f"`{make_progress_bar(xp, lv*100)}`\n{xp}/{lv*100} XP", inline=False)
-    embed.add_field(name="💪 Gym", value=f"Lv{user_data.get('gym_level',0)}", inline=True)
-    embed.set_footer(text="k caidat để chỉnh sửa avatar/ảnh bìa/bio")
+    xp_need = lv * 100
+    xp_bar = make_progress_bar(xp, xp_need, 12)
+    embed.add_field(
+        name=f"🌟 Cấp {lv}",
+        value=f"`{xp_bar}`\n{xp:,}/{xp_need:,} XP",
+        inline=False
+    )
+
+    money_lines = f"💰 Ví: **{money:,}**\n🏦 NH: **{bank_bal:,}**"
+    if stock_val > 0:
+        money_lines += f"\n📈 CK: **{stock_val:,}**"
+    if kc > 0:
+        money_lines += f"\n💎 KC: **{kc:,}**"
+    embed.add_field(name="💳 Tài Sản", value=money_lines, inline=True)
+
+    misc_lines = f"🔥 Streak: **{user_data.get('streak',0)}** ngày\n💪 Gym: **Lv{user_data.get('gym_level',0)}**"
+    if user_data.get("loan_amount", 0) > 0:
+        misc_lines += f"\n⚠️ Nợ: **{user_data['loan_amount']:,}**"
+    embed.add_field(name="📋 Khác", value=misc_lines, inline=True)
+
+    embed.add_field(name="\u200b", value=f"**💎 TỔNG TÀI SẢN: {total:,} 💰**", inline=False)
+
     return embed
 
 
-class RankSettingsButtonView(discord.ui.View):
-    def __init__(self, author):
-        super().__init__(timeout=60)
-        self.author = author
+class RankActionView(discord.ui.View):
+    def __init__(self, target_user, viewer_is_owner: bool):
+        super().__init__(timeout=90)
+        self.target_user = target_user
+        self.viewer_is_owner = viewer_is_owner
+        if not viewer_is_owner:
+            self.remove_item(self.btn_settings)
 
-    @discord.ui.button(label="⚙️ Cài Đặt Hồ Sơ", style=discord.ButtonStyle.secondary)
-    async def open_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.author.id:
+    @discord.ui.button(label="Cài Đặt Hồ Sơ", emoji="⚙️", style=discord.ButtonStyle.secondary)
+    async def btn_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.target_user.id:
             return await interaction.response.send_message("Đây không phải hồ sơ của bạn!", ephemeral=True)
         await interaction.response.send_message(
-            embed=build_settings_embed(str(self.author.id)),
-            view=SettingsMainView(self.author),
+            embed=build_settings_embed(str(self.target_user.id)),
+            view=SettingsMainView(self.target_user),
             ephemeral=True
         )
 
-    async def interaction_check(self, interaction):
-        return True  # cho phép ai cũng bấm xem, nhưng chặn trong callback
+    @discord.ui.button(label="Ngân Hàng", emoji="🏦", style=discord.ButtonStyle.primary)
+    async def btn_bank(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ud = load_user(str(interaction.user.id))
+        embed = discord.Embed(title="🏦 NGÂN HÀNG", color=discord.Color.blue())
+        embed.add_field(name="💳 Ví", value=f"**{ud.get('money',0):,} 💰**", inline=True)
+        embed.add_field(name="🏦 Két sắt", value=f"**{ud.get('bank',0):,} 💰**", inline=True)
+        await interaction.response.send_message(embed=embed, view=BankHubView(interaction.user), ephemeral=True)
+
+    @discord.ui.button(label="Lịch Sử", emoji="📜", style=discord.ButtonStyle.secondary)
+    async def btn_history(self, interaction: discord.Interaction, button: discord.ui.Button):
+        history = load_user(str(interaction.user.id)).get("history", [])
+        desc = "\n".join(history[:10]) if history else "Chưa có lịch sử."
+        await interaction.response.send_message(
+            embed=discord.Embed(title="📜 LỊCH SỬ GẦN ĐÂY", description=desc, color=discord.Color.blue()),
+            ephemeral=True
+        )
 
 
 @bot.command()
@@ -6851,7 +7253,7 @@ async def rank(ctx, member: discord.Member = None):
     target = member or ctx.author
     user_data = load_user(target.id)
     embed = build_rank_embed(target, user_data)
-    view = RankSettingsButtonView(target) if member is None else None
+    view = RankActionView(target, viewer_is_owner=(member is None or member.id == ctx.author.id))
     await ctx.reply(embed=embed, view=view, mention_author=False)
 
 TOP_CATEGORIES = {
