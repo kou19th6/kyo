@@ -14595,6 +14595,10 @@ async def bangdieukhien(ctx):
 # =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
+
+from monopoly import setup_monopoly
+setup_monopoly(bot, db, load_user=load_user, save_user=save_user, add_history=add_history)
+
 keep_alive() 
 
 TOKEN_PART_1 = 'MTUxODUwMzkzNDIyNDg5NjAwMA.GyKHSc.'
