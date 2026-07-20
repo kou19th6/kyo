@@ -1637,6 +1637,9 @@ def card_value(card):
     if card == 'A': return 11
     return int(card)
 
+def draw_card():
+    return random.choice(['A','2','3','4','5','6','7','8','9','10','J','Q','K'])
+
 def hand_value(hand):
     total = sum(card_value(c) for c in hand)
     aces = hand.count('A')
