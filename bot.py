@@ -7233,6 +7233,7 @@ def build_rank_embed(target, user_data):
     if bio:
         embed.description = f"*{bio[:150]}*"
 
+    # ── Level / XP ─────────────────────────────────────
     xp_need = lv * 100
     xp_bar = make_progress_bar(xp, xp_need, 12)
     embed.add_field(
@@ -7241,35 +7242,34 @@ def build_rank_embed(target, user_data):
         inline=False
     )
 
-    # ── Tài sản: dồn hết vào 1 field full-width, không dùng inline nữa
-    # để tránh Discord xếp lệch cột trên màn hình điện thoại
-    money_lines = f"<:Money_kyo:1528673432613552188> Ví: **{money:,}**\n🏦 Ngân hàng: **{bank_bal:,}**"
+    # ── Tài sản: dùng khối code để số luôn thẳng hàng, không lệch ──
+    asset_rows = [("💵 Ví", money), ("🏦 Bank", bank_bal)]
     if stock_val > 0:
-        money_lines += f"\n📈 Chứng khoán: **{stock_val:,}**"
+        asset_rows.append(("📈 CK", stock_val))
     if kc > 0:
-        money_lines += f"\n💎 Kim Cương: **{kc:,}**"
-    embed.add_field(name="💳 Tài Sản", value=money_lines, inline=False)
+        asset_rows.append(("💎 KC", kc))
 
-    # ── Trạng thái hôn nhân
+    label_width = max(len(l) for l, _ in asset_rows)
+    asset_block = "\n".join(f"{l.ljust(label_width)} : {v:,}" for l, v in asset_rows)
+    embed.add_field(name="💳 Tài Sản", value=f"```{asset_block}```", inline=False)
+
+    # ── Hôn nhân ───────────────────────────────────────
     spouse_id = user_data.get("spouse")
     if spouse_id:
         spouse_user = bot.get_user(int(spouse_id))
-        if not spouse_user:
-            try:
-                spouse_user = ctx_guild_member_fallback = None
-            except Exception:
-                spouse_user = None
         spouse_name = spouse_user.name if spouse_user else f"người dùng #{spouse_id[-4:]}"
         marry_line = f"💍 Đã kết hôn với **{spouse_name}**"
     else:
         marry_line = "💔 Độc thân"
     embed.add_field(name="❤️ Hôn Nhân", value=marry_line, inline=False)
 
-    # ── Thông tin khác
-    misc_lines = f"🔥 Streak: **{user_data.get('streak',0)}** ngày\n💪 Gym: **Lv{user_data.get('gym_level',0)}**"
+    # ── Thông tin khác ───────────────────────────────────
+    misc_rows = [("🔥 Streak", f"{user_data.get('streak',0)} ngày"), ("💪 Gym", f"Lv{user_data.get('gym_level',0)}")]
     if user_data.get("loan_amount", 0) > 0:
-        misc_lines += f"\n⚠️ Nợ: **{user_data['loan_amount']:,}**"
-    embed.add_field(name="📋 Khác", value=misc_lines, inline=False)
+        misc_rows.append(("⚠️ Nợ", f"{user_data['loan_amount']:,}"))
+    label_width2 = max(len(l) for l, _ in misc_rows)
+    misc_block = "\n".join(f"{l.ljust(label_width2)} : {v}" for l, v in misc_rows)
+    embed.add_field(name="📋 Khác", value=f"```{misc_block}```", inline=False)
 
     embed.add_field(name="\u200b", value=f"**💎 TỔNG TÀI SẢN: {total:,} <:Money_kyo:1528673432613552188>**", inline=False)
 
