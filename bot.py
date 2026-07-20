@@ -206,7 +206,7 @@ MIN_SAFE_INT           = -MAX_SAFE_INT
 
 MONEY_SOFT_CAP         = MAX_SAFE_INT - 1_000_000_000   # tiền thường tối đa, chỉ chừa 1 nấc để đổi 💎 khi vượt trần
 COMPANY_SOFT_CAP       = MAX_SAFE_INT - 1_000_000_000
-PREMIUM_EXCHANGE_RATE  = 1_000_000_000         # 1 tỷ 💰 = 1 💎
+PREMIUM_EXCHANGE_RATE  = 1_000_000_000         # 1 tỷ <:Money_kyo:1528673432613552188> = 1 💎
 PREMIUM_CURRENCY_NAME  = "Kim Cương 💎"
 
 def overflow_user_to_premium(user_data):
@@ -423,7 +423,7 @@ def check_achievement(user_id, user_data):
     total_money = user_data.get("money", 0) + user_data.get("bank", 0)
     if total_money >= 1_000_000 and "millionaire" not in achievements:
         achievements.append("millionaire")
-        new_achievements.append("💰 Triệu Phú Đầu Tiên")
+        new_achievements.append("<:Money_kyo:1528673432613552188> Triệu Phú Đầu Tiên")
     if total_money >= 1_000_000_000 and "billionaire" not in achievements:
         achievements.append("billionaire")
         new_achievements.append("👑 Tỷ Phú Đồng")
@@ -593,13 +593,13 @@ async def check_gamble_conditions(ctx, amount_str):
         return None, None
 
     if bet_amount <= 0 or bet_amount > user_data["money"]:
-        embed_poor = discord.Embed(description=f"⚠️ Sếp chỉ có **{user_data['money']:,} 💰** thôi!", color=discord.Color.red())
+        embed_poor = discord.Embed(description=f"⚠️ Sếp chỉ có **{user_data['money']:,} <:Money_kyo:1528673432613552188>** thôi!", color=discord.Color.red())
         await ctx.reply(embed=embed_poor, mention_author=False)
         return None, None
 
     diamond_bet_cap = 300000 + min(user_data.get("kim_cuong", 0), 50) * 20000
     if bet_amount > diamond_bet_cap:
-        embed_max = discord.Embed(description=f"🛑 Mỗi ván tối đa **{diamond_bet_cap:,} 💰** thôi nhé! (Sở hữu 💎 sẽ tăng giới hạn cược)", color=discord.Color.red())
+        embed_max = discord.Embed(description=f"🛑 Mỗi ván tối đa **{diamond_bet_cap:,} <:Money_kyo:1528673432613552188>** thôi nhé! (Sở hữu 💎 sẽ tăng giới hạn cược)", color=discord.Color.red())
         await ctx.reply(embed=embed_max, mention_author=False)
         return None, None
 
@@ -898,7 +898,7 @@ async def check_stop_loss_take_profit(user_id, channel):
             user_data["stop_loss"].pop(code, None)
             user_data["stock_buy_prices"].pop(code, None)
             add_history(user_id, f"[SL] Bán {qty} {code} @ {current_price:,} (+{gain:,})")
-            sold_msg.append(f"🛑 **STOP-LOSS {code}**: Bán {qty} CP @ {current_price:,} (tổng {gain:,} 💰)")
+            sold_msg.append(f"🛑 **STOP-LOSS {code}**: Bán {qty} CP @ {current_price:,} (tổng {gain:,} <:Money_kyo:1528673432613552188>)")
         tp_price = user_data.get("take_profit", {}).get(code, 0)
         if tp_price and current_price >= tp_price:
             gain = current_price * qty
@@ -907,7 +907,7 @@ async def check_stop_loss_take_profit(user_id, channel):
             user_data["take_profit"].pop(code, None)
             user_data["stock_buy_prices"].pop(code, None)
             add_history(user_id, f"[TP] Bán {qty} {code} @ {current_price:,} (+{gain:,})")
-            sold_msg.append(f"✅ **TAKE-PROFIT {code}**: Bán {qty} CP @ {current_price:,} (tổng {gain:,} 💰)")
+            sold_msg.append(f"✅ **TAKE-PROFIT {code}**: Bán {qty} CP @ {current_price:,} (tổng {gain:,} <:Money_kyo:1528673432613552188>)")
 
     margin = user_data.get("margin_used", 0)
     if margin > 0:
@@ -1013,9 +1013,9 @@ class ChungKhoanHubView(discord.ui.View):
         for code, qty in stocks.items():
             val = get_stock_sell_price(code, qty) * qty
             total += val
-            lines.append(f"**{code}** {qty:,}CP — {val:,} 💰")
+            lines.append(f"**{code}** {qty:,}CP — {val:,} <:Money_kyo:1528673432613552188>")
         embed = discord.Embed(title="💼 Portfolio", description="\n".join(lines), color=discord.Color.blue())
-        embed.set_footer(text=f"Tổng: {total:,} 💰")
+        embed.set_footer(text=f"Tổng: {total:,} <:Money_kyo:1528673432613552188>")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @discord.ui.button(label="Thị trường", emoji="📊", style=discord.ButtonStyle.secondary, row=1)
@@ -1045,7 +1045,7 @@ def build_ck_hub_embed():
         cur = get_stock_price(code)
         chg = get_price_change_pct(code)
         trend = "🟢" if chg > 0 else "🔴" if chg < 0 else "⚪"
-        embed.add_field(name=f"{trend} {code}", value=f"{cur:,} 💰 ({chg:+.2f}%)", inline=True)
+        embed.add_field(name=f"{trend} {code}", value=f"{cur:,} <:Money_kyo:1528673432613552188> ({chg:+.2f}%)", inline=True)
     return embed
 
 # =====================================================================
@@ -1144,7 +1144,7 @@ async def buy(ctx, code: str, qty: int):
         total_cost = buy_price * qty
         user_data = load_user(user_id)
         if user_data.get("money", 0) < total_cost:
-            return await ctx.reply(embed=discord.Embed(description=f"⚠️ Thiếu tiền! Cần **{total_cost:,} 💰** (giá {buy_price:,}/CP đã gồm trượt giá)", color=discord.Color.red()), mention_author=False)
+            return await ctx.reply(embed=discord.Embed(description=f"⚠️ Thiếu tiền! Cần **{total_cost:,} <:Money_kyo:1528673432613552188>** (giá {buy_price:,}/CP đã gồm trượt giá)", color=discord.Color.red()), mention_author=False)
 
         user_data["money"] -= total_cost
         old_qty = user_data["stocks"].get(code, 0)
@@ -1162,10 +1162,10 @@ async def buy(ctx, code: str, qty: int):
         embed = discord.Embed(title="✅ LỆNH MUA KHỚP", color=discord.Color.green())
         embed.add_field(name="Mã CK", value=f"**{code}**", inline=True)
         embed.add_field(name="Số lượng", value=f"**{qty:,} CP**", inline=True)
-        embed.add_field(name="Giá mua (đã trượt giá)", value=f"**{buy_price:,} 💰/CP**", inline=True)
+        embed.add_field(name="Giá mua (đã trượt giá)", value=f"**{buy_price:,} <:Money_kyo:1528673432613552188>/CP**", inline=True)
         embed.add_field(name="Trượt giá", value=f"**{slip*100:.2f}%**", inline=True)
-        embed.add_field(name="Tổng chi", value=f"**{total_cost:,} 💰**", inline=True)
-        embed.add_field(name="Số dư ví", value=f"**{user_data['money']:,} 💰**", inline=True)
+        embed.add_field(name="Tổng chi", value=f"**{total_cost:,} <:Money_kyo:1528673432613552188>**", inline=True)
+        embed.add_field(name="Số dư ví", value=f"**{user_data['money']:,} <:Money_kyo:1528673432613552188>**", inline=True)
         await ctx.reply(embed=embed, mention_author=False)
     finally:
         release_lock(user_id)
@@ -1213,10 +1213,10 @@ async def sell(ctx, code: str, qty_str: str):
         embed = discord.Embed(title="✅ LỆNH BÁN KHỚP", color=color)
         embed.add_field(name="Mã CK", value=f"**{code}**", inline=True)
         embed.add_field(name="Số lượng", value=f"**{qty:,} CP**", inline=True)
-        embed.add_field(name="Giá bán (đã trượt giá+thuế)", value=f"**{sell_price:,} 💰/CP**", inline=True)
-        embed.add_field(name="Thu về", value=f"**{total_gain:,} 💰**", inline=True)
-        embed.add_field(name="P&L", value=f"**{profit:+,} 💰** ({profit_pct:+.2f}%)", inline=True)
-        embed.set_footer(text=f"Số dư ví: {user_data['money']:,} 💰")
+        embed.add_field(name="Giá bán (đã trượt giá+thuế)", value=f"**{sell_price:,} <:Money_kyo:1528673432613552188>/CP**", inline=True)
+        embed.add_field(name="Thu về", value=f"**{total_gain:,} <:Money_kyo:1528673432613552188>**", inline=True)
+        embed.add_field(name="P&L", value=f"**{profit:+,} <:Money_kyo:1528673432613552188>** ({profit_pct:+.2f}%)", inline=True)
+        embed.set_footer(text=f"Số dư ví: {user_data['money']:,} <:Money_kyo:1528673432613552188>")
         await ctx.reply(embed=embed, mention_author=False)
     finally:
         release_lock(user_id)
@@ -1236,7 +1236,7 @@ async def order(ctx, code: str, side: str, qty: int, price: int):
     user_data = load_user(user_id)
     if is_buy:
         total = price * qty
-        if user_data["money"] < total: return await ctx.reply(f"⚠️ Cần **{total:,} 💰** để đặt lệnh mua!")
+        if user_data["money"] < total: return await ctx.reply(f"⚠️ Cần **{total:,} <:Money_kyo:1528673432613552188>** để đặt lệnh mua!")
         user_data["money"] -= total
     else:
         owned = user_data["stocks"].get(code, 0)
@@ -1258,7 +1258,7 @@ async def order(ctx, code: str, side: str, qty: int, price: int):
                       f"⏳ Khớp khi giá {'≤' if is_buy else '≥'} **{price:,}**\n`k ck orders` | `k ck cancel {order_id}`"),
         color=discord.Color.blue()
     )
-    if is_buy: embed.set_footer(text=f"Đã phong tỏa {price*qty:,} 💰")
+    if is_buy: embed.set_footer(text=f"Đã phong tỏa {price*qty:,} <:Money_kyo:1528673432613552188>")
     await ctx.reply(embed=embed, mention_author=False)
 
 
@@ -1288,7 +1288,7 @@ async def cancel(ctx, order_id: int):
     if target["side"] == "buy":
         refund = target["price"] * target["qty"]
         user_data["money"] += refund
-        await ctx.reply(embed=discord.Embed(description=f"✅ Đã hủy lệnh #{order_id}. Hoàn lại **{refund:,} 💰**", color=discord.Color.green()), mention_author=False)
+        await ctx.reply(embed=discord.Embed(description=f"✅ Đã hủy lệnh #{order_id}. Hoàn lại **{refund:,} <:Money_kyo:1528673432613552188>**", color=discord.Color.green()), mention_author=False)
     else:
         await ctx.reply(embed=discord.Embed(description=f"✅ Đã hủy lệnh bán #{order_id}.", color=discord.Color.green()), mention_author=False)
     save_user(user_id)
@@ -1339,11 +1339,11 @@ async def margin(ctx, code: str, qty: int):
         total_own_assets = own_cash + user_data.get("bank", 0) + stock_value
         max_borrow = total_own_assets * MAX_MARGIN_RATIO - current_margin
         if max_borrow <= 0:
-            return await ctx.reply(embed=discord.Embed(description=f"⚠️ Đã vay tới hạn mức! Tối đa: {total_own_assets*MAX_MARGIN_RATIO:,.0f} 💰", color=discord.Color.red()), mention_author=False)
+            return await ctx.reply(embed=discord.Embed(description=f"⚠️ Đã vay tới hạn mức! Tối đa: {total_own_assets*MAX_MARGIN_RATIO:,.0f} <:Money_kyo:1528673432613552188>", color=discord.Color.red()), mention_author=False)
 
         cash_needed = max(0, total_cost - own_cash)
         if cash_needed > max_borrow:
-            return await ctx.reply(embed=discord.Embed(description=f"⚠️ Vượt hạn mức! Có thể vay thêm: {max_borrow:,.0f} 💰", color=discord.Color.red()), mention_author=False)
+            return await ctx.reply(embed=discord.Embed(description=f"⚠️ Vượt hạn mức! Có thể vay thêm: {max_borrow:,.0f} <:Money_kyo:1528673432613552188>", color=discord.Color.red()), mention_author=False)
 
         paid_cash = min(own_cash, total_cost)
         user_data["money"] -= paid_cash
@@ -1364,10 +1364,10 @@ async def margin(ctx, code: str, qty: int):
 
         embed = discord.Embed(title="💳 MUA KÝ QUỸ THÀNH CÔNG", color=discord.Color.gold())
         embed.add_field(name="Mã CK", value=code, inline=True)
-        embed.add_field(name="Vay ký quỹ", value=f"{cash_needed:,} 💰", inline=True)
+        embed.add_field(name="Vay ký quỹ", value=f"{cash_needed:,} <:Money_kyo:1528673432613552188>", inline=True)
         embed.add_field(name="Lãi suất áp dụng", value=f"{rate*100:.1f}%/năm", inline=True)
-        embed.add_field(name="Lãi vay/ngày", value=f"~{daily_interest:,} 💰", inline=True)
-        embed.add_field(name="Tổng nợ ký quỹ", value=f"{user_data['margin_used']:,} 💰", inline=False)
+        embed.add_field(name="Lãi vay/ngày", value=f"~{daily_interest:,} <:Money_kyo:1528673432613552188>", inline=True)
+        embed.add_field(name="Tổng nợ ký quỹ", value=f"{user_data['margin_used']:,} <:Money_kyo:1528673432613552188>", inline=False)
         embed.set_footer(text=f"⚠️ MARGIN CALL nếu tài sản < {int(MAINTENANCE_MARGIN_RATIO*100)}% nợ!")
         await ctx.reply(embed=embed, mention_author=False)
     finally:
@@ -1386,7 +1386,7 @@ async def short(ctx, code: str, qty: int):
         market_price = get_stock_price(code)
         total_collateral = market_price * qty
         if user_data.get("money", 0) < total_collateral:
-            return await ctx.reply(embed=discord.Embed(description=f"⚠️ Cần **{total_collateral:,} 💰** ký quỹ!", color=discord.Color.red()), mention_author=False)
+            return await ctx.reply(embed=discord.Embed(description=f"⚠️ Cần **{total_collateral:,} <:Money_kyo:1528673432613552188>** ký quỹ!", color=discord.Color.red()), mention_author=False)
         user_data["money"] -= total_collateral
         user_data.setdefault("short_positions", {})
         user_data.setdefault("short_buy_prices", {})
@@ -1395,7 +1395,7 @@ async def short(ctx, code: str, qty: int):
         save_user(user_id)
         add_history(user_id, f"[SHORT] Mở {qty} {code} @ {market_price:,}")
         embed = discord.Embed(title="📉 MỞ VỊ THẾ BÁN KHỐNG",
-            description=f"Mã: **{code}** | SL: **{qty:,}** | Giá: **{market_price:,}**\nKý quỹ: **{total_collateral:,} 💰**\n`k ck covershort {code} {qty}`",
+            description=f"Mã: **{code}** | SL: **{qty:,}** | Giá: **{market_price:,}**\nKý quỹ: **{total_collateral:,} <:Money_kyo:1528673432613552188>**\n`k ck covershort {code} {qty}`",
             color=discord.Color.dark_red())
         await ctx.reply(embed=embed, mention_author=False)
     finally:
@@ -1425,8 +1425,8 @@ async def covershort(ctx, code: str, qty: int):
         add_history(user_id, f"[COVER SHORT] Đóng {qty} {code} P&L {total_profit:+,}")
         color = discord.Color.green() if total_profit >= 0 else discord.Color.red()
         embed = discord.Embed(title="✅ ĐÓNG BÁN KHỐNG", color=color)
-        embed.add_field(name="P&L", value=f"**{total_profit:+,} 💰**", inline=True)
-        embed.add_field(name="Hoàn ký quỹ", value=f"{collateral_return:,} 💰", inline=True)
+        embed.add_field(name="P&L", value=f"**{total_profit:+,} <:Money_kyo:1528673432613552188>**", inline=True)
+        embed.add_field(name="Hoàn ký quỹ", value=f"{collateral_return:,} <:Money_kyo:1528673432613552188>", inline=True)
         await ctx.reply(embed=embed, mention_author=False)
     finally:
         release_lock(user_id)
@@ -1451,7 +1451,7 @@ async def port(ctx, member: discord.Member = None):
             pnl = (sell_p - avg_buy) * qty
             total_long_value += val
             lines.append(f"**{code}** {qty:,}CP @ avg {avg_buy:,} | Giá trị: {val:,} | P&L: **{pnl:+,}**")
-        embed.add_field(name=f"📦 CỔ PHIẾU (Tổng: {total_long_value:,} 💰)", value=truncate_field_value("\n".join(lines)), inline=False)
+        embed.add_field(name=f"📦 CỔ PHIẾU (Tổng: {total_long_value:,} )", value=truncate_field_value("\n".join(lines)), inline=False)
     if shorts:
         lines = []
         for code, qty in shorts.items():
@@ -1462,11 +1462,11 @@ async def port(ctx, member: discord.Member = None):
         embed.add_field(name="📉 BÁN KHỐNG", value=truncate_field_value("\n".join(lines)), inline=False)
     if margin > 0:
         rate = get_base_interest_rate() + MARGIN_BASE_SPREAD
-        embed.add_field(name="💳 KÝ QUỸ", value=f"Nợ: **{margin:,} 💰** | Lãi: {rate*100:.1f}%/năm", inline=False)
+        embed.add_field(name="💳 KÝ QUỸ", value=f"Nợ: **{margin:,} <:Money_kyo:1528673432613552188>** | Lãi: {rate*100:.1f}%/năm", inline=False)
     cash = user_data.get("money", 0)
     bank_bal = user_data.get("bank", 0)
     net_assets = cash + bank_bal + total_long_value - margin
-    embed.add_field(name="💰 TỔNG TÀI SẢN RÒNG", value=f"**{net_assets:,} 💰**", inline=False)
+    embed.add_field(name="<:Money_kyo:1528673432613552188> TỔNG TÀI SẢN RÒNG", value=f"**{net_assets:,} <:Money_kyo:1528673432613552188>**", inline=False)
     await ctx.reply(embed=embed, mention_author=False)
 
 
@@ -1500,7 +1500,7 @@ async def ipo(ctx):
     comp = load_company(comp_id)
     if comp["members"].get(user_id) != "boss": return await ctx.reply("⚠️ Chỉ Chủ Tịch mới được IPO!", mention_author=False)
     if comp.get("is_ipo"): return await ctx.reply("⚠️ Đã niêm yết rồi!", mention_author=False)
-    if comp["treasury"] < 50000000: return await ctx.reply("⚠️ Quỹ tối thiểu **50,000,000 💰** để IPO.", mention_author=False)
+    if comp["treasury"] < 50000000: return await ctx.reply("⚠️ Quỹ tối thiểu **50,000,000 <:Money_kyo:1528673432613552188>** để IPO.", mention_author=False)
     comp["is_ipo"] = True
     comp["last_earnings"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     comp["_fin_snapshot_treasury"] = comp.get("treasury", 0)
@@ -1678,7 +1678,7 @@ class BlackjackView(discord.ui.View):
         embed = discord.Embed(title="🃏 BLACKJACK", color=discord.Color.dark_green())
         embed.add_field(name=f"Nhà Cái {f'({dh})' if reveal_dealer else ''}", value=d_display, inline=False)
         embed.add_field(name=f"Bạn ({ph})", value=format_hand(self.player_hand), inline=False)
-        embed.add_field(name="💰 Cược", value=f"**{self.bet:,}**", inline=True)
+        embed.add_field(name="<:Money_kyo:1528673432613552188> Cược", value=f"**{self.bet:,}**", inline=True)
         return embed
 
     async def end_game(self, interaction, result):
@@ -1690,18 +1690,18 @@ class BlackjackView(discord.ui.View):
         if result == "player_bj":
             win = int(self.bet * 1.5)
             self.user_data["money"] += self.bet + win
-            desc = f"🃏 **BLACKJACK! Thắng {win:,} 💰!**"
+            desc = f"🃏 **BLACKJACK! Thắng {win:,} <:Money_kyo:1528673432613552188>!**"
             color = discord.Color.gold()
         elif result == "player_win":
             self.user_data["money"] += self.bet * 2
-            desc = f"🎉 **THẮNG! Nhận {self.bet*2:,} 💰!**"
+            desc = f"🎉 **THẮNG! Nhận {self.bet*2:,} <:Money_kyo:1528673432613552188>!**"
             color = discord.Color.green()
         elif result == "tie":
             self.user_data["money"] += self.bet
             desc = "🤝 **HÒA! Tiền cược hoàn lại.**"
             color = discord.Color.blue()
         else:  # lose
-            desc = f"💀 **THUA! Mất {self.bet:,} 💰.**"
+            desc = f"💀 **THUA! Mất {self.bet:,} <:Money_kyo:1528673432613552188>.**"
             color = discord.Color.red()
 
         save_user(str(self.player.id))
@@ -1710,7 +1710,7 @@ class BlackjackView(discord.ui.View):
         embed = self.make_embed(reveal_dealer=True)
         embed.color = color
         embed.add_field(name="Kết quả", value=desc, inline=False)
-        embed.set_footer(text=f"Bạn: {ph} | Nhà cái: {dh} | Ví: {self.user_data['money']:,} 💰")
+        embed.set_footer(text=f"Bạn: {ph} | Nhà cái: {dh} | Ví: {self.user_data['money']:,} <:Money_kyo:1528673432613552188>")
         if interaction.response.is_done():
             await interaction.message.edit(embed=embed, view=self)
         else:
@@ -1751,7 +1751,7 @@ class BlackjackView(discord.ui.View):
         elif ph == dh: await self.end_game(interaction, "tie")
         else: await self.end_game(interaction, "lose")
 
-    @discord.ui.button(label="💰 Gấp Đôi (Double)", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="<:Money_kyo:1528673432613552188> Gấp Đôi (Double)", style=discord.ButtonStyle.success)
     async def double_down(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.player.id: return await interaction.response.send_message("Không phải ván của bạn!", ephemeral=True)
         if self.finished or self.doubled: return
@@ -1854,12 +1854,12 @@ async def blackjack(ctx, amount: str):
 WHEEL_PRIZES = [
     {"name": "💀 Mất 20% tiền ví", "mult": -0.2, "color": "red", "weight": 10},
     {"name": "😞 Không có gì", "mult": 0, "color": "grey", "weight": 20},
-    {"name": "💰 +5,000 💰", "fixed": 5000, "color": "yellow", "weight": 25},
-    {"name": "💰 +15,000 💰", "fixed": 15000, "color": "yellow", "weight": 20},
-    {"name": "💰 +50,000 💰", "fixed": 50000, "color": "green", "weight": 12},
-    {"name": "🎁 +100,000 💰", "fixed": 100000, "color": "blue", "weight": 7},
-    {"name": "⭐ +300,000 💰", "fixed": 300000, "color": "purple", "weight": 4},
-    {"name": "👑 +1,000,000 💰", "fixed": 1000000, "color": "gold", "weight": 1},
+    {"name": "<:Money_kyo:1528673432613552188> +5,000 <:Money_kyo:1528673432613552188>", "fixed": 5000, "color": "yellow", "weight": 25},
+    {"name": "<:Money_kyo:1528673432613552188> +15,000 <:Money_kyo:1528673432613552188>", "fixed": 15000, "color": "yellow", "weight": 20},
+    {"name": "<:Money_kyo:1528673432613552188> +50,000 <:Money_kyo:1528673432613552188>", "fixed": 50000, "color": "green", "weight": 12},
+    {"name": "🎁 +100,000 <:Money_kyo:1528673432613552188>", "fixed": 100000, "color": "blue", "weight": 7},
+    {"name": "⭐ +300,000 <:Money_kyo:1528673432613552188>", "fixed": 300000, "color": "purple", "weight": 4},
+    {"name": "👑 +1,000,000 <:Money_kyo:1528673432613552188>", "fixed": 1000000, "color": "gold", "weight": 1},
     {"name": "🐾 Thú cưng ngẫu nhiên", "pet": True, "color": "orange", "weight": 1},
 ]
 
@@ -1891,12 +1891,12 @@ async def vongquay(ctx):
     result_text = ""
     if "fixed" in prize:
         user_data["money"] += prize["fixed"]
-        result_text = f"**{prize['name']}**\nBạn nhận được **{prize['fixed']:,} 💰**!"
+        result_text = f"**{prize['name']}**\nBạn nhận được **{prize['fixed']:,} <:Money_kyo:1528673432613552188>**!"
         save_user(user_id)
     elif "mult" in prize:
         change = int(user_data.get("money", 0) * prize["mult"])
         user_data["money"] = user_data["money"] + change
-        result_text = f"**{prize['name']}**\n{'Mất' if change < 0 else 'Nhận'} **{abs(change):,} 💰**."
+        result_text = f"**{prize['name']}**\n{'Mất' if change < 0 else 'Nhận'} **{abs(change):,} <:Money_kyo:1528673432613552188>**."
         save_user(user_id)
     elif prize.get("pet"):
         rarity = random.choices(list(PET_RATES.keys()), weights=[70, 20, 7, 2.5, 0.5], k=1)[0]
@@ -1910,7 +1910,7 @@ async def vongquay(ctx):
 
     add_history(user_id, f"Vòng quay: {prize['name']}")
     embed = discord.Embed(title="🎡 KẾT QUẢ VÒNG QUAY", description=result_text, color=discord.Color.gold())
-    embed.set_footer(text=f"Quay lại sau 20 giờ | Ví: {user_data.get('money', 0):,} 💰")
+    embed.set_footer(text=f"Quay lại sau 20 giờ | Ví: {user_data.get('money', 0):,} <:Money_kyo:1528673432613552188>")
     await msg.edit(embed=embed)
 
 
@@ -1926,7 +1926,7 @@ async def vecao(ctx, amount: str):
     gamble_cooldowns[user_id] = datetime.now()
 
     # 9 ô, mỗi ô là 1 trong các biểu tượng
-    symbols = ["💎", "⭐", "🍀", "🎁", "💰", "🔔", "🌈", "🃏", "💔"]
+    symbols = ["💎", "⭐", "🍀", "🎁", "<:Money_kyo:1528673432613552188>", "🔔", "🌈", "🃏", "💔"]
     grid = [random.choice(symbols) for _ in range(9)]
 
     # Đếm ký hiệu xuất hiện nhiều nhất
@@ -1940,7 +1940,7 @@ async def vecao(ctx, amount: str):
     win = int(bet * mult)
     user_data["money"] += win
     save_user(user_id)
-    add_history(user_id, f"Vé cào: {most_common_count}x{most_common_sym} (+{win:,} - {bet:,} = {win-bet:+,} 💰)")
+    add_history(user_id, f"Vé cào: {most_common_count}x{most_common_sym} (+{win:,} - {bet:,} = {win-bet:+,} <:Money_kyo:1528673432613552188>)")
 
     # Hiển thị grid
     grid_display = ""
@@ -1953,19 +1953,19 @@ async def vecao(ctx, amount: str):
         if (i+1) % 3 == 0: grid_display += "\n"
 
     if win > bet:
-        result = f"🎉 **TRÚNG {most_common_count}x {most_common_sym}!** Nhận **{win:,} 💰** (lãi {win-bet:+,})"
+        result = f"🎉 **TRÚNG {most_common_count}x {most_common_sym}!** Nhận **{win:,} <:Money_kyo:1528673432613552188>** (lãi {win-bet:+,})"
         color = discord.Color.green()
     elif win == bet:
-        result = f"🤝 **Hòa vốn!** Được lại **{win:,} 💰**"
+        result = f"🤝 **Hòa vốn!** Được lại **{win:,} <:Money_kyo:1528673432613552188>**"
         color = discord.Color.blue()
     else:
-        result = f"💀 **Mất {bet-win:,} 💰**"
+        result = f"💀 **Mất {bet-win:,} <:Money_kyo:1528673432613552188>**"
         color = discord.Color.red()
 
     embed = discord.Embed(title="🎟️ VÉ CÀO", color=color)
     embed.add_field(name="Bảng vé", value=grid_display, inline=False)
     embed.add_field(name="Kết quả", value=result, inline=False)
-    embed.set_footer(text=f"Ví: {user_data['money']:,} 💰 | Cần {most_common_count} ô giống nhau để thắng")
+    embed.set_footer(text=f"Ví: {user_data['money']:,} <:Money_kyo:1528673432613552188> | Cần {most_common_count} ô giống nhau để thắng")
     await ctx.reply(embed=embed, mention_author=False)
 
 
@@ -1994,8 +1994,8 @@ async def tuido(ctx, member: discord.Member = None):
     embed.add_field(name="💵 Tiền mặt", value=f"{cash:,}", inline=True)
     embed.add_field(name="🏦 Ngân hàng", value=f"{bank:,}", inline=True)
     embed.add_field(name="📈 Cổ phiếu", value=f"{stock_value:,}", inline=True)
-    embed.add_field(name="💎 Tổng tài sản", value=f"**{total_wealth:,} 💰**", inline=False)
-    embed.add_field(name="🎯 FIRE Number (25x)", value=f"**{fire_number:,.0f} 💰**", inline=True)
+    embed.add_field(name="💎 Tổng tài sản", value=f"**{total_wealth:,} <:Money_kyo:1528673432613552188>**", inline=False)
+    embed.add_field(name="🎯 FIRE Number (25x)", value=f"**{fire_number:,.0f} <:Money_kyo:1528673432613552188>**", inline=True)
     embed.add_field(name="📊 Tiến độ FIRE", value=f"`{make_progress_bar(fire_progress, 100)}` **{fire_progress:.1f}%**", inline=False)
     if years_to_fire > 0:
         embed.add_field(name="⏳ Ước tính thời gian", value=f"**{years_to_fire:.1f} năm**", inline=True)
@@ -2019,19 +2019,19 @@ async def vay(ctx, amount: int):
     if user_data.get("loan_amount", 0) > 0:
         due = user_data.get("loan_due")
         return await ctx.reply(embed=discord.Embed(
-            description=f"⚠️ Bạn đang nợ **{user_data['loan_amount']:,} 💰**! Trả nợ trước: `k tranno`",
+            description=f"⚠️ Bạn đang nợ **{user_data['loan_amount']:,} <:Money_kyo:1528673432613552188>**! Trả nợ trước: `k tranno`",
             color=discord.Color.red()
         ), mention_author=False)
 
     max_loan = max(50000, (user_data.get("money", 0) + user_data.get("bank", 0)) * 2)
     if amount <= 0 or amount > max_loan:
         return await ctx.reply(embed=discord.Embed(
-            description=f"⚠️ Vay từ 1 đến **{max_loan:,} 💰** (2x tài sản hiện tại).",
+            description=f"⚠️ Vay từ 1 đến **{max_loan:,} <:Money_kyo:1528673432613552188>** (2x tài sản hiện tại).",
             color=discord.Color.red()
         ), mention_author=False)
 
     if amount > 5000000:
-        return await ctx.reply("⚠️ Tối đa vay **5,000,000 💰** mỗi lần!")
+        return await ctx.reply("⚠️ Tối đa vay **5,000,000 <:Money_kyo:1528673432613552188>** mỗi lần!")
 
     due_date = datetime.now() + timedelta(days=3)
     total_owed = int(amount * 1.20)  # Lãi 20%
@@ -2039,11 +2039,11 @@ async def vay(ctx, amount: int):
     user_data["loan_amount"] = total_owed
     user_data["loan_due"] = due_date.strftime("%Y-%m-%d %H:%M:%S")
     save_user(user_id)
-    add_history(user_id, f"Vay ngân hàng {amount:,} 💰 (phải trả {total_owed:,})")
+    add_history(user_id, f"Vay ngân hàng {amount:,} <:Money_kyo:1528673432613552188> (phải trả {total_owed:,})")
 
     embed = discord.Embed(title="💳 VAY TIỀN THÀNH CÔNG", color=discord.Color.green())
-    embed.add_field(name="Số tiền vay", value=f"**{amount:,} 💰**", inline=True)
-    embed.add_field(name="Phải trả", value=f"**{total_owed:,} 💰** (+20%)", inline=True)
+    embed.add_field(name="Số tiền vay", value=f"**{amount:,} <:Money_kyo:1528673432613552188>**", inline=True)
+    embed.add_field(name="Phải trả", value=f"**{total_owed:,} <:Money_kyo:1528673432613552188>** (+20%)", inline=True)
     embed.add_field(name="Hạn chót", value=f"<t:{int(due_date.timestamp())}:F>", inline=False)
     embed.add_field(name="⚠️ Quá hạn", value="Giang hồ đến đòi nợ! Mất 30% tài sản!", inline=False)
     embed.set_footer(text="Trả nợ: k tranno")
@@ -2062,7 +2062,7 @@ async def tranno(ctx):
 
     if user_data.get("money", 0) < loan:
         return await ctx.reply(embed=discord.Embed(
-            description=f"⚠️ Thiếu tiền! Cần **{loan:,} 💰** để trả nợ. Bạn chỉ có {user_data['money']:,} 💰.\nRút từ ngân hàng: `k bank rut all`",
+            description=f"⚠️ Thiếu tiền! Cần **{loan:,} <:Money_kyo:1528673432613552188>** để trả nợ. Bạn chỉ có {user_data['money']:,} <:Money_kyo:1528673432613552188>.\nRút từ ngân hàng: `k bank rut all`",
             color=discord.Color.red()
         ), mention_author=False)
 
@@ -2070,11 +2070,11 @@ async def tranno(ctx):
     user_data["loan_amount"] = 0
     user_data["loan_due"] = None
     save_user(user_id)
-    add_history(user_id, f"Trả nợ ngân hàng -{loan:,} 💰")
+    add_history(user_id, f"Trả nợ ngân hàng -{loan:,} <:Money_kyo:1528673432613552188>")
 
     await ctx.reply(embed=discord.Embed(
         title="✅ TRẢ NỢ THÀNH CÔNG",
-        description=f"Đã trả **{loan:,} 💰** cho ngân hàng. Tín dụng sạch!",
+        description=f"Đã trả **{loan:,} <:Money_kyo:1528673432613552188>** cho ngân hàng. Tín dụng sạch!",
         color=discord.Color.green()
     ), mention_author=False)
 
@@ -2116,14 +2116,14 @@ async def gym(ctx, action: str = ""):
         embed = discord.Embed(title="💪 PHÒNG GYM", color=discord.Color.orange())
         embed.add_field(name="Level hiện tại", value=f"**Lv{gym_level}** (+{gym_level*5}% ATK trong Duel)", inline=False)
         upgrade_cost = (gym_level + 1) * 50000
-        embed.add_field(name="Nâng cấp tiếp theo", value=f"Lv{gym_level+1} — **{upgrade_cost:,} 💰**", inline=False)
+        embed.add_field(name="Nâng cấp tiếp theo", value=f"Lv{gym_level+1} — **{upgrade_cost:,} <:Money_kyo:1528673432613552188>**", inline=False)
         return await ctx.reply(embed=embed, view=GymHubView(ctx.author), mention_author=False)
 
     action = action.lower()
     if action == "nangcap":
         cost = (gym_level + 1) * 50000
         if gym_level >= 10: return await ctx.reply("⚠️ Gym đã max level!", mention_author=False)
-        if user_data.get("money", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} 💰**!", mention_author=False)
+        if user_data.get("money", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} <:Money_kyo:1528673432613552188>**!", mention_author=False)
         user_data["money"] -= cost
         user_data["gym_level"] = gym_level + 1
         save_user(user_id)
@@ -2150,7 +2150,7 @@ SCENARIOS = {
     "terrible": [{"mult": -2.0, "msg": "🐘 **KING KONG NỔI GIẬN!** Bị đấm bay xa, rớt sạch đồ đạc!"}],
     "bad": [{"mult": -0.5, "msg": "🐒 **KHỈ ĂN TRỘM!** Một con khỉ giật túi tiền rồi đu cây biến mất."}],
     "neutral": [{"mult": 0, "msg": "🍂 **LÁ KHÔ XÀO XẠC...** Chẳng có gì cả."}],
-    "good": [{"mult": 0.5, "msg": "💰 **TIỀN LẺ RỚT!** Nhặt được một chiếc ví nhỏ."}],
+    "good": [{"mult": 0.5, "msg": "<:Money_kyo:1528673432613552188> **TIỀN LẺ RỚT!** Nhặt được một chiếc ví nhỏ."}],
     "great": [{"mult": 1.5, "msg": "⚔️ **TIÊU DIỆT THỔ PHỈ!** Tịch thu kho báu của toán cướp rừng!"}],
     "jackpot": [{"mult": 5.0, "msg": "🎫 **VÉ SỐ ĐỘC ĐẮC! (JACKPOT)** Trúng giải ĐẶC BIỆT!"}]
 }
@@ -2232,9 +2232,9 @@ def update_quest_progress(user_id, quest_type):
     if progress >= quest["target"]:
         reward = quest["reward"]
         user_data["money"] += reward
-        add_history(user_id, f"Hoàn thành Quest '{quest['name']}' (+{reward:,} 💰)")
+        add_history(user_id, f"Hoàn thành Quest '{quest['name']}' (+{reward:,} <:Money_kyo:1528673432613552188>)")
         save_user(user_id)
-        return f"✅ **HOÀN THÀNH NHIỆM VỤ: {quest['name']}!**\nPhần thưởng: **+{reward:,} 💰**"
+        return f"✅ **HOÀN THÀNH NHIỆM VỤ: {quest['name']}!**\nPhần thưởng: **+{reward:,} <:Money_kyo:1528673432613552188>**"
 
     save_user(user_id)
     return None
@@ -2247,7 +2247,7 @@ class ShopItemSelect(discord.ui.Select):
         options = []
         for key, item_data in SHOP_ITEMS.items():
             if item_data["type"] == category_type:
-                options.append(discord.SelectOption(label=item_data['name'], description=f"Giá: {item_data['price']:,} 💰", value=key, emoji=item_data['emoji']))
+                options.append(discord.SelectOption(label=item_data['name'], description=f"Giá: {item_data['price']:,} <:Money_kyo:1528673432613552188>", value=key, emoji=item_data['emoji']))
         super().__init__(placeholder="Nhấn vào đây để chọn món đồ...", min_values=1, max_values=1, options=options[:25])
 
     async def callback(self, interaction: discord.Interaction):
@@ -2255,7 +2255,7 @@ class ShopItemSelect(discord.ui.Select):
         user_data = load_user(user_id)
         item_info = SHOP_ITEMS[self.values[0]]
         if user_data.get("money", 0) < item_info["price"]:
-            return await interaction.response.send_message(embed=discord.Embed(description=f"⚠️ Cần **{item_info['price']:,} 💰**.", color=discord.Color.red()), ephemeral=True)
+            return await interaction.response.send_message(embed=discord.Embed(description=f"⚠️ Cần **{item_info['price']:,} <:Money_kyo:1528673432613552188>**.", color=discord.Color.red()), ephemeral=True)
         user_data["money"] -= item_info["price"]
         if item_info["type"] == "title":
             user_data["title"] = item_info["name"]
@@ -2320,11 +2320,11 @@ class SellItemSelect(discord.ui.Select):
             for pet, quantity in list(items.items()):
                 if count >= 25: break
                 if quantity > 0:
-                    options.append(discord.SelectOption(label=pet, description=f"Đang có: {quantity} | Giá: {get_pet_sell_price(pet):,} 💰", value=pet))
+                    options.append(discord.SelectOption(label=pet, description=f"Đang có: {quantity} | Giá: {get_pet_sell_price(pet):,} <:Money_kyo:1528673432613552188>", value=pet))
                     count += 1
         else:
             for asset in list(set(items))[:25]:
-                options.append(discord.SelectOption(label=asset, description=f"Giá cầm: {get_asset_price(asset):,} 💰", value=asset))
+                options.append(discord.SelectOption(label=asset, description=f"Giá cầm: {get_asset_price(asset):,} <:Money_kyo:1528673432613552188>", value=asset))
         super().__init__(placeholder="Chọn món đồ muốn bán...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
@@ -2334,13 +2334,13 @@ class SellItemSelect(discord.ui.Select):
             sell_price = get_pet_sell_price(item_value)
             user_data["pets"][item_value] -= 1
             if user_data["pets"][item_value] == 0: del user_data["pets"][item_value]
-            success_message = f"✅ Bán **{item_value}**. Nhận **{sell_price:,} 💰**!"
+            success_message = f"✅ Bán **{item_value}**. Nhận **{sell_price:,} <:Money_kyo:1528673432613552188>**!"
         else:
             if item_value not in user_data.get("assets", []): return await interaction.response.send_message("Lỗi!", ephemeral=True)
             sell_price = get_asset_price(item_value)
             user_data["assets"].remove(item_value)
-            success_message = f"✅ Cầm **{item_value}**. Nhận **{sell_price:,} 💰**!"
-        user_data["money"] += sell_price; save_user(user_id); add_history(user_id, f"Bán {item_value} (+{sell_price:,} 💰)")
+            success_message = f"✅ Cầm **{item_value}**. Nhận **{sell_price:,} <:Money_kyo:1528673432613552188>**!"
+        user_data["money"] += sell_price; save_user(user_id); add_history(user_id, f"Bán {item_value} (+{sell_price:,} <:Money_kyo:1528673432613552188>)")
         await interaction.response.edit_message(embed=discord.Embed(title="🤝 GIAO DỊCH HOÀN TẤT", description=success_message, color=discord.Color.dark_orange()), view=None)
 
 class SellCategoryMenu(discord.ui.View):
@@ -2403,7 +2403,7 @@ class NhanSinhGameView(discord.ui.View):
         ages = {1: 15, 2: 25, 3: 35, 4: 50, 5: 70}
         tuoi = ages.get(self.phase, 15)
         status = "✅ **THÀNH CÔNG**" if is_win else "❌ **THẤT BẠI**"
-        log = f"🗓️ **Tuổi {tuoi}:** Chọn {letter}.\n🎲 Tỉ lệ: {final_rate:.1f}% | {status}: {result_msg} ({money_change:,} 💰)"
+        log = f"🗓️ **Tuổi {tuoi}:** Chọn {letter}.\n🎲 Tỉ lệ: {final_rate:.1f}% | {status}: {result_msg} ({money_change:,} <:Money_kyo:1528673432613552188>)"
         if is_dead: log += "\n\n💀 **BẠN ĐÃ ĐỘT TỬ!**"; self.phase = 99
         else:
             self.phase += 1
@@ -2432,10 +2432,10 @@ class NhanSinhGameView(discord.ui.View):
             if user_id in dang_choi_nhansinh: dang_choi_nhansinh.remove(user_id)
             user_data = load_user(user_id)
             user_data["money"] = max(0, user_data["money"] + self.tien_an); save_user(user_id)
-            add_history(user_id, f"Kết thúc Nhân Sinh ({'+' if self.tien_an >= 0 else ''}{self.tien_an:,} 💰)")
-            if self.tien_an < 0: embed.color = discord.Color.red(); embed.add_field(name="🪦 Kết cục", value=f"❌ Để lại khoản nợ: **{self.tien_an:,} 💰**", inline=False)
-            elif self.tien_an >= 500000: embed.color = discord.Color.gold(); embed.add_field(name="🪦 Kết cục", value=f"👑 Hưởng thọ trong nhung lụa! Di sản: **+{self.tien_an:,} 💰**", inline=False)
-            else: embed.color = discord.Color.blue(); embed.add_field(name="🪦 Kết cục", value=f"💼 Cuộc đời êm ấm. Di sản: **+{self.tien_an:,} 💰**", inline=False)
+            add_history(user_id, f"Kết thúc Nhân Sinh ({'+' if self.tien_an >= 0 else ''}{self.tien_an:,} <:Money_kyo:1528673432613552188>)")
+            if self.tien_an < 0: embed.color = discord.Color.red(); embed.add_field(name="🪦 Kết cục", value=f"❌ Để lại khoản nợ: **{self.tien_an:,} <:Money_kyo:1528673432613552188>**", inline=False)
+            elif self.tien_an >= 500000: embed.color = discord.Color.gold(); embed.add_field(name="🪦 Kết cục", value=f"👑 Hưởng thọ trong nhung lụa! Di sản: **+{self.tien_an:,} <:Money_kyo:1528673432613552188>**", inline=False)
+            else: embed.color = discord.Color.blue(); embed.add_field(name="🪦 Kết cục", value=f"💼 Cuộc đời êm ấm. Di sản: **+{self.tien_an:,} <:Money_kyo:1528673432613552188>**", inline=False)
         if interaction.response.is_done(): await interaction.message.edit(embed=embed, view=self)
         else: await interaction.response.edit_message(embed=embed, view=self)
 
@@ -2466,9 +2466,9 @@ class SoloOTTGame(discord.ui.View):
             p1d = load_user(self.player_1.id); p2d = load_user(self.player_2.id); total = self.bet_amount * 2
             if c1 == c2: ket_qua = "🤝 **HÒA!** Tiền hoàn lại."; p1d["money"] += self.bet_amount; p2d["money"] += self.bet_amount
             elif (c1=="🪨" and c2=="✂️") or (c1=="📄" and c2=="🪨") or (c1=="✂️" and c2=="📄"):
-                ket_qua = f"🎉 **{self.player_1.name} THẮNG!** +{total:,} 💰"; p1d["money"] += total; add_history(self.player_1.id, f"Thắng OTT +{total:,}")
+                ket_qua = f"🎉 **{self.player_1.name} THẮNG!** +{total:,} <:Money_kyo:1528673432613552188>"; p1d["money"] += total; add_history(self.player_1.id, f"Thắng OTT +{total:,}")
             else:
-                ket_qua = f"🎉 **{self.player_2.name} THẮNG!** +{total:,} 💰"; p2d["money"] += total; add_history(self.player_2.id, f"Thắng OTT +{total:,}")
+                ket_qua = f"🎉 **{self.player_2.name} THẮNG!** +{total:,} <:Money_kyo:1528673432613552188>"; p2d["money"] += total; add_history(self.player_2.id, f"Thắng OTT +{total:,}")
             save_user(self.player_1.id); save_user(self.player_2.id)
             embed = discord.Embed(title="⚔️ KẾT QUẢ", color=discord.Color.gold())
             embed.add_field(name=self.player_1.name, value=c1, inline=True); embed.add_field(name="VS", value="⚡", inline=True); embed.add_field(name=self.player_2.name, value=c2, inline=True)
@@ -2493,7 +2493,7 @@ class SoloOTTAccept(discord.ui.View):
         if p1d.get("money", 0) < self.bet_amount or p2d.get("money", 0) < self.bet_amount: return await interaction.response.send_message("Không đủ tiền!", ephemeral=True)
         p1d["money"] -= self.bet_amount; p2d["money"] -= self.bet_amount; save_user(self.player_1.id); save_user(self.player_2.id)
         game = SoloOTTGame(self.player_1, self.player_2, self.bet_amount)
-        embed = discord.Embed(title="⚔️ OẲN TÙ TÌ", description=f"{self.player_1.mention} 🆚 {self.player_2.mention}\nCược: **{self.bet_amount:,} 💰**\n\n👇 **BẤM ĐỂ CHỌN CHIÊU**", color=discord.Color.red())
+        embed = discord.Embed(title="⚔️ OẲN TÙ TÌ", description=f"{self.player_1.mention} 🆚 {self.player_2.mention}\nCược: **{self.bet_amount:,} <:Money_kyo:1528673432613552188>**\n\n👇 **BẤM ĐỂ CHỌN CHIÊU**", color=discord.Color.red())
         await interaction.response.edit_message(embed=embed, view=game); game.msg = interaction.message; self.stop()
 
 class MarryAccept(discord.ui.View):
@@ -2554,7 +2554,7 @@ class DuelAccept(discord.ui.View):
 
         embed = discord.Embed(title="⚔️ KẾT QUẢ QUYẾT ĐẤU", color=discord.Color.gold())
         embed.add_field(name="Diễn biến", value="\n".join(battle_log[-5:]), inline=False)
-        embed.add_field(name="🏆 KẾT QUẢ", value=f"**{winner.mention}** thắng! Nhận **{prize:,} 💰**!", inline=False)
+        embed.add_field(name="🏆 KẾT QUẢ", value=f"**{winner.mention}** thắng! Nhận **{prize:,} <:Money_kyo:1528673432613552188>**!", inline=False)
         if c_gym or t_gym:
             embed.add_field(name="💪 Gym Buff", value=f"{self.challenger.name}: Gym Lv{c_gym} | {self.target.name}: Gym Lv{t_gym}", inline=False)
         await interaction.response.edit_message(embed=embed, view=None); self.stop()
@@ -2610,8 +2610,8 @@ class SapNhapAcceptView(discord.ui.View):
             title="🤝 SÁP NHẬP THÀNH CÔNG!",
             description=(
                 f"**{buyer_comp['name']}** đã thâu tóm **{target_comp['name']}**!\n"
-                f"💰 Giá mua: **{self.price:,} 💰** (trả cho cựu Chủ Tịch)\n"
-                f"📦 Hấp thụ thêm **{absorbed:,} 💰** từ quỹ cũ\n"
+                f"<:Money_kyo:1528673432613552188> Giá mua: **{self.price:,} <:Money_kyo:1528673432613552188>** (trả cho cựu Chủ Tịch)\n"
+                f"📦 Hấp thụ thêm **{absorbed:,} <:Money_kyo:1528673432613552188>** từ quỹ cũ\n"
                 f"📈 Danh tiếng bên mua +10"
             ),
             color=discord.Color.gold()
@@ -2652,7 +2652,7 @@ class CompanyInviteView(discord.ui.View):
 
 class ExpSelect(discord.ui.Select):
     def __init__(self):
-        options = [discord.SelectOption(label="4 Giờ (Bãi Cỏ)", description="~350 💰", emoji="🌿", value="4"), discord.SelectOption(label="8 Giờ (Hang Động)", description="~800 💰", emoji="🦇", value="8"), discord.SelectOption(label="12 Giờ (Di Tích)", description="~1500 💰", emoji="🏛️", value="12")]
+        options = [discord.SelectOption(label="4 Giờ (Bãi Cỏ)", description="~350 <:Money_kyo:1528673432613552188>", emoji="🌿", value="4"), discord.SelectOption(label="8 Giờ (Hang Động)", description="~800 <:Money_kyo:1528673432613552188>", emoji="🦇", value="8"), discord.SelectOption(label="12 Giờ (Di Tích)", description="~1500 <:Money_kyo:1528673432613552188>", emoji="🏛️", value="12")]
         super().__init__(placeholder="Chọn địa điểm cắm trại...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction):
@@ -2744,11 +2744,11 @@ class CtyHubView(discord.ui.View):
                 await interaction.response.send_message(*a, **kw, ephemeral=True)
         await baocaotaichinh.callback(FakeCtx())
 
-    @discord.ui.button(label="Góp Quỹ", emoji="💰", style=discord.ButtonStyle.success, row=1)
+    @discord.ui.button(label="Góp Quỹ", emoji="<:Money_kyo:1528673432613552188>", style=discord.ButtonStyle.success, row=1)
     async def btn_gop(self, interaction, button):
         async def do_gop(ctx, amt):
             await gop.callback(ctx, amt)
-        await interaction.response.send_modal(CtyAmountModal("💰 Góp Quỹ Công Ty", do_gop))
+        await interaction.response.send_modal(CtyAmountModal("<:Money_kyo:1528673432613552188> Góp Quỹ Công Ty", do_gop))
 
     @discord.ui.button(label="Thu Lãi", emoji="📈", style=discord.ButtonStyle.primary, row=1)
     async def btn_thulai(self, interaction, button):
@@ -2829,7 +2829,7 @@ async def cty(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); comp_id = user_data.get("company")
     if not comp_id:
         return await ctx.send(embed=discord.Embed(title="🏢 SÀN GIAO DỊCH DOANH NGHIỆP",
-            description="Bạn chưa có công ty.\n`k cty tao <tên công ty>` (Phí: 500,000 💰)", color=discord.Color.red()))
+            description="Bạn chưa có công ty.\n`k cty tao <tên công ty>` (Phí: 500,000 <:Money_kyo:1528673432613552188>)", color=discord.Color.red()))
 
     comp = load_company(comp_id)
     if not comp:
@@ -2843,7 +2843,7 @@ async def cty(ctx):
     fin = compute_company_financials(comp)
 
     embed_db = discord.Embed(title=f"🏢 CÔNG TY: {comp['name']}", color=discord.Color.gold())
-    embed_db.add_field(name="Quỹ Công Ty", value=f"**{comp['treasury']:,} 💰**", inline=True)
+    embed_db.add_field(name="Quỹ Công Ty", value=f"**{comp['treasury']:,} <:Money_kyo:1528673432613552188>**", inline=True)
     embed_db.add_field(name="Sức Mạnh", value=f"⚔️ Lv{atk} | 🛡️ Lv{df}", inline=True)
     embed_db.add_field(name="Xếp Hạng Tín Dụng", value=f"**{rating}** (lãi vay +{spread*100:.0f}%)", inline=True)
 
@@ -2852,7 +2852,7 @@ async def cty(ctx):
     scandal_str = "\n🚨 **ĐANG DÍNH PHỐT!**" if comp.get("has_scandal") else ""
     embed_db.add_field(name="Danh Tiếng", value=f"**{rep}/100** ({rep_status}){scandal_str}", inline=True)
     embed_db.add_field(name="Nhân Sự", value=f"**{len(comp['members'])} người**", inline=True)
-    embed_db.add_field(name="Lợi Nhuận/giờ", value=f"**{fin['net_income']:+,} 💰** (DT {fin['revenue']:,} - CP {fin['expenses']:,})", inline=True)
+    embed_db.add_field(name="Lợi Nhuận/giờ", value=f"**{fin['net_income']:+,} <:Money_kyo:1528673432613552188>** (DT {fin['revenue']:,} - CP {fin['expenses']:,})", inline=True)
     embed_db.add_field(name="Chức vụ của bạn", value=f"**{role_name}**", inline=False)
 
     cmds = (
@@ -2870,7 +2870,7 @@ async def cty(ctx):
 async def tao(ctx, *, name: str):
     user_id = str(ctx.author.id); user_data = load_user(user_id)
     if user_data.get("company"): return await ctx.reply("Bạn đã có công ty rồi!", mention_author=False)
-    if user_data.get("money", 0) < 500000: return await ctx.reply("⚠️ Phí đăng ký **500,000 💰**.", mention_author=False)
+    if user_data.get("money", 0) < 500000: return await ctx.reply("⚠️ Phí đăng ký **500,000 <:Money_kyo:1528673432613552188>**.", mention_author=False)
     user_data["money"] -= 500000; user_data["company"] = user_id
     new_comp = {
         "_id": user_id, "name": name, "treasury": 0, "members": {user_id: "boss"},
@@ -2898,8 +2898,8 @@ async def phongban(ctx, dept: str = None, levels: int = 1):
         for key, info in DEPARTMENTS_INFO.items():
             lv = deps.get(key, 0)
             cost = info["base_cost"] * (lv + 1)
-            embed.add_field(name=f"{info['name']} Lv{lv}", value=f"Thu nhập: **{lv*info['income_per_lv']:,}/giờ**\nNâng cấp: **{cost:,} 💰**\n`k cty phongban {key}`", inline=True)
-        embed.add_field(name="📊 Tổng lợi nhuận/giờ", value=f"**{fin['net_income']:+,} 💰**", inline=False)
+            embed.add_field(name=f"{info['name']} Lv{lv}", value=f"Thu nhập: **{lv*info['income_per_lv']:,}/giờ**\nNâng cấp: **{cost:,} <:Money_kyo:1528673432613552188>**\n`k cty phongban {key}`", inline=True)
+        embed.add_field(name="📊 Tổng lợi nhuận/giờ", value=f"**{fin['net_income']:+,} <:Money_kyo:1528673432613552188>**", inline=False)
         return await ctx.reply(embed=embed, mention_author=False)
 
     dept = dept.lower()
@@ -2909,13 +2909,13 @@ async def phongban(ctx, dept: str = None, levels: int = 1):
     cur_lv = deps.get(dept, 0)
     info = DEPARTMENTS_INFO[dept]
     total_cost = sum(info["base_cost"] * (cur_lv + i + 1) for i in range(levels))
-    if comp["treasury"] < total_cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{total_cost:,} 💰**!", mention_author=False)
+    if comp["treasury"] < total_cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{total_cost:,} <:Money_kyo:1528673432613552188>**!", mention_author=False)
     comp["treasury"] -= total_cost
     deps[dept] = cur_lv + levels
     if info.get("rep_bonus"):
         comp["reputation"] = min(100, comp.get("reputation", 100) + info["rep_bonus"] * levels)
     save_company(comp_id)
-    await ctx.reply(embed=discord.Embed(description=f"✅ **{info['name']}** nâng lên **Lv{cur_lv+levels}**! (-{total_cost:,} 💰)", color=discord.Color.green()), mention_author=False)
+    await ctx.reply(embed=discord.Embed(description=f"✅ **{info['name']}** nâng lên **Lv{cur_lv+levels}**! (-{total_cost:,} <:Money_kyo:1528673432613552188>)", color=discord.Color.green()), mention_author=False)
 
 
 @cty.command()
@@ -2928,12 +2928,12 @@ async def baocaotaichinh(ctx):
     rating, spread = get_credit_rating(comp)
     equity = comp.get("treasury", 0) - comp.get("debt", 0)
     embed = discord.Embed(title=f"📑 BÁO CÁO TÀI CHÍNH — {comp['name']}", color=discord.Color.dark_gold())
-    embed.add_field(name="💰 Doanh Thu/giờ", value=f"{fin['revenue']:,} 💰", inline=True)
-    embed.add_field(name="💸 Chi Phí/giờ", value=f"{fin['expenses']:,} 💰", inline=True)
-    embed.add_field(name="📈 Lợi Nhuận Ròng/giờ", value=f"**{fin['net_income']:+,} 💰**", inline=True)
-    embed.add_field(name="🏦 Tài Sản (Quỹ)", value=f"{comp.get('treasury',0):,} 💰", inline=True)
-    embed.add_field(name="📉 Nợ Phải Trả", value=f"{comp.get('debt',0):,} 💰", inline=True)
-    embed.add_field(name="🧮 Vốn Chủ Sở Hữu", value=f"**{equity:,} 💰**", inline=True)
+    embed.add_field(name="<:Money_kyo:1528673432613552188> Doanh Thu/giờ", value=f"{fin['revenue']:,} <:Money_kyo:1528673432613552188>", inline=True)
+    embed.add_field(name="💸 Chi Phí/giờ", value=f"{fin['expenses']:,} <:Money_kyo:1528673432613552188>", inline=True)
+    embed.add_field(name="📈 Lợi Nhuận Ròng/giờ", value=f"**{fin['net_income']:+,} <:Money_kyo:1528673432613552188>**", inline=True)
+    embed.add_field(name="🏦 Tài Sản (Quỹ)", value=f"{comp.get('treasury',0):,} <:Money_kyo:1528673432613552188>", inline=True)
+    embed.add_field(name="📉 Nợ Phải Trả", value=f"{comp.get('debt',0):,} <:Money_kyo:1528673432613552188>", inline=True)
+    embed.add_field(name="🧮 Vốn Chủ Sở Hữu", value=f"**{equity:,} <:Money_kyo:1528673432613552188>**", inline=True)
     embed.add_field(name="⭐ Xếp Hạng Tín Dụng", value=f"**{rating}** (phụ phí lãi vay +{spread*100:.0f}%)", inline=False)
     if comp.get("is_ipo"):
         embed.add_field(name="📊 Ảnh hưởng giá CP", value=f"Earnings drift: **{comp.get('earnings_drift',0)*100:+.1f}%** (cập nhật mỗi {EARNINGS_INTERVAL_HOURS}h)", inline=False)
@@ -2984,13 +2984,13 @@ async def codividend(ctx):
         hdata = load_user(hid)
         hdata["money"] = hdata.get("money", 0) + amount
         save_user(hid)
-        add_history(hid, f"Nhận cổ tức {code} +{amount:,} 💰")
+        add_history(hid, f"Nhận cổ tức {code} +{amount:,} <:Money_kyo:1528673432613552188>")
         paid_count += 1
 
-    add_history(user_id, f"Chia cổ tức {code}: {payout_pool:,} 💰 cho {paid_count} cổ đông")
+    add_history(user_id, f"Chia cổ tức {code}: {payout_pool:,} <:Money_kyo:1528673432613552188> cho {paid_count} cổ đông")
     embed = discord.Embed(
         title="💵 CHIA CỔ TỨC TỪ LỢI NHUẬN THẬT",
-        description=f"Mã: **{code}** | Tổng chi: **{payout_pool:,} 💰**\nCổ đông nhận: **{paid_count} người** | Mỗi CP: **{per_share:,.0f} 💰**",
+        description=f"Mã: **{code}** | Tổng chi: **{payout_pool:,} <:Money_kyo:1528673432613552188>**\nCổ đông nhận: **{paid_count} người** | Mỗi CP: **{per_share:,.0f} <:Money_kyo:1528673432613552188>**",
         color=discord.Color.gold()
     )
     await ctx.send(embed=embed)
@@ -3015,7 +3015,7 @@ async def sapnhap(ctx, *, target_name: str):
     fin = compute_company_financials(target)
     valuation = target.get("treasury", 0) + max(0, fin["net_income"]) * 24 * 10  # định giá = quỹ + 10 ngày lợi nhuận
     if comp["treasury"] < valuation:
-        return await ctx.reply(embed=discord.Embed(description=f"⚠️ Cần **{valuation:,} 💰** để đề nghị (định giá theo vốn hóa thật), quỹ bạn chỉ có {comp['treasury']:,} 💰!", color=discord.Color.red()), mention_author=False)
+        return await ctx.reply(embed=discord.Embed(description=f"⚠️ Cần **{valuation:,} <:Money_kyo:1528673432613552188>** để đề nghị (định giá theo vốn hóa thật), quỹ bạn chỉ có {comp['treasury']:,} <:Money_kyo:1528673432613552188>!", color=discord.Color.red()), mention_author=False)
 
     target_boss_id = next((uid for uid, role in target["members"].items() if role == "boss"), None)
     if not target_boss_id: return await ctx.reply("⚠️ Công ty kia không có Chủ Tịch!", mention_author=False)
@@ -3023,7 +3023,7 @@ async def sapnhap(ctx, *, target_name: str):
     embed = discord.Embed(
         title="🤝 ĐỀ NGHỊ SÁP NHẬP",
         description=(f"**{comp['name']}** đề nghị mua lại **{target['name']}**\n"
-                      f"💰 Định giá: **{valuation:,} 💰** (quỹ + 10 ngày lợi nhuận thật)\n\n<@{target_boss_id}> có đồng ý không?"),
+                      f"<:Money_kyo:1528673432613552188> Định giá: **{valuation:,} <:Money_kyo:1528673432613552188>** (quỹ + 10 ngày lợi nhuận thật)\n\n<@{target_boss_id}> có đồng ý không?"),
         color=discord.Color.gold()
     )
     view = SapNhapAcceptView(comp_id, target["_id"], target_boss_id, valuation)
@@ -3039,12 +3039,12 @@ async def dinhchinh(ctx):
     if not comp.get("has_scandal") and comp.get("reputation", 100) >= 100: return await ctx.reply("Công ty đang trong sạch!")
     rating, spread = get_credit_rating(comp)
     cost = max(100000, int(comp["treasury"] * (0.05 + spread * 0.1)))
-    if comp["treasury"] < cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{cost:,} 💰**!")
+    if comp["treasury"] < cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{cost:,} <:Money_kyo:1528673432613552188>**!")
     comp["treasury"] -= cost; comp["has_scandal"] = False
     recovered_rep = random.randint(15, 30)
     comp["reputation"] = min(100, comp.get("reputation", 50) + recovered_rep)
     save_company(comp_id)
-    await ctx.reply(embed=discord.Embed(title="📰 XỬ LÝ KHỦNG HOẢNG THÀNH CÔNG", description=f"Chi **{cost:,} 💰** (xếp hạng {rating}).\n✅ Gỡ Scandal! +{recovered_rep} danh tiếng", color=discord.Color.green()), mention_author=False)
+    await ctx.reply(embed=discord.Embed(title="📰 XỬ LÝ KHỦNG HOẢNG THÀNH CÔNG", description=f"Chi **{cost:,} <:Money_kyo:1528673432613552188>** (xếp hạng {rating}).\n✅ Gỡ Scandal! +{recovered_rep} danh tiếng", color=discord.Color.green()), mention_author=False)
 
 
 @cty.command()
@@ -3057,13 +3057,13 @@ async def nangcap(ctx, stat: str, levels: int = 1):
     if stat == "cong":
         current_lvl = comp.get("atk_level", 1)
         total_cost = sum((current_lvl + i) * 500000 for i in range(levels))
-        if comp["treasury"] < total_cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{total_cost:,} 💰**!")
+        if comp["treasury"] < total_cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{total_cost:,} <:Money_kyo:1528673432613552188>**!")
         comp["treasury"] -= total_cost; comp["atk_level"] = current_lvl + levels
         msg = f"⚔️ Nâng CÔNG **Lv{current_lvl} → Lv{current_lvl+levels}**!"
     elif stat == "thu":
         current_lvl = comp.get("def_level", 1)
         total_cost = sum((current_lvl + i) * 300000 for i in range(levels))
-        if comp["treasury"] < total_cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{total_cost:,} 💰**!")
+        if comp["treasury"] < total_cost: return await ctx.reply(f"⚠️ Quỹ không đủ **{total_cost:,} <:Money_kyo:1528673432613552188>**!")
         comp["treasury"] -= total_cost; comp["def_level"] = current_lvl + levels
         msg = f"🛡️ Nâng THỦ **Lv{current_lvl} → Lv{current_lvl+levels}**!"
     else: return await ctx.reply("⚠️ Dùng `k cty nangcap cong <lv>` hoặc `thu <lv>`.")
@@ -3106,7 +3106,7 @@ async def gop(ctx, amount: int):
     comp = load_company(comp_id)
     user_data["money"] -= amount; comp["treasury"] += amount
     save_user(user_id); save_company(comp_id)
-    await ctx.reply(f"💰 Bạn đã cống hiến **{amount:,} 💰**.\nTổng quỹ: **{comp['treasury']:,} 💰**.", mention_author=False)
+    await ctx.reply(f"<:Money_kyo:1528673432613552188> Bạn đã cống hiến **{amount:,} <:Money_kyo:1528673432613552188>**.\nTổng quỹ: **{comp['treasury']:,} <:Money_kyo:1528673432613552188>**.", mention_author=False)
 
 
 @cty.command()
@@ -3122,7 +3122,7 @@ async def thulai(ctx):
     lai_nhan_duoc = min(int(comp["treasury"] * 0.03), 80000)
     comp["treasury"] += lai_nhan_duoc; comp["last_interest"] = now.strftime("%Y-%m-%d %H:%M:%S")
     save_company(comp_id)
-    await ctx.reply(f"📈 Công ty nhận **{lai_nhan_duoc:,} 💰** lãi hôm nay!", mention_author=False)
+    await ctx.reply(f"📈 Công ty nhận **{lai_nhan_duoc:,} <:Money_kyo:1528673432613552188>** lãi hôm nay!", mention_author=False)
 
 
 @cty.command(name="vaycty")
@@ -3131,12 +3131,12 @@ async def vaycty(ctx, amount: int):
     if not comp_id: return await ctx.reply("⚠️ Bạn chưa có công ty!", mention_author=False)
     comp = load_company(comp_id)
     if comp["members"].get(user_id) != "boss": return await ctx.reply("⚠️ Chỉ Chủ Tịch mới được vay vốn!", mention_author=False)
-    if comp.get("debt", 0) > 0: return await ctx.reply(f"⚠️ Đang nợ **{comp['debt']:,} 💰**! `k cty tranocty` trước.", mention_author=False)
+    if comp.get("debt", 0) > 0: return await ctx.reply(f"⚠️ Đang nợ **{comp['debt']:,} <:Money_kyo:1528673432613552188>**! `k cty tranocty` trước.", mention_author=False)
 
     rating, spread = get_credit_rating(comp)
     max_loan = max(1000000, int(comp.get("treasury", 0) * 3.0))
     if amount <= 0 or amount > max_loan:
-        return await ctx.reply(f"⚠️ Vay từ 1 đến **{max_loan:,} 💰**.", mention_author=False)
+        return await ctx.reply(f"⚠️ Vay từ 1 đến **{max_loan:,} <:Money_kyo:1528673432613552188>**.", mention_author=False)
 
     interest_rate = get_base_interest_rate() + spread + 0.10
     total_owed = int(amount * (1 + interest_rate))
@@ -3149,8 +3149,8 @@ async def vaycty(ctx, amount: int):
     embed = discord.Embed(title="🏦 VAY VỐN NGÂN HÀNG DOANH NGHIỆP", color=discord.Color.green())
     embed.add_field(name="Xếp hạng tín dụng", value=f"**{rating}**", inline=True)
     embed.add_field(name="Lãi suất áp dụng", value=f"**{interest_rate*100:.1f}%** (5 ngày)", inline=True)
-    embed.add_field(name="Số tiền vay", value=f"{amount:,} 💰", inline=True)
-    embed.add_field(name="Phải trả", value=f"**{total_owed:,} 💰**", inline=True)
+    embed.add_field(name="Số tiền vay", value=f"{amount:,} <:Money_kyo:1528673432613552188>", inline=True)
+    embed.add_field(name="Phải trả", value=f"**{total_owed:,} <:Money_kyo:1528673432613552188>**", inline=True)
     embed.add_field(name="Hạn chót", value=f"<t:{int(due.timestamp())}:F>", inline=False)
     await ctx.reply(embed=embed, mention_author=False)
 
@@ -3163,10 +3163,10 @@ async def tranocty(ctx):
     if comp["members"].get(user_id) not in ["boss", "quanly"]: return await ctx.reply("⚠️ Chỉ Ban Giám Đốc mới trả được nợ!", mention_author=False)
     debt = comp.get("debt", 0)
     if debt <= 0: return await ctx.reply("✅ Công ty không có nợ!", mention_author=False)
-    if comp.get("treasury", 0) < debt: return await ctx.reply(f"⚠️ Cần **{debt:,} 💰**!", mention_author=False)
+    if comp.get("treasury", 0) < debt: return await ctx.reply(f"⚠️ Cần **{debt:,} <:Money_kyo:1528673432613552188>**!", mention_author=False)
     comp["treasury"] -= debt; comp["debt"] = 0; comp["debt_due"] = None
     save_company(comp_id)
-    await ctx.reply(embed=discord.Embed(description=f"✅ Đã trả hết nợ **{debt:,} 💰**!", color=discord.Color.green()), mention_author=False)
+    await ctx.reply(embed=discord.Embed(description=f"✅ Đã trả hết nợ **{debt:,} <:Money_kyo:1528673432613552188>**!", color=discord.Color.green()), mention_author=False)
 
 
 @cty.command(name="quangcao")
@@ -3179,7 +3179,7 @@ async def quangcao(ctx, amount: int):
     try: last = datetime.strptime(comp.get("last_pr", "2000-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
     except Exception: last = datetime(2000, 1, 1)
     if now - last < timedelta(hours=12): return await ctx.reply(f"⏳ Hồi: <t:{int((last+timedelta(hours=12)).timestamp())}:R>", mention_author=False)
-    if amount < 50000: return await ctx.reply("⚠️ Tối thiểu **50,000 💰**!", mention_author=False)
+    if amount < 50000: return await ctx.reply("⚠️ Tối thiểu **50,000 <:Money_kyo:1528673432613552188>**!", mention_author=False)
     if comp.get("treasury", 0) < amount: return await ctx.reply("⚠️ Quỹ không đủ!", mention_author=False)
     comp["treasury"] -= amount; comp["last_pr"] = now.strftime("%Y-%m-%d %H:%M:%S")
     if random.uniform(0, 100) <= 12:
@@ -3191,7 +3191,7 @@ async def quangcao(ctx, amount: int):
         comp["reputation"] = min(100, comp.get("reputation", 100) + rep_gain)
         bonus = int(amount * random.uniform(0.3, 0.8))
         comp["treasury"] += bonus
-        result = f"📢 **THÀNH CÔNG!** +{rep_gain} danh tiếng, +{bonus:,} 💰!"; color = discord.Color.green()
+        result = f"📢 **THÀNH CÔNG!** +{rep_gain} danh tiếng, +{bonus:,} <:Money_kyo:1528673432613552188>!"; color = discord.Color.green()
     save_company(comp_id)
     await ctx.reply(embed=discord.Embed(title="📢 CHIẾN DỊCH MARKETING", description=result, color=color), mention_author=False)
 
@@ -3207,7 +3207,7 @@ async def boicong(ctx, *, target_name: str):
     except Exception: last = datetime(2000, 1, 1)
     if now - last < timedelta(hours=18): return await ctx.reply(f"⏳ Hồi: <t:{int((last+timedelta(hours=18)).timestamp())}:R>", mention_author=False)
     cost = 80000
-    if comp.get("treasury", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} 💰**!", mention_author=False)
+    if comp.get("treasury", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} <:Money_kyo:1528673432613552188>**!", mention_author=False)
     try: all_comps = list(companies_col.find())
     except Exception: all_comps = []
     target = next((c for c in all_comps if target_name.lower() in c["name"].lower()), None)
@@ -3239,7 +3239,7 @@ async def giandiep(ctx, *, target_name: str):
     except Exception: last = datetime(2000, 1, 1)
     if now - last < timedelta(hours=18): return await ctx.reply(f"⏳ Hồi: <t:{int((last+timedelta(hours=18)).timestamp())}:R>", mention_author=False)
     cost = 60000
-    if comp.get("treasury", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} 💰**!", mention_author=False)
+    if comp.get("treasury", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} <:Money_kyo:1528673432613552188>**!", mention_author=False)
     try: all_comps = list(companies_col.find())
     except Exception: all_comps = []
     target = next((c for c in all_comps if target_name.lower() in c["name"].lower()), None)
@@ -3252,13 +3252,13 @@ async def giandiep(ctx, *, target_name: str):
         target["treasury"] = max(0, target.get("treasury", 0) - loot)
         comp["treasury"] += loot
         save_company(target["_id"]); save_company(comp_id)
-        result = f"🕵️‍♂️ **THÀNH CÔNG!** Lấy **{loot:,} 💰**!"; color = discord.Color.dark_green()
+        result = f"🕵️‍♂️ **THÀNH CÔNG!** Lấy **{loot:,} <:Money_kyo:1528673432613552188>**!"; color = discord.Color.dark_green()
     else:
         fine = int(comp.get("treasury", 0) * 0.10)
         comp["treasury"] = max(0, comp.get("treasury", 0) - fine)
         comp["reputation"] = max(0, comp.get("reputation", 100) - 15); comp["has_scandal"] = True
         save_company(comp_id)
-        result = f"🚨 **BỊ BẮT!** Phạt **{fine:,} 💰**!"; color = discord.Color.red()
+        result = f"🚨 **BỊ BẮT!** Phạt **{fine:,} <:Money_kyo:1528673432613552188>**!"; color = discord.Color.red()
     await ctx.reply(embed=discord.Embed(title="🕵️‍♂️ GIÁN ĐIỆP", description=result, color=color), mention_author=False)
 
 
@@ -3271,7 +3271,7 @@ async def anninh(ctx):
     lvl = comp.get("security_level", 1)
     if lvl >= 10: return await ctx.reply("⚠️ An ninh đã max!", mention_author=False)
     cost = (lvl + 1) * 200000
-    if comp.get("treasury", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} 💰**!", mention_author=False)
+    if comp.get("treasury", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} <:Money_kyo:1528673432613552188>**!", mention_author=False)
     comp["treasury"] -= cost; comp["security_level"] = lvl + 1
     save_company(comp_id)
     await ctx.reply(embed=discord.Embed(description=f"🛡️ AN NINH **Lv{lvl} → Lv{lvl+1}**!", color=discord.Color.blue()), mention_author=False)
@@ -3299,7 +3299,7 @@ async def cotuc(ctx, percent: int):
     for m_id in members:
         m_data = load_user(m_id); m_data["money"] += each; save_user(m_id)
     save_company(comp_id)
-    await ctx.send(embed=discord.Embed(title="💵 CHIA THƯỞNG NỘI BỘ", description=f"Chia **{percent}%** lợi nhuận (**{total_pay:,} 💰**) cho **{len(members)}** người! Mỗi người: **{each:,} 💰**", color=discord.Color.green()))
+    await ctx.send(embed=discord.Embed(title="💵 CHIA THƯỞNG NỘI BỘ", description=f"Chia **{percent}%** lợi nhuận (**{total_pay:,} <:Money_kyo:1528673432613552188>**) cho **{len(members)}** người! Mỗi người: **{each:,} <:Money_kyo:1528673432613552188>**", color=discord.Color.green()))
 
 
 @cty.command()
@@ -3309,12 +3309,12 @@ async def luong(ctx, amount: int):
     comp = load_company(comp_id)
     if comp["members"].get(user_id) != "boss": return await ctx.reply("Chỉ Chủ tịch mới phát lương!", mention_author=False)
     mem_count = len(comp["members"]); total_cost = amount * mem_count
-    if total_cost > comp["treasury"]: return await ctx.reply(f"Quỹ không đủ! Cần **{total_cost:,} 💰**.", mention_author=False)
+    if total_cost > comp["treasury"]: return await ctx.reply(f"Quỹ không đủ! Cần **{total_cost:,} <:Money_kyo:1528673432613552188>**.", mention_author=False)
     comp["treasury"] -= total_cost
     for m_id in list(comp["members"].keys()):
         m_data = load_user(m_id); m_data["money"] += amount; save_user(m_id)
     save_company(comp_id)
-    await ctx.send(embed=discord.Embed(description=f"💸 Phát **{amount:,} 💰**/người! Tổng trừ quỹ: **{total_cost:,} 💰**", color=discord.Color.green()))
+    await ctx.send(embed=discord.Embed(description=f"💸 Phát **{amount:,} <:Money_kyo:1528673432613552188>**/người! Tổng trừ quỹ: **{total_cost:,} <:Money_kyo:1528673432613552188>**", color=discord.Color.green()))
 
 
 @cty.command()
@@ -3418,19 +3418,19 @@ class BankHubView(discord.ui.View):
     async def btn_refresh(self, interaction, button):
         ud = load_user(str(self.author.id))
         embed = discord.Embed(title="🏦 NGÂN HÀNG TRUNG ƯƠNG", color=discord.Color.blue())
-        embed.add_field(name="💳 Ví", value=f"**{ud.get('money',0):,} 💰**", inline=True)
-        embed.add_field(name="🏦 Két sắt", value=f"**{ud.get('bank',0):,} 💰**", inline=True)
+        embed.add_field(name="💳 Ví", value=f"**{ud.get('money',0):,} <:Money_kyo:1528673432613552188>**", inline=True)
+        embed.add_field(name="🏦 Két sắt", value=f"**{ud.get('bank',0):,} <:Money_kyo:1528673432613552188>**", inline=True)
         if ud.get("loan_amount", 0) > 0:
-            embed.add_field(name="⚠️ Đang nợ", value=f"**{ud['loan_amount']:,} 💰**", inline=False)
+            embed.add_field(name="⚠️ Đang nợ", value=f"**{ud['loan_amount']:,} <:Money_kyo:1528673432613552188>**", inline=False)
         await interaction.response.edit_message(embed=embed, view=self)
 @bot.group(invoke_without_command=True, aliases=['nganhang', 'nh'])
 async def bank(ctx):
     user_data = load_user(ctx.author.id)
     embed = discord.Embed(title="🏦 NGÂN HÀNG TRUNG ƯƠNG", color=discord.Color.blue())
-    embed.add_field(name="💳 Ví", value=f"**{user_data.get('money', 0):,} 💰**", inline=True)
-    embed.add_field(name="🏦 Két sắt", value=f"**{user_data.get('bank', 0):,} 💰**", inline=True)
+    embed.add_field(name="💳 Ví", value=f"**{user_data.get('money', 0):,} <:Money_kyo:1528673432613552188>**", inline=True)
+    embed.add_field(name="🏦 Két sắt", value=f"**{user_data.get('bank', 0):,} <:Money_kyo:1528673432613552188>**", inline=True)
     if user_data.get("loan_amount", 0) > 0:
-        embed.add_field(name="⚠️ Đang nợ", value=f"**{user_data['loan_amount']:,} 💰**", inline=False)
+        embed.add_field(name="⚠️ Đang nợ", value=f"**{user_data['loan_amount']:,} <:Money_kyo:1528673432613552188>**", inline=False)
     await ctx.reply(embed=embed, view=BankHubView(ctx.author), mention_author=False)
 
 @bank.command()
@@ -3445,7 +3445,7 @@ async def laisuat(ctx):
         return await ctx.reply(embed=discord.Embed(description=f"⏳ Quay lại: <t:{next_time}:R>", color=discord.Color.orange()), mention_author=False)
     interest = int(bank_bal * 0.001)
     user_data["bank"] += interest; user_data["last_interest"] = now.strftime("%Y-%m-%d %H:%M:%S"); save_user(user_id)
-    await ctx.reply(embed=discord.Embed(description=f"📈 Nhận **{interest:,} 💰** lãi (0.1%).", color=discord.Color.green()), mention_author=False)
+    await ctx.reply(embed=discord.Embed(description=f"📈 Nhận **{interest:,} <:Money_kyo:1528673432613552188>** lãi (0.1%).", color=discord.Color.green()), mention_author=False)
 
 @bank.command(aliases=['send'])
 async def gui(ctx, amount: str):
@@ -3454,7 +3454,7 @@ async def gui(ctx, amount: str):
     except ValueError: return await ctx.reply("⚠️ Nhập số hoặc `all`!")
     if dep <= 0 or dep > user_data["money"]: return await ctx.reply("⚠️ Không đủ tiền!")
     user_data["money"] -= dep; user_data["bank"] = user_data.get("bank", 0) + dep; save_user(user_id)
-    await ctx.reply(embed=discord.Embed(description=f"✅ Gửi **{dep:,} 💰** vào két!", color=discord.Color.green()), mention_author=False)
+    await ctx.reply(embed=discord.Embed(description=f"✅ Gửi **{dep:,} <:Money_kyo:1528673432613552188>** vào két!", color=discord.Color.green()), mention_author=False)
 
 @bank.command(aliases=['withdraw'])
 async def rut(ctx, amount: str):
@@ -3463,7 +3463,7 @@ async def rut(ctx, amount: str):
     except ValueError: return await ctx.reply("⚠️ Nhập số hoặc `all`!")
     if w <= 0 or w > bb: return await ctx.reply("⚠️ Số dư không đủ!")
     user_data["bank"] -= w; user_data["money"] += w; save_user(user_id)
-    await ctx.reply(embed=discord.Embed(description=f"✅ Rút **{w:,} 💰** ra ví!", color=discord.Color.green()), mention_author=False)
+    await ctx.reply(embed=discord.Embed(description=f"✅ Rút **{w:,} <:Money_kyo:1528673432613552188>** ra ví!", color=discord.Color.green()), mention_author=False)
 class FarmSeedSelect(discord.ui.Select):
     """Dùng chung cho cả Mua và Trồng — action quyết định gọi hàm nào."""
     def __init__(self, action: str):
@@ -3471,7 +3471,7 @@ class FarmSeedSelect(discord.ui.Select):
         options = [
             discord.SelectOption(
                 label=v["name"],
-                description=f"{v['cost']:,}💰 | {v['time_hours']}h | Lãi {v['profit_min']:,}-{v['profit_max']:,}",
+                description=f"{v['cost']:,}<:Money_kyo:1528673432613552188> | {v['time_hours']}h | Lãi {v['profit_min']:,}-{v['profit_max']:,}",
                 value=k
             )
             for k, v in FARM_SEEDS.items()
@@ -3548,7 +3548,7 @@ def build_farm_embed(user_id):
             else:
                 embed.description = f"🌱 Đang trồng **{si['name']}**\nThu hoạch: <t:{int(ht.timestamp())}:R>"
 
-    seeds_str = "\n".join([f"**{v['name']}** — {v['cost']:,}💰 | {v['time_hours']}h" for v in FARM_SEEDS.values()])
+    seeds_str = "\n".join([f"**{v['name']}** — {v['cost']:,}<:Money_kyo:1528673432613552188> | {v['time_hours']}h" for v in FARM_SEEDS.values()])
     embed.add_field(name="🌾 Các loại hạt giống", value=seeds_str, inline=False)
     return embed
 # =====================================================================
@@ -3570,7 +3570,7 @@ async def mua(ctx, seed: str):
     seed = seed.lower()
     if seed not in FARM_SEEDS: return await ctx.reply(f"⚠️ Các loại: {', '.join(FARM_SEEDS.keys())}")
     user_id = str(ctx.author.id); user_data = load_user(user_id); cost = FARM_SEEDS[seed]["cost"]
-    if user_data.get("money", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} 💰**.")
+    if user_data.get("money", 0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} <:Money_kyo:1528673432613552188>**.")
     user_data["money"] -= cost; user_data["assets"].append(f"Hạt giống {FARM_SEEDS[seed]['name']}")
     save_user(user_id); await ctx.reply(embed=discord.Embed(description=f"🛒 Mua xong! `k farm trong {seed}`", color=discord.Color.green()))
 
@@ -3595,7 +3595,7 @@ async def thuhoach(ctx):
     user_data["money"] += profit; user_data["farm"] = {"seed": None, "plant_time": None}; save_user(user_id)
     add_history(user_id, f"Thu hoạch {si['name']} (+{profit:,})")
     qm = update_quest_progress(user_id, "farm")
-    result = f"🌾 Gặt **{si['name']}** được **{profit:,} 💰**!"
+    result = f"🌾 Gặt **{si['name']}** được **{profit:,} <:Money_kyo:1528673432613552188>**!"
     if qm: result += f"\n\n{qm}"
     await ctx.reply(embed=discord.Embed(description=result, color=discord.Color.gold()))
 
@@ -3626,7 +3626,7 @@ async def cauca(ctx):
     save_user(user_id)
     add_history(user_id, f"Câu {fish_name} ({'+' if fish_value>=0 else ''}{fish_value:,})")
     qm = update_quest_progress(user_id, "fish"); na = check_achievement(user_id, user_data)
-    result = f"🎣 **{fish_name}** [{label}]\n{'Bán' if fish_value>=0 else 'Chi phí'}: **{fish_value:,} 💰**"
+    result = f"🎣 **{fish_name}** [{label}]\n{'Bán' if fish_value>=0 else 'Chi phí'}: **{fish_value:,} <:Money_kyo:1528673432613552188>**"
     if qm: result += f"\n\n{qm}"
     if na: save_user(user_id); result += "\n🏅 **THÀNH TÍCH:** " + ", ".join(na)
     await msg.edit(embed=discord.Embed(title="🎣 KẾT QUẢ", description=result, color=color))
@@ -3644,15 +3644,15 @@ async def dilamthem(ctx):
     job = random.choice(JOBS); wage = random.randint(job["min"], job["max"])
     bad_event = None
     if random.randint(1, 100) <= 10:
-        acc = random.randint(1000, max(1000, abs(wage) // 2)); wage -= acc; bad_event = f"⚠️ Sự cố! Mất **{acc:,} 💰**."
+        acc = random.randint(1000, max(1000, abs(wage) // 2)); wage -= acc; bad_event = f"⚠️ Sự cố! Mất **{acc:,} <:Money_kyo:1528673432613552188>**."
     wage = max(0, wage)
     user_data["money"] += wage; user_data["last_work"] = now.strftime("%Y-%m-%d %H:%M:%S"); save_user(user_id)
     add_history(user_id, f"Làm {job['name']} (+{wage:,})")
     qm = update_quest_progress(user_id, "work")
-    embed = discord.Embed(title="💼 NHẬN LƯƠNG!", description=f"**{job['name']}** - _{job['desc']}_\n💰 Lương: **{wage:,} 💰**", color=discord.Color.green())
+    embed = discord.Embed(title="💼 NHẬN LƯƠNG!", description=f"**{job['name']}** - _{job['desc']}_\n<:Money_kyo:1528673432613552188> Lương: **{wage:,} <:Money_kyo:1528673432613552188>**", color=discord.Color.green())
     if bad_event: embed.description += f"\n\n{bad_event}"
     if qm: embed.description += f"\n\n{qm}"
-    embed.set_footer(text=f"Ví: {user_data['money']:,} 💰 | CD: 45p")
+    embed.set_footer(text=f"Ví: {user_data['money']:,} <:Money_kyo:1528673432613552188> | CD: 45p")
     await ctx.reply(embed=embed, mention_author=False)
 
 # =====================================================================
@@ -3667,13 +3667,13 @@ async def nhiemvu(ctx):
     embed = discord.Embed(title="📋 NHIỆM VỤ HÀNG NGÀY", color=discord.Color.gold() if done else discord.Color.blue())
     embed.add_field(name=f"{'✅' if done else '🔄'} {quest['name']}", value=quest["desc"], inline=False)
     embed.add_field(name="Tiến độ", value=f"`{make_progress_bar(min(prog,tgt), tgt)}` {min(prog,tgt)}/{tgt}", inline=False)
-    embed.add_field(name="Thưởng", value=f"**{quest['reward']:,} 💰**", inline=True)
+    embed.add_field(name="Thưởng", value=f"**{quest['reward']:,} <:Money_kyo:1528673432613552188>**", inline=True)
     await ctx.reply(embed=embed, mention_author=False)
 
 @bot.command(aliases=['achievement', 'ach'])
 async def thanhtich(ctx, member: discord.Member = None):
     target = member or ctx.author; user_data = load_user(target.id)
-    ach_names = {"millionaire": "💰 Triệu Phú", "billionaire": "👑 Tỷ Phú", "level10": "⭐ Cấp 10", "level50": "🌟 Cấp 50", "pet_collector": "🐾 5 Thú Cưng", "fisher": "🎣 50 Cá", "streak7": "🔥 Streak 7", "streak30": "🌈 Streak 30"}
+    ach_names = {"millionaire": "<:Money_kyo:1528673432613552188> Triệu Phú", "billionaire": "👑 Tỷ Phú", "level10": "⭐ Cấp 10", "level50": "🌟 Cấp 50", "pet_collector": "🐾 5 Thú Cưng", "fisher": "🎣 50 Cá", "streak7": "🔥 Streak 7", "streak30": "🌈 Streak 30"}
     achievements = user_data.get("achievements", [])
     embed = discord.Embed(title=f"🏅 THÀNH TÍCH {target.name}", color=discord.Color.gold())
     if not achievements: embed.description = "Chưa có thành tích."
@@ -3689,7 +3689,7 @@ async def thanhtich(ctx, member: discord.Member = None):
 @bot.command(aliases=['cuop', 'cuopbank'])
 async def cuopnganhang(ctx):
     user_id = str(ctx.author.id); user_data = load_user(user_id); now = datetime.now()
-    if user_data.get("bank", 0) < 200000: return await ctx.reply(embed=discord.Embed(description="⚠️ Cần gửi ít nhất **200,000 💰** trong ngân hàng!", color=discord.Color.red()), mention_author=False)
+    if user_data.get("bank", 0) < 200000: return await ctx.reply(embed=discord.Embed(description="⚠️ Cần gửi ít nhất **200,000 <:Money_kyo:1528673432613552188>** trong ngân hàng!", color=discord.Color.red()), mention_author=False)
     if user_id in rob_cooldowns and (now - rob_cooldowns[user_id]).total_seconds() < 7200:
         r = int(7200 - (now - rob_cooldowns[user_id]).total_seconds())
         return await ctx.reply(embed=discord.Embed(description=f"⏳ Đang bị truy nã! {r//60}p {r%60}s nữa.", color=discord.Color.orange()), mention_author=False)
@@ -3699,12 +3699,12 @@ async def cuopnganhang(ctx):
     if random.randint(1,100) <= 20:
         loot = int(user_data["bank"] * random.uniform(0.03, 0.10)); user_data["money"] += loot; save_user(user_id)
         add_history(user_id, f"Cướp Bank +{loot:,}")
-        embed = discord.Embed(title="🎉 TRÓT LỌT!", description=f"Vơ vét **{loot:,} 💰**!\n⏳ CD: 2 giờ", color=discord.Color.green()); embed.set_image(url=GIF_LINKS["rob_success"])
+        embed = discord.Embed(title="🎉 TRÓT LỌT!", description=f"Vơ vét **{loot:,} <:Money_kyo:1528673432613552188>**!\n⏳ CD: 2 giờ", color=discord.Color.green()); embed.set_image(url=GIF_LINKS["rob_success"])
     else:
         fine = int(user_data["bank"] * 0.15); user_data["bank"] -= fine
         jail_time = now + timedelta(minutes=20); user_data["jail_time"] = jail_time.strftime("%Y-%m-%d %H:%M:%S"); save_user(user_id)
         add_history(user_id, f"Cướp Bank xịt -{fine:,}")
-        embed = discord.Embed(title="🚨 BỊ TÓM!", description=f"Bị bắt! Phạt **{fine:,} 💰**.\n⛔ Tù đến: <t:{int(jail_time.timestamp())}:R>!", color=discord.Color.red()); embed.set_image(url=GIF_LINKS["rob_fail"])
+        embed = discord.Embed(title="🚨 BỊ TÓM!", description=f"Bị bắt! Phạt **{fine:,} <:Money_kyo:1528673432613552188>**.\n⛔ Tù đến: <t:{int(jail_time.timestamp())}:R>!", color=discord.Color.red()); embed.set_image(url=GIF_LINKS["rob_fail"])
     await msg.edit(embed=embed)
 
 # =====================================================================
@@ -3799,7 +3799,7 @@ async def moctui(ctx, member: discord.Member):
 
         embed = discord.Embed(
             title="🎉 THÀNH CÔNG!",
-            description=f"Nhanh tay lẹ mắt! Móc được **{loot:,} 💰** từ ví của **{member.name}** rồi lẩn vào đám đông.",
+            description=f"Nhanh tay lẹ mắt! Móc được **{loot:,} <:Money_kyo:1528673432613552188>** từ ví của **{member.name}** rồi lẩn vào đám đông.",
             color=discord.Color.green()
         )
         embed.set_image(url=GIF_LINKS.get("rob_success", ""))
@@ -3844,11 +3844,11 @@ async def moctui(ctx, member: discord.Member):
     add_history(user_id, f"Móc túi thất bại, phạt -{paid_from_cash+paid_from_bank:,} (nợ {unpaid:,})")
     add_history(target_id, f"Nhận bồi thường vụ móc túi hụt +{compensation:,}")
 
-    pay_breakdown = f"💵 Trừ ví: **{paid_from_cash:,} 💰**"
+    pay_breakdown = f"💵 Trừ ví: **{paid_from_cash:,} <:Money_kyo:1528673432613552188>**"
     if paid_from_bank > 0:
-        pay_breakdown += f"\n🏦 Trừ ngân hàng: **{paid_from_bank:,} 💰**"
+        pay_breakdown += f"\n🏦 Trừ ngân hàng: **{paid_from_bank:,} <:Money_kyo:1528673432613552188>**"
     if unpaid > 0:
-        pay_breakdown += f"\n⚠️ Không đủ khả năng bồi thường: nợ lại **{unpaid:,} 💰** (án tù +10 phút)"
+        pay_breakdown += f"\n⚠️ Không đủ khả năng bồi thường: nợ lại **{unpaid:,} <:Money_kyo:1528673432613552188>** (án tù +10 phút)"
 
     flavor = random.choice(JAIL_ENTRY_FLAVOR)
 
@@ -3858,7 +3858,7 @@ async def moctui(ctx, member: discord.Member):
             f"**{member.name}** hét lên và tóm được cổ tay bạn! Cảnh sát ập tới ngay sau đó.\n\n"
             f"⚖️ Tiền án lần thứ **{crime_lv}** — mức phạt tính theo tài sản nạn nhân (**{int(fine_rate*100)}%**)\n"
             f"{pay_breakdown}\n"
-            f"🎁 {member.name} nhận bồi thường: **{compensation:,} 💰**\n\n"
+            f"🎁 {member.name} nhận bồi thường: **{compensation:,} <:Money_kyo:1528673432613552188>**\n\n"
             f"{flavor}\n"
             f"⛓️ Ngồi tù đến <t:{int(jail_time.timestamp())}:R>!\n\n"
             f"💡 Trong tù bạn có thể: `k toaan` (hầu tòa) | `k laodongtu` (lao động giảm án) | `k vuotnguc` (vượt ngục - liều mạng)"
@@ -3983,7 +3983,7 @@ async def nangcapnhatu(ctx):
 
     if user_data.get("money", 0) < cost:
         return await ctx.reply(embed=discord.Embed(
-            description=f"⚠️ Bạn cần **{cost:,} 💰** (tiền cá nhân) để nâng lên **{PRISON_LEVELS[next_lvl]['name']}**!",
+            description=f"⚠️ Bạn cần **{cost:,} <:Money_kyo:1528673432613552188>** (tiền cá nhân) để nâng lên **{PRISON_LEVELS[next_lvl]['name']}**!",
             color=discord.Color.red()
         ), mention_author=False)
 
@@ -4004,7 +4004,7 @@ async def nangcapnhatu(ctx):
             f"⛏️ Giảm án lao động: **~{p['labor_reduce_pct']}%**/lần\n"
             f"🔒 Hệ số biệt giam: **x{p['solitary_mult']}**\n"
             f"⚖️ Hệ số phạt hầu tòa: **x{p['court_fine_mult']}**\n\n"
-            f"💸 Chi phí: **{cost:,} 💰** (từ ví cá nhân của {ctx.author.mention})"
+            f"💸 Chi phí: **{cost:,} <:Money_kyo:1528673432613552188>** (từ ví cá nhân của {ctx.author.mention})"
         ),
         color=discord.Color.dark_gold()
     )
@@ -4030,7 +4030,7 @@ async def thongtinnhatu(ctx):
     )
     if lvl < MAX_PRISON_LEVEL:
         next_p = PRISON_LEVELS[lvl+1]
-        embed.add_field(name="📈 Nâng cấp tiếp theo", value=f"**{next_p['name']}** — {next_p['upgrade_cost']:,} 💰\n`k nangcapnhatu`", inline=False)
+        embed.add_field(name="📈 Nâng cấp tiếp theo", value=f"**{next_p['name']}** — {next_p['upgrade_cost']:,} <:Money_kyo:1528673432613552188>\n`k nangcapnhatu`", inline=False)
     else:
         embed.add_field(name="📈 Nâng cấp", value="✅ Đã đạt cấp tối đa!", inline=False)
     embed.set_footer(text="k laodongtu — lao động giảm án | k vuotngu — liều mạng vượt ngục")
@@ -4124,7 +4124,7 @@ async def hosotu(ctx, member: discord.Member = None):
     embed.add_field(name="🍀 Uy Tín Tù Nhân", value=f"**{rep}/100**", inline=True)
     embed.add_field(name="🏃 Vượt Ngục Thất Bại Liên Tiếp", value=f"**{escape_fails}/{MAX_ESCAPE_FAIL_STREAK}**", inline=True)
     if bounty > 0:
-        embed.add_field(name="💰 Tiền Treo Thưởng Truy Nã", value=f"**{bounty:,} 💰**", inline=True)
+        embed.add_field(name="<:Money_kyo:1528673432613552188> Tiền Treo Thưởng Truy Nã", value=f"**{bounty:,} <:Money_kyo:1528673432613552188>**", inline=True)
 
     embed.set_footer(text="k toaan | k laodongtu | k vuotnguc | k cantin")
     await ctx.reply(embed=embed, mention_author=False)
@@ -4316,7 +4316,7 @@ TRIAL_STAGE_POOL = [
              "succ_score": 2, "fail_score": -4,
              "succ_flavor": "Bất ngờ màn kịch lại hiệu quả với vài bồi thẩm viên.",
              "fail_flavor": "Màn kịch lộ liễu khiến bồi thẩm đoàn khó chịu."},
-            {"label": "💰 Ngầm gợi ý 'quà cảm ơn' cho bồi thẩm đoàn", "chance": 6,
+            {"label": "<:Money_kyo:1528673432613552188> Ngầm gợi ý 'quà cảm ơn' cho bồi thẩm đoàn", "chance": 6,
              "succ_score": 3, "fail_score": -8,
              "succ_flavor": "Không ai phát hiện ra hành vi này...",
              "fail_flavor": "MƯU ĐỒ HỐI LỘ BỒI THẨM ĐOÀN BỊ PHÁT HIỆN! Tội nghiêm trọng bổ sung."},
@@ -4468,7 +4468,7 @@ class BigCourtTrialView(discord.ui.View):
         total_money = user_data.get("money", 0) + user_data.get("bank", 0)
         if total_money < fine:
             verdict_title = "⚖️ THIẾU TIỀN NỘP PHẠT"
-            verdict_desc = f"Bạn cần **{fine:,} 💰** để hoàn tất phiên xử nhưng không đủ. Án tù **GIỮ NGUYÊN**."
+            verdict_desc = f"Bạn cần **{fine:,} <:Money_kyo:1528673432613552188>** để hoàn tất phiên xử nhưng không đủ. Án tù **GIỮ NGUYÊN**."
             color = discord.Color.red()
         else:
             pay_cash = min(user_data.get("money", 0), fine)
@@ -4484,12 +4484,12 @@ class BigCourtTrialView(discord.ui.View):
             verdict_title = f"⚖️ TÒA TUYÊN ÁN — Điểm cuối: {self.total_score}"
             if new_remain > 0:
                 verdict_desc = (
-                    f"💰 Nộp phạt: **{fine:,} 💰** (hệ số x{fine_mult:.2f})\n"
+                    f"<:Money_kyo:1528673432613552188> Nộp phạt: **{fine:,} <:Money_kyo:1528673432613552188>** (hệ số x{fine_mult:.2f})\n"
                     f"📊 Kết quả: **{outcome}**\n"
                     f"⏳ Án tù còn lại: <t:{int(new_end.timestamp())}:R>"
                 )
             else:
-                verdict_desc = f"💰 Nộp phạt: **{fine:,} 💰**\n🎉 Án tù đã hết ngay sau khi tuyên!"
+                verdict_desc = f"<:Money_kyo:1528673432613552188> Nộp phạt: **{fine:,} <:Money_kyo:1528673432613552188>**\n🎉 Án tù đã hết ngay sau khi tuyên!"
             color = discord.Color.gold() if reduce_pct > 0 else discord.Color.red()
 
         add_history(uid, f"Hầu tòa ({plea['label']}, điểm {self.total_score}) — {outcome}")
@@ -4740,7 +4740,7 @@ async def resolve_rescue(channel, guild, lobby: "RescueLobbyView"):
             udata = load_user(uid)
             udata["money"] = udata.get("money", 0) + reward
             save_user(uid)
-            add_history(uid, f"Cướp ngục thành công cứu <@{target_id}> (+{reward:,} 💰)")
+            add_history(uid, f"Cướp ngục thành công cứu <@{target_id}> (+{reward:,} <:Money_kyo:1528673432613552188>)")
 
         embed = discord.Embed(
             title="🎉 CƯỚP NGỤC THÀNH CÔNG!",
@@ -4748,7 +4748,7 @@ async def resolve_rescue(channel, guild, lobby: "RescueLobbyView"):
                 f"Đội đột kích ({mentions}) đã đột nhập **{prison_data['name']}** và giải cứu thành công "
                 f"<@{target_id}>!\n\n"
                 f"🎯 Tỉ lệ đã roll: **{chance}%**\n"
-                f"💰 Mỗi thành viên nhận: **{reward:,} 💰**"
+                f"<:Money_kyo:1528673432613552188> Mỗi thành viên nhận: **{reward:,} <:Money_kyo:1528673432613552188>**"
             ),
             color=discord.Color.gold()
         )
@@ -4886,7 +4886,7 @@ async def vuotngu(ctx):
             description=(
                 "Bạn chạy thoát vào màn đêm, tiếng còi báo động vang lên phía sau lưng!\n\n"
                 f"🍀 Uy tín tù nhân: **{user_data['prison_rep']}/100** (+5)\n"
-                "⚠️ Nhưng giờ bạn bị treo thưởng truy nã **+20,000 💰**, cẩn thận thợ săn tiền thưởng!"
+                "⚠️ Nhưng giờ bạn bị treo thưởng truy nã **+20,000 <:Money_kyo:1528673432613552188>**, cẩn thận thợ săn tiền thưởng!"
             ),
             color=discord.Color.gold()
         )
@@ -4924,7 +4924,7 @@ async def vuotngu(ctx):
             title="🚨 BỊ TÓM LẠI!",
             description=(
                 f"Đèn pha cai ngục quét trúng bạn ngay khi vừa trèo qua tường!\n"
-                f"💰 Phạt roi vọt: **{fine:,} 💰**\n"
+                f"<:Money_kyo:1528673432613552188> Phạt roi vọt: **{fine:,} <:Money_kyo:1528673432613552188>**\n"
                 f"⏳ Án tù tăng gấp đôi, đến <t:{int(new_end.timestamp())}:R>!\n"
                 f"🍀 Uy tín tù nhân: **{user_data['prison_rep']}/100** (-5)"
                 f"{solitary_note}"
@@ -4991,7 +4991,7 @@ async def laodongtu(ctx):
             title="🤕 TAI NẠN LAO ĐỘNG!",
             description=(
                 f"Cuốc xẻng trượt tay, bạn bị thương nhẹ!\n"
-                f"💰 Vẫn nhận **{money_gain:,} 💰** tiền công\n"
+                f"<:Money_kyo:1528673432613552188> Vẫn nhận **{money_gain:,} <:Money_kyo:1528673432613552188>** tiền công\n"
                 f"⏳ Án tù bị cộng thêm **5 phút** do nghỉ dưỡng thương!"
             ),
             color=discord.Color.orange()
@@ -5016,12 +5016,12 @@ async def laodongtu(ctx):
             time_note = f"⏳ Án tù giảm còn: <t:{int(new_end.timestamp())}:R>"
 
         save_user(uid)
-        add_history(uid, f"Lao động tù (+{money_gain:,} 💰, -{reduce_secs//60}p án)")
+        add_history(uid, f"Lao động tù (+{money_gain:,} <:Money_kyo:1528673432613552188>, -{reduce_secs//60}p án)")
         embed = discord.Embed(
             title="✅ LAO ĐỘNG HOÀN THÀNH",
             description=(
                 f"Cần cù bù thông minh! Cai ngục hài lòng với thái độ của bạn.\n"
-                f"💰 Tiền công: **+{money_gain:,} 💰**\n"
+                f"<:Money_kyo:1528673432613552188> Tiền công: **+{money_gain:,} <:Money_kyo:1528673432613552188>**\n"
                 f"🍀 Uy tín tù nhân: **{user_data['prison_rep']}/100** (+{rep_gain})\n"
                 f"{time_note}"
             ),
@@ -5309,7 +5309,7 @@ class PrisonCanteenSelect(discord.ui.Select):
     def __init__(self, author):
         self.author = author
         options = [
-            discord.SelectOption(label=v["name"][:100], description=f"{v['price']:,} 💰 — {v['desc']}"[:100], value=k)
+            discord.SelectOption(label=v["name"][:100], description=f"{v['price']:,} <:Money_kyo:1528673432613552188> — {v['desc']}"[:100], value=k)
             for k, v in PRISON_CANTEEN.items()
         ]
         super().__init__(placeholder="Chọn món để mua...", min_values=1, max_values=1, options=options)
@@ -5324,11 +5324,11 @@ class PrisonCanteenSelect(discord.ui.Select):
             return await interaction.response.send_message("✅ Bạn không ở trong tù!", ephemeral=True)
         good = PRISON_CANTEEN[self.values[0]]
         if ud.get("money", 0) < good["price"]:
-            return await interaction.response.send_message(f"⚠️ Cần **{good['price']:,} 💰**!", ephemeral=True)
+            return await interaction.response.send_message(f"⚠️ Cần **{good['price']:,} <:Money_kyo:1528673432613552188>**!", ephemeral=True)
         ud["money"] -= good["price"]
         ud["prison_rep"] = min(100, ud.get("prison_rep", 50) + good["rep"])
         save_user(uid)
-        add_history(uid, f"Mua {good['name']} ở căng tin (-{good['price']:,} 💰, +{good['rep']} uy tín)")
+        add_history(uid, f"Mua {good['name']} ở căng tin (-{good['price']:,} <:Money_kyo:1528673432613552188>, +{good['rep']} uy tín)")
         await interaction.response.send_message(embed=discord.Embed(
             description=f"🥫 Mua **{good['name']}**!\n🍀 Uy tín: **{ud['prison_rep']}/100** (+{good['rep']})",
             color=discord.Color.green()
@@ -5368,12 +5368,12 @@ async def cantin(ctx, item: str = None):
 
     good = PRISON_CANTEEN[key]
     if ud.get("money", 0) < good["price"]:
-        return await ctx.reply(f"⚠️ Cần **{good['price']:,} 💰**!", mention_author=False)
+        return await ctx.reply(f"⚠️ Cần **{good['price']:,} <:Money_kyo:1528673432613552188>**!", mention_author=False)
 
     ud["money"] -= good["price"]
     ud["prison_rep"] = min(100, ud.get("prison_rep", 50) + good["rep"])
     save_user(uid)
-    add_history(uid, f"Mua {good['name']} ở căng tin (-{good['price']:,} 💰, +{good['rep']} uy tín)")
+    add_history(uid, f"Mua {good['name']} ở căng tin (-{good['price']:,} <:Money_kyo:1528673432613552188>, +{good['rep']} uy tín)")
 
     await ctx.reply(embed=discord.Embed(
         description=f"🥫 Mua **{good['name']}**!\n🍀 Uy tín: **{ud['prison_rep']}/100** (+{good['rep']})",
@@ -5533,10 +5533,10 @@ class PhapBaoSelect(discord.ui.Select):
         self.author = author
         options = []
         for k, w in PRISON_WEAPONS.items():
-            cost = f"{w['price']:,} 💰" if w["price"] else " + ".join(f"{v}x {n}" for n, v in w["mats"].items())
+            cost = f"{w['price']:,} <:Money_kyo:1528673432613552188>" if w["price"] else " + ".join(f"{v}x {n}" for n, v in w["mats"].items())
             options.append(discord.SelectOption(label=f"🗡️ {w['name']}"[:100], description=cost[:100], value=k))
         for k, a in PRISON_ARMORS.items():
-            cost = f"{a['price']:,} 💰" if a["price"] else " + ".join(f"{v}x {n}" for n, v in a["mats"].items())
+            cost = f"{a['price']:,} <:Money_kyo:1528673432613552188>" if a["price"] else " + ".join(f"{v}x {n}" for n, v in a["mats"].items())
             options.append(discord.SelectOption(label=f"🛡️ {a['name']}"[:100], description=cost[:100], value=k))
         super().__init__(placeholder="Chọn pháp bảo để mua/rèn...", min_values=1, max_values=1, options=options[:25])
 
@@ -5551,7 +5551,7 @@ class PhapBaoSelect(discord.ui.Select):
 
         if item["price"] > 0:
             if ud.get("money", 0) < item["price"]:
-                return await interaction.response.send_message(f"⚠️ Cần **{item['price']:,} 💰**!", ephemeral=True)
+                return await interaction.response.send_message(f"⚠️ Cần **{item['price']:,} <:Money_kyo:1528673432613552188>**!", ephemeral=True)
             ud["money"] -= item["price"]
         else:
             mats = ud.setdefault("prison_materials", {})
@@ -5599,13 +5599,13 @@ async def phapbao(ctx):
 
     w_lines = []
     for k, w in PRISON_WEAPONS.items():
-        cost = f"{w['price']:,} 💰" if w["price"] else " + ".join(f"{v}x {n}" for n, v in w["mats"].items())
+        cost = f"{w['price']:,} <:Money_kyo:1528673432613552188>" if w["price"] else " + ".join(f"{v}x {n}" for n, v in w["mats"].items())
         w_lines.append(f"`{k}` **{w['name']}** (ATK+{w['atk']}) — {cost}")
     embed.add_field(name="🗡️ Vũ Khí", value="\n".join(w_lines), inline=False)
 
     a_lines = []
     for k, a in PRISON_ARMORS.items():
-        cost = f"{a['price']:,} 💰" if a["price"] else " + ".join(f"{v}x {n}" for n, v in a["mats"].items())
+        cost = f"{a['price']:,} <:Money_kyo:1528673432613552188>" if a["price"] else " + ".join(f"{v}x {n}" for n, v in a["mats"].items())
         a_lines.append(f"`{k}` **{a['name']}** (DEF+{a['def']}) — {cost}")
     embed.add_field(name="🛡️ Giáp", value="\n".join(a_lines), inline=False)
 
@@ -5633,7 +5633,7 @@ async def phapbao_mua(ctx, item_id: str):
 
     if item["price"] > 0:
         if ud.get("money", 0) < item["price"]:
-            return await ctx.reply(f"⚠️ Cần **{item['price']:,} 💰**!", mention_author=False)
+            return await ctx.reply(f"⚠️ Cần **{item['price']:,} <:Money_kyo:1528673432613552188>**!", mention_author=False)
         ud["money"] -= item["price"]
     else:
         mats = ud.setdefault("prison_materials", {})
@@ -6530,8 +6530,8 @@ async def danhnhau(ctx, target: discord.Member):
 
     save_user(winner_id)
     save_user(loser_id)
-    add_history(winner_id, f"Thắng đấu công pháp vs {loser_name} ({rounds_fought} hiệp, +{steal:,} 💰)")
-    add_history(loser_id, f"Thua đấu công pháp vs {winner_name} ({rounds_fought} hiệp, -{steal:,} 💰)")
+    add_history(winner_id, f"Thắng đấu công pháp vs {loser_name} ({rounds_fought} hiệp, +{steal:,} <:Money_kyo:1528673432613552188>)")
+    add_history(loser_id, f"Thua đấu công pháp vs {winner_name} ({rounds_fought} hiệp, -{steal:,} <:Money_kyo:1528673432613552188>)")
 
     embed = discord.Embed(
         title="🏆 KẾT THÚC TRẬN ĐẤU CÔNG PHÁP",
@@ -6540,7 +6540,7 @@ async def danhnhau(ctx, target: discord.Member):
             f"\n\n{'─'*24}\n"
             f"⏱️ Tổng số hiệp: **{rounds_fought}/{PRISON_FIGHT_MAX_ROUNDS}**\n"
             f"🏆 **{winner_name}** chiến thắng! Máu còn lại: {max(0,winner_f['hp'])}/{winner_f['max_hp']}\n"
-            f"💰 Cướp được **{steal:,} 💰** | ✨ +{exp_gain} tu vi\n"
+            f"<:Money_kyo:1528673432613552188> Cướp được **{steal:,} <:Money_kyo:1528673432613552188>** | ✨ +{exp_gain} tu vi\n"
             f"🍀 {winner_name}: +5 uy tín | {loser_name}: -5 uy tín"
             f"{reduce_note}"
         )[:4000],
@@ -6578,14 +6578,14 @@ async def thamtu(ctx, target: discord.Member, amount: int):
     td["money"] = td.get("money", 0) + net
     save_user(sid)
     save_user(tid)
-    add_history(sid, f"Thăm nuôi {target.name} -{amount:,} 💰 (phí {fee:,})")
-    add_history(tid, f"Nhận thăm nuôi từ {ctx.author.name} +{net:,} 💰")
+    add_history(sid, f"Thăm nuôi {target.name} -{amount:,} <:Money_kyo:1528673432613552188> (phí {fee:,})")
+    add_history(tid, f"Nhận thăm nuôi từ {ctx.author.name} +{net:,} <:Money_kyo:1528673432613552188>")
 
     await ctx.reply(embed=discord.Embed(
         title="🚪 THĂM NUÔI",
         description=(
-            f"{ctx.author.mention} gửi **{amount:,} 💰** cho {target.mention} đang ở tù.\n"
-            f"🏛️ Phí trại giam: **{fee:,} 💰** | Tù nhân nhận: **{net:,} 💰**"
+            f"{ctx.author.mention} gửi **{amount:,} <:Money_kyo:1528673432613552188>** cho {target.mention} đang ở tù.\n"
+            f"🏛️ Phí trại giam: **{fee:,} <:Money_kyo:1528673432613552188>** | Tù nhân nhận: **{net:,} <:Money_kyo:1528673432613552188>**"
         ),
         color=discord.Color.blue()
     ), mention_author=False)
@@ -6595,7 +6595,7 @@ async def daovang(ctx):
     if user_id in mining_cooldowns and (now - mining_cooldowns[user_id]).total_seconds() < 60:
         return await ctx.reply(embed=discord.Embed(description=f"⏳ Nghỉ {int(60-(now-mining_cooldowns[user_id]).total_seconds())}s!", color=discord.Color.orange()), mention_author=False)
     if "Cuốc Chim ⛏️" not in user_data.get("assets", []):
-        if user_data.get("money",0) < 10000: return await ctx.reply("⚠️ Cần **10,000 💰** mua Cuốc Chim!")
+        if user_data.get("money",0) < 10000: return await ctx.reply("⚠️ Cần **10,000 <:Money_kyo:1528673432613552188>** mua Cuốc Chim!")
         user_data["money"] -= 10000; user_data["assets"].append("Cuốc Chim ⛏️"); await ctx.send("🛒 Tự động mua **Cuốc Chim ⛏️**!")
     mining_cooldowns[user_id] = now
     msg = await ctx.send(embed=discord.Embed(description="⛏️ Đang đào...", color=discord.Color.dark_grey()))
@@ -6607,11 +6607,11 @@ async def daovang(ctx):
     elif roll<=98: name, val = "Kim Cương 💎", random.randint(40000, 80000)
     else:
         pen = int(user_data["money"]*0.15); user_data["money"] -= pen; save_user(user_id)
-        return await msg.edit(embed=discord.Embed(description=f"💥 **BÙMMMM!** Đào trúng bom! -{pen:,} 💰!", color=discord.Color.red()))
+        return await msg.edit(embed=discord.Embed(description=f"💥 **BÙMMMM!** Đào trúng bom! -{pen:,} <:Money_kyo:1528673432613552188>!", color=discord.Color.red()))
     user_data["money"] += val; save_user(user_id)
     if val > 0: add_history(user_id, f"Đào {name} +{val:,}")
     qm = update_quest_progress(user_id, "mine")
-    result = f"⛏️ Đào được: **{name}** | Bán: **{val:,} 💰**"
+    result = f"⛏️ Đào được: **{name}** | Bán: **{val:,} <:Money_kyo:1528673432613552188>**"
     if qm: result += f"\n\n{qm}"
     await msg.edit(embed=discord.Embed(description=result, color=discord.Color.green() if val > 0 else discord.Color.light_grey()))
 
@@ -6621,33 +6621,33 @@ async def vietlott(ctx, so: int, amount: str):
     user_data, bet = await check_gamble_conditions(ctx, amount)
     if not user_data: return
     user_id = str(ctx.author.id); user_data["money"] -= bet; save_user(user_id); gamble_cooldowns[user_id] = datetime.now()
-    msg = await ctx.reply(embed=discord.Embed(description=f"🎫 Mua vé **{so:02d}** | {bet:,} 💰 | Quay...", color=discord.Color.blue()), mention_author=False)
+    msg = await ctx.reply(embed=discord.Embed(description=f"🎫 Mua vé **{so:02d}** | {bet:,} <:Money_kyo:1528673432613552188> | Quay...", color=discord.Color.blue()), mention_author=False)
     await asyncio.sleep(3)
     kq = random.randint(0, 99)
     if so == kq:
         w = bet * 60; user_data["money"] += w; save_user(user_id); add_history(user_id, f"Trúng Vietlott +{w:,}")
-        await msg.edit(embed=discord.Embed(description=f"🎉 **TRÚNG ĐỘC ĐẮC!** Kết quả: **{kq:02d}**!\n+**{w:,} 💰** (x60)!", color=discord.Color.green()))
+        await msg.edit(embed=discord.Embed(description=f"🎉 **TRÚNG ĐỘC ĐẮC!** Kết quả: **{kq:02d}**!\n+**{w:,} <:Money_kyo:1528673432613552188>** (x60)!", color=discord.Color.green()))
     else:
         add_history(user_id, f"Trượt Vietlott -{bet:,}")
-        await msg.edit(embed=discord.Embed(description=f"💀 **TRẬT!** Kết quả: **{kq:02d}**. Mất **{bet:,} 💰**.", color=discord.Color.red()))
+        await msg.edit(embed=discord.Embed(description=f"💀 **TRẬT!** Kết quả: **{kq:02d}**. Mất **{bet:,} <:Money_kyo:1528673432613552188>**.", color=discord.Color.red()))
 
 @bot.command()
 async def coin(ctx, amount: str):
     user_data, bet = await check_gamble_conditions(ctx, amount)
     if not user_data: return
     user_id = str(ctx.author.id); user_data["money"] -= bet; save_user(user_id); gamble_cooldowns[user_id] = datetime.now()
-    msg = await ctx.reply(embed=discord.Embed(description=f"🪙 Tung **{bet:,} 💰**...", color=discord.Color.gold()), mention_author=False)
+    msg = await ctx.reply(embed=discord.Embed(description=f"🪙 Tung **{bet:,} <:Money_kyo:1528673432613552188>**...", color=discord.Color.gold()), mention_author=False)
     await asyncio.sleep(2)
     if random.randint(1,100) <= 48:
         user_data["money"] += bet*2; save_user(user_id); add_history(user_id, f"Tung xu Thắng +{bet:,}")
         qm = update_quest_progress(user_id, "gamble")
-        result = f"🪙 **NGỬA!** +**{bet*2:,} 💰**!"
+        result = f"🪙 **NGỬA!** +**{bet*2:,} <:Money_kyo:1528673432613552188>**!"
         if qm: result += f"\n\n{qm}"
         await msg.edit(embed=discord.Embed(description=result, color=discord.Color.green()))
     else:
         add_history(user_id, f"Tung xu Thua -{bet:,}")
         qm = update_quest_progress(user_id, "gamble")
-        result = f"🪙 **SẤP!** Mất **{bet:,} 💰**."
+        result = f"🪙 **SẤP!** Mất **{bet:,} <:Money_kyo:1528673432613552188>**."
         if qm: result += f"\n\n{qm}"
         await msg.edit(embed=discord.Embed(description=result, color=discord.Color.red()))
 
@@ -6665,10 +6665,10 @@ async def taixiu(ctx, choice: str, amount: str):
     rt = "xiu" if total <= 10 else "tai"
     embed = discord.Embed(title="🎲 KẾT QUẢ")
     if cm[ch] == rt:
-        if d1==d2==d3: w = bet*5; txt = f"🔥 **BÃO x5!** +{w:,} 💰!"
-        else: w = bet*2; txt = f"✅ **THẮNG!** +{w:,} 💰!"
+        if d1==d2==d3: w = bet*5; txt = f"🔥 **BÃO x5!** +{w:,} <:Money_kyo:1528673432613552188>!"
+        else: w = bet*2; txt = f"✅ **THẮNG!** +{w:,} <:Money_kyo:1528673432613552188>!"
         user_data["money"] += w; embed.color = discord.Color.green(); add_history(user_id, f"TaiXiu +{w-bet:,}")
-    else: w = 0; txt = f"💀 **THUA!** Mất {bet:,} 💰."; embed.color = discord.Color.red(); add_history(user_id, f"TaiXiu -{bet:,}")
+    else: w = 0; txt = f"💀 **THUA!** Mất {bet:,} <:Money_kyo:1528673432613552188>."; embed.color = discord.Color.red(); add_history(user_id, f"TaiXiu -{bet:,}")
     save_user(user_id); qm = update_quest_progress(user_id, "gamble")
     embed.description = f"**[{d1}|{d2}|{d3}]** Tổng {total} - **{rt.upper()}**\n\n{txt}"
     if qm: embed.description += f"\n\n{qm}"
@@ -6687,8 +6687,8 @@ async def baucua(ctx, choice: str, amount: str):
     faces = ["🥒","🦀","🦐","🐟","🐓","🦌"]; dice = [random.choice(faces) for _ in range(3)]; mc = dice.count(vc[ch])
     embed = discord.Embed(title="🎲 KẾT QUẢ")
     if mc > 0:
-        w = bet + bet*mc; user_data["money"] += w; embed.color = discord.Color.green(); txt = f"🎉 **TRÚNG {mc} Ô!** +{w:,} 💰"; add_history(user_id, f"BauCua +{w-bet:,}")
-    else: embed.color = discord.Color.red(); txt = f"💀 **TRẬT!** Mất {bet:,} 💰."; add_history(user_id, f"BauCua -{bet:,}")
+        w = bet + bet*mc; user_data["money"] += w; embed.color = discord.Color.green(); txt = f"🎉 **TRÚNG {mc} Ô!** +{w:,} <:Money_kyo:1528673432613552188>"; add_history(user_id, f"BauCua +{w-bet:,}")
+    else: embed.color = discord.Color.red(); txt = f"💀 **TRẬT!** Mất {bet:,} <:Money_kyo:1528673432613552188>."; add_history(user_id, f"BauCua -{bet:,}")
     save_user(user_id); qm = update_quest_progress(user_id, "gamble")
     embed.description = f"**[{dice[0]}|{dice[1]}|{dice[2]}]**\n\n{txt}"
     if qm: embed.description += f"\n\n{qm}"
@@ -6708,14 +6708,14 @@ async def mayxeng(ctx, amount: str):
         if slots[0]=="👑": w = bet*40
         elif slots[0]=="💎": w = bet*15
         else: w = bet*8
-        txt = f"🔥 **JACKPOT!!! 3x{slots[0]}** +{w:,} 💰!"; user_data["money"] += w; add_history(user_id, f"Slot JACKPOT +{w:,}")
+        txt = f"🔥 **JACKPOT!!! 3x{slots[0]}** +{w:,} <:Money_kyo:1528673432613552188>!"; user_data["money"] += w; add_history(user_id, f"Slot JACKPOT +{w:,}")
     elif len(set(slots)) < 3:
-        w = int(bet*1.5); txt = f"🎉 **Thắng nhỏ!** +{w:,} 💰."; user_data["money"] += w; add_history(user_id, f"Slot +{w-bet:,}")
-    else: w = 0; txt = f"💀 **TOANG!** Mất {bet:,} 💰."; add_history(user_id, f"Slot -{bet:,}")
+        w = int(bet*1.5); txt = f"🎉 **Thắng nhỏ!** +{w:,} <:Money_kyo:1528673432613552188>."; user_data["money"] += w; add_history(user_id, f"Slot +{w-bet:,}")
+    else: w = 0; txt = f"💀 **TOANG!** Mất {bet:,} <:Money_kyo:1528673432613552188>."; add_history(user_id, f"Slot -{bet:,}")
     save_user(user_id); qm = update_quest_progress(user_id, "gamble")
     embed.description = f"**[{slots[0]}|{slots[1]}|{slots[2]}]**\n\n{txt}"
     if qm: embed.description += f"\n\n{qm}"
-    embed.set_footer(text=f"Ví: {user_data['money']:,} 💰")
+    embed.set_footer(text=f"Ví: {user_data['money']:,} <:Money_kyo:1528673432613552188>")
     await msg.edit(embed=embed)
 
 @bot.command()
@@ -6725,7 +6725,7 @@ async def gacha(ctx):
         r = int(300-(now-gacha_cooldowns[user_id]).total_seconds())
         return await ctx.reply(embed=discord.Embed(description=f"⏳ Ủ trứng thêm **{r//60}p {r%60}s**!", color=discord.Color.orange()), mention_author=False)
     user_data = load_user(user_id); cost = 50000
-    if user_data.get("money",0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} 💰**.")
+    if user_data.get("money",0) < cost: return await ctx.reply(f"⚠️ Cần **{cost:,} <:Money_kyo:1528673432613552188>**.")
     user_data["money"] -= cost; gacha_cooldowns[user_id] = now; save_user(user_id)
     msg = await ctx.reply(embed=discord.Embed(title="🥚 ĐẬP TRỨNG GACHA", description="Đang đập...", color=discord.Color.orange()), mention_author=False)
     await asyncio.sleep(1.5)
@@ -6768,8 +6768,8 @@ HELP_PAGES = [
             "`k lichsu` (`ls`) — Lịch sử giao dịch của bạn\n"
             "`k nhiemvu` — Xem nhiệm vụ hàng ngày\n"
             "`k thanhtich [@user]` — Xem thành tích đã đạt\n"
-            "`k marry @user` — Cầu hôn (phí 1,000,000 💰)\n"
-            "`k lyhon` — Ly hôn (phí 500,000 💰)\n"
+            "`k marry @user` — Cầu hôn (phí 1,000,000 <:Money_kyo:1528673432613552188>)\n"
+            "`k lyhon` — Ly hôn (phí 500,000 <:Money_kyo:1528673432613552188>)\n"
             "`k dilamthem` (`work`) — Đi làm thêm (CD 45p)\n"
             "`k tuido` (`fire`) — Tính điểm Tự Do Tài Chính (FIRE), xem tổng tài sản"
         ),
@@ -6811,7 +6811,7 @@ HELP_PAGES = [
         ),
     },
     {
-        "title": "🎮 CASINO (cược tối đa 300,000 💰, CD 6s)",
+        "title": "🎮 CASINO (cược tối đa 300,000 <:Money_kyo:1528673432613552188>, CD 6s)",
         "color": discord.Color.gold(),
         "desc": (
             "`k coin <tiền/all>` — Tung xu\n"
@@ -6828,7 +6828,7 @@ HELP_PAGES = [
         "color": discord.Color.purple(),
         "desc": (
             "`k vongquay` (`spin`/`wheel`) — Vòng quay free, hồi 20h\n"
-            "`k gacha` — Đập trứng thú cưng (CD 5p, phí 50,000 💰)\n"
+            "`k gacha` — Đập trứng thú cưng (CD 5p, phí 50,000 <:Money_kyo:1528673432613552188>)\n"
             "`k cuopnganhang` (`cuop`) — Cướp ngân hàng (CD 2h, cần bank ≥200k)\n"
             "`k moctui @user` — Móc túi trực tiếp người chơi (CD 30p)\n"
             "   ✅ 40% thành công: lấy 5-15% ví nạn nhân\n"
@@ -6888,14 +6888,14 @@ HELP_PAGES = [
         "color": discord.Color.red(),
         "desc": (
             "`k pk @user <tiền/all>` (`ott`) — Gạ kèo Oẳn Tù Tì\n"
-            "`k nhansinh` (`mophong`) — Mô phỏng nhân sinh (vé 500 💰)"
+            "`k nhansinh` (`mophong`) — Mô phỏng nhân sinh (vé 500 <:Money_kyo:1528673432613552188>)"
         ),
     },
     {
         "title": "🏢 CÔNG TY (k cty / congty)",
         "color": discord.Color.dark_gold(),
         "desc": (
-            "`k cty tao <tên>` — Thành lập công ty (phí 500,000 💰)\n"
+            "`k cty tao <tên>` — Thành lập công ty (phí 500,000 <:Money_kyo:1528673432613552188>)\n"
             "`k cty` — Xem bảng điều khiển công ty\n"
             "`k cty gop <tiền>` — Góp quỹ công ty\n"
             "`k cty thulai` — Thu lãi quỹ (1 lần/ngày)\n"
@@ -6936,7 +6936,7 @@ HELP_PAGES = [
         "desc": (
             "`k kallen` — Menu chính, xem tiến độ & vé\n"
             "`k kallen choi` — Chọn nhân vật & chapter để chiến đấu\n"
-            "`k kallen muave [số lượng]` — Mua vé (30,000 💰/vé)\n"
+            "`k kallen muave [số lượng]` — Mua vé (30,000 <:Money_kyo:1528673432613552188>/vé)\n"
             "`k kallen nhanvat` — Xem danh sách nhân vật & kỹ năng\n"
             "`k kallen mokuyen <tên>` — Mở khóa nhân vật bằng vật phẩm\n"
             "`k kallen nangcap <tên>` — Nâng cấp nhân vật\n"
@@ -6968,13 +6968,13 @@ HELP_PAGES = [
         "color": discord.Color.blue(),
         "desc": (
             "`k kimcuong` — Xem số dư & hướng dẫn\n"
-            "`k kimcuong doi <số/all>` — Đổi 💎 → 💰\n"
+            "`k kimcuong doi <số/all>` — Đổi 💎 → <:Money_kyo:1528673432613552188>\n"
             "`k kimcuong chuyen @user <số>` — Tặng 💎 cho người khác\n"
             "`k kimcuong top` — Bảng xếp hạng Kim Cương\n"
             "`k kimcuong shop` — Cửa hàng độc quyền bằng 💎\n\n"
             "💡 Kim Cương tự sinh ra khi ví/ngân hàng vượt ngưỡng cực cao "
             "(tránh mất tiền do lỗi tràn số).\n"
-            "🎰 **Perk:** Sở hữu 💎 tự tăng giới hạn cược casino (tối đa +1,000,000 💰)."
+            "🎰 **Perk:** Sở hữu 💎 tự tăng giới hạn cược casino (tối đa +1,000,000 <:Money_kyo:1528673432613552188>)."
         ),
     },
     {
@@ -7185,7 +7185,7 @@ def build_rank_embed(target, user_data):
         inline=False
     )
 
-    money_lines = f"💰 Ví: **{money:,}**\n🏦 NH: **{bank_bal:,}**"
+    money_lines = f"<:Money_kyo:1528673432613552188> Ví: **{money:,}**\n🏦 NH: **{bank_bal:,}**"
     if stock_val > 0:
         money_lines += f"\n📈 CK: **{stock_val:,}**"
     if kc > 0:
@@ -7197,7 +7197,7 @@ def build_rank_embed(target, user_data):
         misc_lines += f"\n⚠️ Nợ: **{user_data['loan_amount']:,}**"
     embed.add_field(name="📋 Khác", value=misc_lines, inline=True)
 
-    embed.add_field(name="\u200b", value=f"**💎 TỔNG TÀI SẢN: {total:,} 💰**", inline=False)
+    embed.add_field(name="\u200b", value=f"**💎 TỔNG TÀI SẢN: {total:,} <:Money_kyo:1528673432613552188>**", inline=False)
 
     return embed
 
@@ -7224,8 +7224,8 @@ class RankActionView(discord.ui.View):
     async def btn_bank(self, interaction: discord.Interaction, button: discord.ui.Button):
         ud = load_user(str(interaction.user.id))
         embed = discord.Embed(title="🏦 NGÂN HÀNG", color=discord.Color.blue())
-        embed.add_field(name="💳 Ví", value=f"**{ud.get('money',0):,} 💰**", inline=True)
-        embed.add_field(name="🏦 Két sắt", value=f"**{ud.get('bank',0):,} 💰**", inline=True)
+        embed.add_field(name="💳 Ví", value=f"**{ud.get('money',0):,} <:Money_kyo:1528673432613552188>**", inline=True)
+        embed.add_field(name="🏦 Két sắt", value=f"**{ud.get('bank',0):,} <:Money_kyo:1528673432613552188>**", inline=True)
         await interaction.response.send_message(embed=embed, view=BankHubView(interaction.user), ephemeral=True)
 
     @discord.ui.button(label="Lịch Sử", emoji="📜", style=discord.ButtonStyle.secondary)
@@ -7247,7 +7247,7 @@ async def rank(ctx, member: discord.Member = None):
     await ctx.reply(embed=embed, view=view, mention_author=False)
 
 TOP_CATEGORIES = {
-    "tien":  {"label": "💰 Tài Sản",   "emoji": "💰", "color": discord.Color.gold()},
+    "tien":  {"label": "<:Money_kyo:1528673432613552188> Tài Sản",   "emoji": "<:Money_kyo:1528673432613552188>", "color": discord.Color.gold()},
     "level": {"label": "🌟 Cấp Độ",    "emoji": "🌟", "color": discord.Color.purple()},
     "ca":    {"label": "🎣 Ngư Dân",   "emoji": "🎣", "color": discord.Color.blue()},
     "kc":    {"label": "💎 Kim Cương", "emoji": "💎", "color": discord.Color.teal()},
@@ -7281,7 +7281,7 @@ def build_top_data(category):
         fmt = lambda a: f"{a[0]:,} 💎"
     else:
         dl = sorted([(d["_id"], d.get("money", 0) + d.get("bank", 0)) for d in all_users], key=lambda x: x[1], reverse=True)
-        fmt = lambda a: f"{a[0]:,} 💰"
+        fmt = lambda a: f"{a[0]:,} <:Money_kyo:1528673432613552188>"
 
     return dl, fmt, TOP_CATEGORIES.get(category, TOP_CATEGORIES["tien"])
 
@@ -7327,7 +7327,7 @@ class TopBoardView(discord.ui.View):
         self._sync_buttons()
         await interaction.response.edit_message(embed=self.make_embed(), view=self)
 
-    @discord.ui.button(label="Tài Sản", emoji="💰", style=discord.ButtonStyle.success, custom_id="tien", row=0)
+    @discord.ui.button(label="Tài Sản", emoji="<:Money_kyo:1528673432613552188>", style=discord.ButtonStyle.success, custom_id="tien", row=0)
     async def btn_tien(self, interaction, button):
         await self._switch(interaction, "tien")
 
@@ -7391,11 +7391,11 @@ async def daily(ctx):
                 user_data["money"] = max(0, user_data.get("money",0) - penalty)
                 user_data["bank"] = max(0, user_data.get("bank",0) - max(0, penalty - user_data.get("money",0)))
                 user_data["loan_amount"] = 0; user_data["loan_due"] = None
-                await ctx.send(embed=discord.Embed(description=f"🦹 **GIANG HỒ ĐẾN ĐÒI NỢ!** Mất **{penalty:,} 💰** (30% tài sản)!", color=discord.Color.dark_red()))
+                await ctx.send(embed=discord.Embed(description=f"🦹 **GIANG HỒ ĐẾN ĐÒI NỢ!** Mất **{penalty:,} <:Money_kyo:1528673432613552188>** (30% tài sản)!", color=discord.Color.dark_red()))
         except Exception: pass
     user_data["money"] += total; user_data["last_daily"] = now.strftime("%Y-%m-%d %H:%M:%S")
     na = check_achievement(user_id, user_data); save_user(user_id)
-    embed = discord.Embed(title="🎁 ĐIỂM DANH", description=f"Nhận **{total:,} 💰**!\n🔥 Streak: **{streak} ngày** (+{bonus:,} bonus)\n💳 Ví: **{user_data['money']:,} 💰**", color=discord.Color.green())
+    embed = discord.Embed(title="🎁 ĐIỂM DANH", description=f"Nhận **{total:,} <:Money_kyo:1528673432613552188>**!\n🔥 Streak: **{streak} ngày** (+{bonus:,} bonus)\n💳 Ví: **{user_data['money']:,} <:Money_kyo:1528673432613552188>**", color=discord.Color.green())
     if na: embed.description += "\n🏅 " + ", ".join(na)
     embed.set_thumbnail(url=GIF_LINKS["daily"])
     await ctx.reply(embed=embed, mention_author=False)
@@ -7408,7 +7408,7 @@ async def lixi(ctx):
     if now - last < timedelta(hours=12):
         return await ctx.reply(embed=discord.Embed(description=f"🧧 Lì xì tiếp: <t:{int((last+timedelta(hours=12)).timestamp())}:R>.", color=discord.Color.orange()), mention_author=False)
     tien = random.randint(500, 5000); user_data["money"] += tien; user_data["last_lixi"] = now.strftime("%Y-%m-%d %H:%M:%S"); save_user(user_id)
-    await ctx.reply(embed=discord.Embed(description=f"🧧 Lì xì **{tien:,} 💰**! Ví: **{user_data['money']:,} 💰**", color=discord.Color.red()), mention_author=False)
+    await ctx.reply(embed=discord.Embed(description=f"🧧 Lì xì **{tien:,} <:Money_kyo:1528673432613552188>**! Ví: **{user_data['money']:,} <:Money_kyo:1528673432613552188>**", color=discord.Color.red()), mention_author=False)
 
 @bot.command()
 async def give(ctx, member: discord.Member, amount: int):
@@ -7417,7 +7417,7 @@ async def give(ctx, member: discord.Member, amount: int):
     gd["money"] -= amount; nd["money"] += amount; save_user(ng); save_user(nn)
     add_history(ng, f"Chuyển {member.name} -{amount:,}"); add_history(nn, f"Nhận {ctx.author.name} +{amount:,}")
     qm = update_quest_progress(ng, "give")
-    embed = discord.Embed(title="💸 CHUYỂN KHOẢN", description=f"{ctx.author.mention} → {member.mention}: **{amount:,} 💰**!", color=discord.Color.green())
+    embed = discord.Embed(title="💸 CHUYỂN KHOẢN", description=f"{ctx.author.mention} → {member.mention}: **{amount:,} <:Money_kyo:1528673432613552188>**!", color=discord.Color.green())
     if qm: embed.description += f"\n\n{qm}"
     await ctx.send(embed=embed)
 
@@ -7438,7 +7438,7 @@ async def phai(ctx):
         if datetime.now() >= end:
             r = user_data.get("exp_reward",500); user_data["money"] += r
             user_data.pop("exp_end",None); user_data.pop("exp_reward",None); save_user(user_id)
-            return await ctx.reply(embed=discord.Embed(title="🎉 TRỞ VỀ!", description=f"Thu hoạch **{r:,} 💰**!", color=discord.Color.gold()), mention_author=False)
+            return await ctx.reply(embed=discord.Embed(title="🎉 TRỞ VỀ!", description=f"Thu hoạch **{r:,} <:Money_kyo:1528673432613552188>**!", color=discord.Color.gold()), mention_author=False)
         tl = end - datetime.now(); h,r2 = divmod(int(tl.total_seconds()), 3600); m,_ = divmod(r2, 60)
         return await ctx.reply(embed=discord.Embed(description=f"⏳ Đang khám phá! Còn **{h}h {m}m**.", color=discord.Color.orange()), mention_author=False)
     await ctx.send(embed=discord.Embed(title="⛺ THÁM HIỂM AFK", description="Gửi nhân vật đi treo máy!\n\n👇 **CHỌN KHU VỰC**", color=discord.Color.dark_green()), view=ExpView(ctx.author))
@@ -7449,7 +7449,7 @@ async def nhansinh(ctx):
     if user_id in dang_choi_nhansinh: return await ctx.reply("⏳ Đang trong một kiếp luân hồi!")
     if user_id in nhansinh_cooldowns and (now-nhansinh_cooldowns[user_id]).total_seconds() < 5: return await ctx.reply("⏳ Từ từ đã!")
     user_data = load_user(user_id)
-    if user_data.get("money",0) < 500: return await ctx.reply("⚠️ Vé luân hồi **500 💰**.")
+    if user_data.get("money",0) < 500: return await ctx.reply("⚠️ Vé luân hồi **500 <:Money_kyo:1528673432613552188>**.")
     user_data["money"] -= 500; nhansinh_cooldowns[user_id] = now; dang_choi_nhansinh.append(user_id); save_user(user_id)
     stats = {"may_man": random.randint(1,10)}; view = NhanSinhGameView(ctx.author, stats)
     embed = discord.Embed(title="🌀 MÔ PHỎNG NHÂN SINH", description=f"Ký chủ: {ctx.author.mention}", color=discord.Color.teal())
@@ -7466,7 +7466,7 @@ async def pk(ctx, member: discord.Member, amount: str):
     except ValueError: return await ctx.reply("⚠️ Nhập số hoặc `all`!")
     if bet <= 0 or bet > user_data.get("money",0): return await ctx.reply(f"⚠️ Không đủ tiền! Có {user_data.get('money',0):,}")
     if bet > 300000: return await ctx.reply("⚠️ Tối đa 300k!")
-    embed = discord.Embed(title="⚔️ GẠ KÈO OẲN TÙ TÌ", description=f"{ctx.author.mention} thách {member.mention}!\nCược: **{bet:,} 💰**.", color=discord.Color.red())
+    embed = discord.Embed(title="⚔️ GẠ KÈO OẲN TÙ TÌ", description=f"{ctx.author.mention} thách {member.mention}!\nCược: **{bet:,} <:Money_kyo:1528673432613552188>**.", color=discord.Color.red())
     await ctx.send(f"{member.mention}", embed=embed, view=SoloOTTAccept(ctx.author, member, bet))
 
 @bot.command()
@@ -7475,8 +7475,8 @@ async def marry(ctx, member: discord.Member):
     sd = load_user(ctx.author.id)
     if sd.get("spouse"): return await ctx.reply("⚠️ Đã kết hôn rồi!")
     if load_user(member.id).get("spouse"): return await ctx.reply(f"⚠️ {member.name} đã có người yêu!")
-    if sd.get("money",0) < 1000000: return await ctx.reply(f"⚠️ Lễ cưới cần **1,000,000 💰**.")
-    embed = discord.Embed(title="💍 LỜI CẦU HÔN", description=f"💕 {ctx.author.mention} cầu hôn {member.mention}!\n\n💒 Lễ cưới trị giá **1,000,000 💰**!", color=discord.Color.pink())
+    if sd.get("money",0) < 1000000: return await ctx.reply(f"⚠️ Lễ cưới cần **1,000,000 <:Money_kyo:1528673432613552188>**.")
+    embed = discord.Embed(title="💍 LỜI CẦU HÔN", description=f"💕 {ctx.author.mention} cầu hôn {member.mention}!\n\n💒 Lễ cưới trị giá **1,000,000 <:Money_kyo:1528673432613552188>**!", color=discord.Color.pink())
     embed.set_image(url=GIF_LINKS["marry"])
     await ctx.send(f"{member.mention}", embed=embed, view=MarryAccept(ctx.author, member))
 
@@ -7488,7 +7488,7 @@ async def lyhon(ctx):
     
     cost = 500000
     if user_data.get("money", 0) < cost:
-        return await ctx.reply(embed=discord.Embed(description=f"⚠️ Phí ly hôn là **{cost:,} 💰**.", color=discord.Color.red()), mention_author=False)
+        return await ctx.reply(embed=discord.Embed(description=f"⚠️ Phí ly hôn là **{cost:,} <:Money_kyo:1528673432613552188>**.", color=discord.Color.red()), mention_author=False)
     
     spouse_id = user_data["spouse"]
     spouse_data = load_user(spouse_id)
@@ -7500,7 +7500,7 @@ async def lyhon(ctx):
     save_user(user_id)
     save_user(spouse_id)
     
-    await ctx.reply(embed=discord.Embed(title="💔 LY HÔN", description=f"💔 Bạn đã nộp đơn ly hôn và mất **{cost:,} 💰** phí luật sư.\nMong bạn sẽ tìm được hạnh phúc mới!", color=discord.Color.dark_grey()), mention_author=False)
+    await ctx.reply(embed=discord.Embed(title="💔 LY HÔN", description=f"💔 Bạn đã nộp đơn ly hôn và mất **{cost:,} <:Money_kyo:1528673432613552188>** phí luật sư.\nMong bạn sẽ tìm được hạnh phúc mới!", color=discord.Color.dark_grey()), mention_author=False)
 
 # =====================================================================
 # HỆ THỐNG SỰ KIỆN
@@ -7532,13 +7532,13 @@ async def on_message(message):
                 user_data["xp"] -= max_xp_required; user_data["level"] += 1
                 reward = user_data["level"] * 100
                 user_data["money"] += reward
-                add_history(user_id, f"Thăng cấp Lv{user_data['level']} (+{reward:,} 💰)")
+                add_history(user_id, f"Thăng cấp Lv{user_data['level']} (+{reward:,} <:Money_kyo:1528673432613552188>)")
                 
                 new_achievements = check_achievement(user_id, user_data)
                 save_user(user_id)
                 
                 try: 
-                    level_msg = f"🎉 **{message.author.mention}** đã đột phá lên **Cấp {user_data['level']}**!\nThưởng: **{reward:,} 💰**"
+                    level_msg = f"🎉 **{message.author.mention}** đã đột phá lên **Cấp {user_data['level']}**!\nThưởng: **{reward:,} <:Money_kyo:1528673432613552188>**"
                     if new_achievements: level_msg += f"\n🏅 **THÀNH TÍCH MỚI:** " + ", ".join(new_achievements)
                     await message.channel.send(embed=discord.Embed(description=level_msg, color=discord.Color.gold()))
                 except Exception: pass
@@ -7595,8 +7595,8 @@ async def themtien(ctx, member: discord.Member, amount: int):
     if amount > 0: 
         user_id = str(member.id); user_data = load_user(user_id)
         user_data["money"] += amount; save_user(user_id)
-        add_history(user_id, f"Được Admin bơm (+{amount:,} 💰)")
-        await ctx.send(embed=discord.Embed(description=f"✅ Bơm **{amount:,} 💰** cho {member.mention}!", color=discord.Color.green()))
+        add_history(user_id, f"Được Admin bơm (+{amount:,} <:Money_kyo:1528673432613552188>)")
+        await ctx.send(embed=discord.Embed(description=f"✅ Bơm **{amount:,} <:Money_kyo:1528673432613552188>** cho {member.mention}!", color=discord.Color.green()))
 
 @bot.command()
 @commands.has_permissions(administrator=True) 
@@ -7604,7 +7604,7 @@ async def trutien(ctx, member: discord.Member, amount: int):
     if amount > 0: 
         user_id = str(member.id); user_data = load_user(user_id)
         user_data["money"] -= amount; save_user(user_id)
-        await ctx.send(embed=discord.Embed(description=f"⚖️ Tước đoạt **{amount:,} 💰** từ {member.mention}!", color=discord.Color.red()))
+        await ctx.send(embed=discord.Embed(description=f"⚖️ Tước đoạt **{amount:,} <:Money_kyo:1528673432613552188>** từ {member.mention}!", color=discord.Color.red()))
 
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -7619,7 +7619,7 @@ async def resetjail(ctx, member: discord.Member):
 @commands.has_permissions(administrator=True)
 async def giveall(ctx, amount: int):
     if amount <= 0 or amount > 10000:
-        return await ctx.send(embed=discord.Embed(description="⚠️ Giveall tối đa 10,000 💰!", color=discord.Color.red()))
+        return await ctx.send(embed=discord.Embed(description="⚠️ Giveall tối đa 10,000 <:Money_kyo:1528673432613552188>!", color=discord.Color.red()))
     count = 0
     for member in ctx.guild.members:
         if not member.bot:
@@ -7627,7 +7627,7 @@ async def giveall(ctx, amount: int):
             user_data["money"] += amount
             save_user(member.id)
             count += 1
-    await ctx.send(embed=discord.Embed(description=f"✅ Đã bơm **{amount:,} 💰** cho **{count}** thành viên!", color=discord.Color.green()))
+    await ctx.send(embed=discord.Embed(description=f"✅ Đã bơm **{amount:,} <:Money_kyo:1528673432613552188>** cho **{count}** thành viên!", color=discord.Color.green()))
 # =====================================================================
 # HỆ THỐNG ĐẠI CHIẾN CÔNG TY - v1.0
 # Dán đoạn code này vào bot.py, TRƯỚC dòng keep_alive()
@@ -8030,10 +8030,10 @@ async def run_battle(interaction_or_ctx, atk_comp, def_comp, atk_boss_member):
         inline=False
     )
     embed_final.add_field(
-        name="💰 Chiến lợi phẩm",
+        name="<:Money_kyo:1528673432613552188> Chiến lợi phẩm",
         value=(
-            f"Cướp **{loot:,} 💰** từ quỹ đối phương\n"
-            f"Mỗi thành viên nhận thêm **+{member_bonus:,} 💰**"
+            f"Cướp **{loot:,} <:Money_kyo:1528673432613552188>** từ quỹ đối phương\n"
+            f"Mỗi thành viên nhận thêm **+{member_bonus:,} <:Money_kyo:1528673432613552188>**"
         ),
         inline=False
     )
@@ -8051,7 +8051,7 @@ async def run_battle(interaction_or_ctx, atk_comp, def_comp, atk_boss_member):
         value="\n".join(round_logs),
         inline=False
     )
-    embed_final.set_footer(text=f"Quỹ thắng: {winner_comp['treasury']:,} 💰 | Quỹ thua: {loser_comp['treasury']:,} 💰")
+    embed_final.set_footer(text=f"Quỹ thắng: {winner_comp['treasury']:,} <:Money_kyo:1528673432613552188> | Quỹ thua: {loser_comp['treasury']:,} <:Money_kyo:1528673432613552188>")
 
     await channel.send(embed=embed_final)
 
@@ -8148,8 +8148,8 @@ def build_daichien_info_embed(user_id):
     embed.add_field(
         name="📈 Nâng cấp",
         value=(
-            f"ATK Lv{atk_lvl} → Lv{atk_lvl+1}: **{atk_lvl*500000:,} 💰**\n"
-            f"DEF Lv{def_lvl} → Lv{def_lvl+1}: **{def_lvl*300000:,} 💰**\n"
+            f"ATK Lv{atk_lvl} → Lv{atk_lvl+1}: **{atk_lvl*500000:,} <:Money_kyo:1528673432613552188>**\n"
+            f"DEF Lv{def_lvl} → Lv{def_lvl+1}: **{def_lvl*300000:,} <:Money_kyo:1528673432613552188>**\n"
             f"`k cty nangcap cong` | `k cty nangcap thu`"
         ),
         inline=False
@@ -8176,7 +8176,7 @@ class DaichienTargetSelect(discord.ui.Select):
             rep = c.get("reputation", 100)
             options.append(discord.SelectOption(
                 label=c["name"][:100],
-                description=f"💰{c.get('treasury',0):,} | ⚔️Lv{c.get('atk_level',1)} 🛡️Lv{c.get('def_level',1)} | 🌟{rep}/100"[:100],
+                description=f"<:Money_kyo:1528673432613552188>{c.get('treasury',0):,} | ⚔️Lv{c.get('atk_level',1)} 🛡️Lv{c.get('def_level',1)} | 🌟{rep}/100"[:100],
                 value=c["_id"]
             ))
         super().__init__(placeholder="Chọn công ty đối thủ...", min_values=1, max_values=1, options=options)
@@ -8201,7 +8201,7 @@ class DaichienTargetSelect(discord.ui.Select):
             description=(
                 f"**{atk_comp['name']}** tuyên chiến với **{def_comp['name']}**!\n\n"
                 f"⚔️ Công: **{atk_power}** vs 🛡️ Thủ: **{def_power}**\n"
-                f"💰 Tiền thưởng nếu thắng: **~{loot_preview:,} 💰**\n\n"
+                f"<:Money_kyo:1528673432613552188> Tiền thưởng nếu thắng: **~{loot_preview:,} <:Money_kyo:1528673432613552188>**\n\n"
                 f"<@{def_boss_id}> — **Chủ Tịch {def_comp['name']}**, bạn có nhận chiến không?"
             ),
             color=discord.Color.red()
@@ -8370,7 +8370,7 @@ async def tan(ctx, *, target_name: str):
         description=(
             f"**{atk_comp['name']}** tuyên chiến với **{def_comp['name']}**!\n\n"
             f"⚔️ Công: **{atk_power}** vs 🛡️ Thủ: **{def_power}**\n"
-            f"💰 Tiền thưởng nếu thắng: **~{loot_preview:,} 💰**\n\n"
+            f"<:Money_kyo:1528673432613552188> Tiền thưởng nếu thắng: **~{loot_preview:,} <:Money_kyo:1528673432613552188>**\n\n"
             f"<@{def_boss_id}> — **Chủ Tịch {def_comp['name']}**, bạn có nhận chiến không?"
         ),
         color=discord.Color.red()
@@ -8425,8 +8425,8 @@ async def info(ctx):
     embed.add_field(
         name="📈 Nâng cấp",
         value=(
-            f"ATK Lv{atk_lvl} → Lv{atk_lvl+1}: **{atk_lvl*500000:,} 💰** (từ quỹ)\n"
-            f"DEF Lv{def_lvl} → Lv{def_lvl+1}: **{def_lvl*300000:,} 💰** (từ quỹ)\n"
+            f"ATK Lv{atk_lvl} → Lv{atk_lvl+1}: **{atk_lvl*500000:,} <:Money_kyo:1528673432613552188>** (từ quỹ)\n"
+            f"DEF Lv{def_lvl} → Lv{def_lvl+1}: **{def_lvl*300000:,} <:Money_kyo:1528673432613552188>** (từ quỹ)\n"
             f"`k cty nangcap cong` | `k cty nangcap thu`"
         ),
         inline=False
@@ -9730,7 +9730,7 @@ class KFBattleView(discord.ui.View):
             description=(
                 f"Đã thoát khỏi **{state.chapter['title']}**\n\n"
                 f"⭐ XP lưu: **+{state.total_xp}**\n"
-                f"💰 Tiền lưu: **+{state.total_money:,} 💰**\n"
+                f"<:Money_kyo:1528673432613552188> Tiền lưu: **+{state.total_money:,} <:Money_kyo:1528673432613552188>**\n"
                 f"📦 {_drop_summary(state.drops)}"
             ),
             color=discord.Color.dark_grey(),
@@ -10151,7 +10151,7 @@ class KFBattleView(discord.ui.View):
  
         kf["total_boss_kills"] = kf.get("total_boss_kills", 0) + 1
         save_kf_user(uid, ud)
-        add_history(uid, f"KF C{chid} ✅ (+{state.total_money:,} 💰)")
+        add_history(uid, f"KF C{chid} ✅ (+{state.total_money:,} <:Money_kyo:1528673432613552188>)")
  
         unlock_line = ""
         if chid == 5:
@@ -10164,7 +10164,7 @@ class KFBattleView(discord.ui.View):
         desc = (
             chapter["story_end"] +
             f"\n\n{'═'*28}\n"
-            f"💰 Tiền: **+{state.total_money:,} 💰**\n"
+            f"<:Money_kyo:1528673432613552188> Tiền: **+{state.total_money:,} <:Money_kyo:1528673432613552188>**\n"
             f"⭐ XP: **+{state.total_xp}**\n"
             f"📦 {_drop_summary(state.drops)}"
             f"{title_line}{unlock_line}"
@@ -10298,7 +10298,7 @@ def kf_battle_embed(state: KFGameState, msg: str = "", color=None) -> discord.Em
         text=(
             f"Lượt {state.turn}  •  "
             f"⭐ XP: +{state.total_xp}  •  "
-            f"💰 +{state.total_money:,}  •  "
+            f"<:Money_kyo:1528673432613552188> +{state.total_money:,}  •  "
             f"📦 {len(state.drops)} loại drop"
         )
     )
@@ -10364,7 +10364,7 @@ def kf_battle_embed(state: KFGameState, msg: str = "", color=None) -> discord.Em
         await interaction.response.edit_message(
             embed=discord.Embed(
                 title="🏃 Rút Lui",
-                description=f"Thoát khỏi **{state.chapter['title']}**.\nXP: **+{state.total_xp}** | 💰 +**{state.total_money:,}**",
+                description=f"Thoát khỏi **{state.chapter['title']}**.\nXP: **+{state.total_xp}** | <:Money_kyo:1528673432613552188> +**{state.total_money:,}**",
                 color=discord.Color.dark_grey()
             ),
             view=self
@@ -10761,7 +10761,7 @@ def kf_battle_embed(state: KFGameState, msg: str = "", color=None) -> discord.Em
         kf["total_boss_kills"] = kf.get("total_boss_kills", 0) + 1
 
         save_kf_user(user_id, ud)
-        add_history(user_id, f"KF C{chid} thắng (+{state.total_money:,} 💰)")
+        add_history(user_id, f"KF C{chid} thắng (+{state.total_money:,} <:Money_kyo:1528673432613552188>)")
 
         unlock_next = ""
         if chid == 5:
@@ -10772,7 +10772,7 @@ def kf_battle_embed(state: KFGameState, msg: str = "", color=None) -> discord.Em
         desc = (
             chapter["story_end"] +
             f"\n\n{'═'*28}\n"
-            f"💰 **+{state.total_money:,} 💰** | ⭐ XP: +{state.total_xp}\n"
+            f"<:Money_kyo:1528673432613552188> **+{state.total_money:,} <:Money_kyo:1528673432613552188>** | ⭐ XP: +{state.total_xp}\n"
             f"📦 {_drop_summary(state.drops)}"
             f"{title_line}{unlock_next}"
         )
@@ -10988,7 +10988,7 @@ class KFRaidLobbyView(discord.ui.View):
                 f"{raid['desc']}\n"
                 f"👥 Người chơi ({len(self.players)}/{raid['max_players']}): {', '.join(names)}\n"
                 f"💀 Boss HP: {raid['boss_hp']:,} | ATK: {raid['boss_atk']} | DEF: {raid['boss_def']}\n"
-                f"💰 Thưởng: {raid['reward_money']:,} 💰 + {raid['drop_count']}x {raid['drop_item']}"
+                f"<:Money_kyo:1528673432613552188> Thưởng: {raid['reward_money']:,} <:Money_kyo:1528673432613552188> + {raid['drop_count']}x {raid['drop_item']}"
             ),
             color=discord.Color.dark_red()
         )
@@ -11140,14 +11140,14 @@ class KFRaidLobbyView(discord.ui.View):
                 if raid["id"] not in kf.get("raid_clears", []):
                     kf.setdefault("raid_clears", []).append(raid["id"])
                 save_kf_user(uid, ud)
-                add_history(uid, f"Raid {raid['name']} thắng (+{each_money:,} 💰)")
+                add_history(uid, f"Raid {raid['name']} thắng (+{each_money:,} <:Money_kyo:1528673432613552188>)")
 
             mentions = " ".join(f"<@{p}>" for p in players)
             embed = discord.Embed(
                 title=f"🏆 RAID HOÀN THÀNH — {raid['name']}",
                 description=(
                     f"{mentions}\n\n"
-                    f"💰 Mỗi người nhận: **{each_money:,} 💰**\n"
+                    f"<:Money_kyo:1528673432613552188> Mỗi người nhận: **{each_money:,} <:Money_kyo:1528673432613552188>**\n"
                     f"📦 Drop: **{raid['drop_count']}x {raid['drop_item']}** mỗi người\n"
                     f"🏷️ Danh hiệu: **{raid.get('title_reward','???')}**"
                 ),
@@ -11173,7 +11173,7 @@ class KFShopView(discord.ui.View):
 
         options = []
         for key, item in KF_SHOP_ITEMS.items():
-            price_str = f"{item['price']:,} 💰" if item["price"] else "FREE"
+            price_str = f"{item['price']:,} <:Money_kyo:1528673432613552188>" if item["price"] else "FREE"
             options.append(discord.SelectOption(
                 label       = item["name"][:25],
                 description = f"{price_str} | {item['desc'][:40]}",
@@ -11192,7 +11192,7 @@ class KFShopView(discord.ui.View):
 
         price = item["price"]
         if price > 0 and ud.get("money", 0) < price:
-            return await interaction.response.send_message(f"⚠️ Thiếu tiền! Cần **{price:,} 💰**", ephemeral=True)
+            return await interaction.response.send_message(f"⚠️ Thiếu tiền! Cần **{price:,} <:Money_kyo:1528673432613552188>**", ephemeral=True)
 
         if price > 0:
             ud["money"] -= price
@@ -11213,9 +11213,9 @@ class KFShopView(discord.ui.View):
             result = "✅ Mua thành công!"
 
         save_kf_user(str(self.author.id), ud)
-        add_history(str(self.author.id), f"KF Shop: mua {item['name']} (-{price:,} 💰)")
+        add_history(str(self.author.id), f"KF Shop: mua {item['name']} (-{price:,} <:Money_kyo:1528673432613552188>)")
         await interaction.response.send_message(
-            embed=discord.Embed(description=f"{result}\nSố dư: **{ud.get('money',0):,} 💰**", color=discord.Color.green()),
+            embed=discord.Embed(description=f"{result}\nSố dư: **{ud.get('money',0):,} <:Money_kyo:1528673432613552188>**", color=discord.Color.green()),
             ephemeral=True
         )
 
@@ -11575,7 +11575,7 @@ async def thoat(ctx):
             description=(
                 f"Đã thoát khỏi **{state.chapter['title']}**.\n\n"
                 f"📊 XP đã tích: **+{state.total_xp}**\n"
-                f"💰 Tiền đã nhận: **+{state.total_money:,} 💰**\n"
+                f"<:Money_kyo:1528673432613552188> Tiền đã nhận: **+{state.total_money:,} <:Money_kyo:1528673432613552188>**\n"
                 f"📦 Drops: {_drop_summary(state.drops)}\n\n"
                 f"*Dùng `k kallen choi` để bắt đầu lại.*"
             ),
@@ -11645,14 +11645,14 @@ async def muave(ctx, amount: int = 1):
     ud, kf = get_kf_user(uid)
     total = KF_TICKET_PRICE * amount
     if ud.get("money", 0) < total:
-        return await ctx.reply(f"⚠️ Cần **{total:,} 💰** để mua **{amount}** vé!", mention_author=False)
+        return await ctx.reply(f"⚠️ Cần **{total:,} <:Money_kyo:1528673432613552188>** để mua **{amount}** vé!", mention_author=False)
     ud["money"] -= total
     kf["inventory"][KF_TICKET_ITEM] = kf["inventory"].get(KF_TICKET_ITEM, 0) + amount
     save_kf_user(uid, ud)
-    add_history(uid, f"Mua {amount}x vé KF (-{total:,} 💰)")
+    add_history(uid, f"Mua {amount}x vé KF (-{total:,} <:Money_kyo:1528673432613552188>)")
     await ctx.reply(
         embed=discord.Embed(
-            description=f"🎟️ Mua **{amount} {KF_TICKET_ITEM}**!\nTổng chi: **{total:,} 💰** | Vé còn: **{kf['inventory'][KF_TICKET_ITEM]}**",
+            description=f"🎟️ Mua **{amount} {KF_TICKET_ITEM}**!\nTổng chi: **{total:,} <:Money_kyo:1528673432613552188>** | Vé còn: **{kf['inventory'][KF_TICKET_ITEM]}**",
             color=discord.Color.green()
         ), mention_author=False
     )
@@ -11787,7 +11787,7 @@ async def nangcap(ctx, char_name: str):
     )
     embed.add_field(name="Cấp hiện tại", value=f"**Lv {lv}**", inline=True)
     embed.add_field(name="XP",           value=f"**{exp_have}/{exp_need}**", inline=True)
-    embed.add_field(name="Chi phí UP",   value=f"**{cost_money:,} 💰**", inline=True)
+    embed.add_field(name="Chi phí UP",   value=f"**{cost_money:,} <:Money_kyo:1528673432613552188>**", inline=True)
     embed.add_field(
         name="Cách lên cấp",
         value="• XP từ chiến đấu (tự động)\n• Dùng tiền để up thẳng: nếu có đủ XP\n• Lên cấp tăng **5% mỗi chỉ số**",
@@ -11812,8 +11812,8 @@ async def nangcap(ctx, char_name: str):
         kf["char_exp"][cid] = min(exp_have + add_xp, exp_need - 1)
         save_kf_user(uid, ud)
         embed.add_field(
-            name="💰 Dùng tiền nạp XP",
-            value=f"Trả **{cost_money:,} 💰** → +**{add_xp} XP** (30% thanh XP)",
+            name="<:Money_kyo:1528673432613552188> Dùng tiền nạp XP",
+            value=f"Trả **{cost_money:,} <:Money_kyo:1528673432613552188>** → +**{add_xp} XP** (30% thanh XP)",
             inline=False
         )
     else:
@@ -11866,13 +11866,13 @@ async def cuahang(ctx):
     ud, kf = get_kf_user(uid)
     embed  = discord.Embed(
         title="🛒 CỬA HÀNG KALLEN FANTASY",
-        description=f"Ví của bạn: **{ud.get('money',0):,} 💰**\n\nMua vật phẩm hỗ trợ chiến đấu, vé, và trang bị cơ bản.",
+        description=f"Ví của bạn: **{ud.get('money',0):,} <:Money_kyo:1528673432613552188>**\n\nMua vật phẩm hỗ trợ chiến đấu, vé, và trang bị cơ bản.",
         color=discord.Color.green()
     )
     for key, item in list(KF_SHOP_ITEMS.items())[:8]:
         embed.add_field(
             name  = item["name"],
-            value = f"{item['price']:,} 💰 | {item['desc']}",
+            value = f"{item['price']:,} <:Money_kyo:1528673432613552188> | {item['desc']}",
             inline=True
         )
     await ctx.reply(embed=embed, view=KFShopView(ctx.author), mention_author=False)
@@ -11895,7 +11895,7 @@ async def inventory(ctx, member: discord.Member = None):
     if mats:
         embed.add_field(
             name  = "🧪 Nguyên Liệu",
-            value = "\n".join(f"• **{k}** x{v} — {KF_EXCLUSIVE_ITEMS[k]['sell']:,} 💰/cái" for k, v in list(mats.items())[:10]),
+            value = "\n".join(f"• **{k}** x{v} — {KF_EXCLUSIVE_ITEMS[k]['sell']:,} <:Money_kyo:1528673432613552188>/cái" for k, v in list(mats.items())[:10]),
             inline=False
         )
 
@@ -11931,8 +11931,8 @@ async def bancuahang(ctx, item_name: str = None, amount: int = None):
         sellable = {k: v for k, v in inv.items() if k in KF_EXCLUSIVE_ITEMS and v > 0}
         if not sellable:
             return await ctx.reply("📦 Không có vật phẩm KF nào để bán!", mention_author=False)
-        lines = [f"**{k}** x{v} → {KF_EXCLUSIVE_ITEMS[k]['sell']:,} 💰/cái" for k, v in sellable.items()]
-        embed = discord.Embed(title="💰 BÁN VẬT PHẨM KF", description="\n".join(lines) + "\n\n`k kallen bancuahang <tên> <số>`", color=discord.Color.gold())
+        lines = [f"**{k}** x{v} → {KF_EXCLUSIVE_ITEMS[k]['sell']:,} <:Money_kyo:1528673432613552188>/cái" for k, v in sellable.items()]
+        embed = discord.Embed(title="<:Money_kyo:1528673432613552188> BÁN VẬT PHẨM KF", description="\n".join(lines) + "\n\n`k kallen bancuahang <tên> <số>`", color=discord.Color.gold())
         return await ctx.reply(embed=embed, mention_author=False)
 
     matched = None
@@ -11953,9 +11953,9 @@ async def bancuahang(ctx, item_name: str = None, amount: int = None):
     inv[matched] = have - amount
     ud["money"]  = ud.get("money", 0) + total
     save_kf_user(uid, ud)
-    add_history(uid, f"Bán {amount}x {matched} KF (+{total:,} 💰)")
+    add_history(uid, f"Bán {amount}x {matched} KF (+{total:,} <:Money_kyo:1528673432613552188>)")
     await ctx.reply(
-        embed=discord.Embed(description=f"✅ Bán **{amount}x {matched}** → **+{total:,} 💰**!", color=discord.Color.green()),
+        embed=discord.Embed(description=f"✅ Bán **{amount}x {matched}** → **+{total:,} <:Money_kyo:1528673432613552188>**!", color=discord.Color.green()),
         mention_author=False
     )
 
@@ -11975,7 +11975,7 @@ async def story(ctx, chapter_num: int = 1):
     embed.add_field(name="⚔️ Giữa Trận", value=ch["story_mid"],    inline=False)
     embed.add_field(name="🌠 Kết Thúc",  value=ch["story_end"],    inline=False)
     embed.add_field(name="👿 Boss",       value=f"**{ch['boss']['name']}**\n*{ch['boss']['lore']}*", inline=False)
-    embed.set_footer(text=f"Waves: {ch['waves']} | Vé: {ch['ticket_cost']} | Thưởng: {ch['reward_money']:,} 💰")
+    embed.set_footer(text=f"Waves: {ch['waves']} | Vé: {ch['ticket_cost']} | Thưởng: {ch['reward_money']:,} <:Money_kyo:1528673432613552188>")
     await ctx.reply(embed=embed, mention_author=False)
 
 
@@ -12082,7 +12082,7 @@ async def raid(ctx, *, raid_name: str = None):
                 value = (
                     f"{r['desc']}\n"
                     f"👥 {r['min_players']}-{r['max_players']} người | 🎟️ {r['ticket_cost']} vé/người\n"
-                    f"💀 HP: {r['boss_hp']:,} | 💰 {r['reward_money']:,} 💰\n"
+                    f"💀 HP: {r['boss_hp']:,} | <:Money_kyo:1528673432613552188> {r['reward_money']:,} <:Money_kyo:1528673432613552188>\n"
                     f"`k kallen raid {rid}`"
                 ),
                 inline=False
@@ -12116,7 +12116,7 @@ async def raid(ctx, *, raid_name: str = None):
         description=(
             f"{raid['desc']}\n"
             f"👥 {len([str(ctx.author.id)])}/{raid['max_players']} người\n"
-            f"💀 Boss HP: {raid['boss_hp']:,} | Thưởng: {raid['reward_money']:,} 💰"
+            f"💀 Boss HP: {raid['boss_hp']:,} | Thưởng: {raid['reward_money']:,} <:Money_kyo:1528673432613552188>"
         ),
         color=discord.Color.dark_red()
     )
@@ -12798,7 +12798,7 @@ BOT_FILE_PATH = os.path.abspath(__file__)
 
 DEFAULT_GIF_LINKS = dict(GIF_LINKS)
 DEFAULT_EMOJIS = {
-    "money": "💰", "bank": "🏦", "level_up": "🌟", "jail": "🚨",
+    "money": "<:Money_kyo:1528673432613552188>", "bank": "🏦", "level_up": "🌟", "jail": "🚨",
     "win": "🎉", "lose": "💀", "marry": "💍", "daily": "🎁",
     "work": "💼", "mine": "⛏️", "fish": "🎣", "gacha": "🥚",
     "rob_success": "🎉", "rob_fail": "🚨", "quest": "📋",
@@ -13114,7 +13114,7 @@ class EmojiValueModal(discord.ui.Modal, title="Chỉnh sửa Emoji"):
         self.parent_view = parent_view
         self.emoji_input = discord.ui.TextInput(
             label=f"Emoji mới cho '{key}'"[:45],
-            placeholder="💰 hoặc <:tencustom:id>",
+            placeholder="<:Money_kyo:1528673432613552188> hoặc <:tencustom:id>",
             default=CUSTOM_EMOJIS.get(key, ""),
             style=discord.TextStyle.short,
             required=True,
@@ -14115,7 +14115,7 @@ KC_SHOP_ITEMS = {
     "kc_pet_2": {"type": "pet_guaranteed", "name": "Godzilla Vĩ Đại 🦖",     "price": 10, "emoji": "🦖"},
 }
 
-KC_EXCHANGE_BACK_RATE = 800_000_000  # 1 💎 -> 800 triệu 💰 khi đổi ngược (thấp hơn tỷ giá sinh ra để tránh lạm dụng)
+KC_EXCHANGE_BACK_RATE = 800_000_000  # 1 💎 -> 800 triệu <:Money_kyo:1528673432613552188> khi đổi ngược (thấp hơn tỷ giá sinh ra để tránh lạm dụng)
 
 
 class KCShopSelect(discord.ui.Select):
@@ -14191,18 +14191,18 @@ async def kimcuong(ctx):
         title=f"💎 KIM CƯƠNG — {ctx.author.name}",
         description=(
             f"Bạn đang có: **{kc:,} {PREMIUM_CURRENCY_NAME}**\n\n"
-            f"💡 Kim Cương tự sinh ra khi ví/ngân hàng vượt ngưỡng **{MONEY_SOFT_CAP:,} 💰** "
-            f"(tỷ giá {PREMIUM_EXCHANGE_RATE:,} 💰 = 1 💎).\n\n"
+            f"💡 Kim Cương tự sinh ra khi ví/ngân hàng vượt ngưỡng **{MONEY_SOFT_CAP:,} <:Money_kyo:1528673432613552188>** "
+            f"(tỷ giá {PREMIUM_EXCHANGE_RATE:,} <:Money_kyo:1528673432613552188> = 1 💎).\n\n"
             "**LỆNH:**\n"
-            "`k kimcuong doi <số/all>` — Đổi 💎 → 💰\n"
+            "`k kimcuong doi <số/all>` — Đổi 💎 → <:Money_kyo:1528673432613552188>\n"
             "`k kimcuong chuyen @user <số>` — Tặng 💎 cho người khác\n"
             "`k kimcuong top` — Bảng xếp hạng Kim Cương\n"
             "`k kimcuong shop` — Cửa hàng độc quyền bằng 💎\n\n"
-            "🎰 **Perk:** Sở hữu 💎 tăng giới hạn cược casino (+20,000 💰/viên, tối đa +1,000,000 💰)."
+            "🎰 **Perk:** Sở hữu 💎 tăng giới hạn cược casino (+20,000 <:Money_kyo:1528673432613552188>/viên, tối đa +1,000,000 <:Money_kyo:1528673432613552188>)."
         ),
         color=discord.Color.blue()
     )
-    embed.set_footer(text=f"Tỷ giá đổi ngược: 1 💎 = {KC_EXCHANGE_BACK_RATE:,} 💰")
+    embed.set_footer(text=f"Tỷ giá đổi ngược: 1 💎 = {KC_EXCHANGE_BACK_RATE:,} <:Money_kyo:1528673432613552188>")
     await ctx.reply(embed=embed, mention_author=False)
 
 
@@ -14227,10 +14227,10 @@ async def kc_doi(ctx, amount: str = None):
     user_data["kim_cuong"] -= qty
     user_data["money"] = min(MONEY_SOFT_CAP, user_data.get("money", 0) + gain)
     save_user(user_id)
-    add_history(user_id, f"Đổi {qty} 💎 → +{gain:,} 💰")
+    add_history(user_id, f"Đổi {qty} 💎 → +{gain:,} <:Money_kyo:1528673432613552188>")
 
     await ctx.reply(embed=discord.Embed(
-        description=f"✅ Đổi **{qty:,} 💎** → **+{gain:,} 💰**!\nSố dư 💎 còn lại: **{user_data['kim_cuong']:,}**",
+        description=f"✅ Đổi **{qty:,} 💎** → **+{gain:,} <:Money_kyo:1528673432613552188>**!\nSố dư 💎 còn lại: **{user_data['kim_cuong']:,}**",
         color=discord.Color.green()
     ), mention_author=False)
 
@@ -14473,8 +14473,8 @@ class QuickMenuView(discord.ui.View):
     async def btn_bank(self, interaction, button):
         ud = load_user(str(self.author.id))
         embed = discord.Embed(title="🏦 NGÂN HÀNG TRUNG ƯƠNG", description="📥 `k bank gui <số/all>` | 📤 `k bank rut <số/all>` | 📈 `k bank laisuat`", color=discord.Color.blue())
-        embed.add_field(name="💳 Ví", value=f"**{ud.get('money',0):,} 💰**", inline=True)
-        embed.add_field(name="🏦 Két sắt", value=f"**{ud.get('bank',0):,} 💰**", inline=True)
+        embed.add_field(name="💳 Ví", value=f"**{ud.get('money',0):,} <:Money_kyo:1528673432613552188>**", inline=True)
+        embed.add_field(name="🏦 Két sắt", value=f"**{ud.get('bank',0):,} <:Money_kyo:1528673432613552188>**", inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @discord.ui.button(label="🎁 Điểm Danh", style=discord.ButtonStyle.success, row=0)
@@ -14493,7 +14493,7 @@ class QuickMenuView(discord.ui.View):
     async def btn_farm(self, interaction, button):
         ud = load_user(str(self.author.id))
         farm = ud.get("farm", {"seed": None, "plant_time": None})
-        seeds_str = "\n".join([f"`{k}`: {v['name']} | {v['cost']:,}💰 | {v['time_hours']}h" for k, v in FARM_SEEDS.items()])
+        seeds_str = "\n".join([f"`{k}`: {v['name']} | {v['cost']:,}<:Money_kyo:1528673432613552188> | {v['time_hours']}h" for k, v in FARM_SEEDS.items()])
         desc = f"Đất trống.\n\n{seeds_str}\n\n`k farm mua <tên>` | `k farm trong <tên>`"
         if farm.get("seed"):
             desc = f"🌱 Đang trồng: **{FARM_SEEDS.get(farm['seed'], {}).get('name','?')}**\nGõ `k farm thuhoach` khi chín."
@@ -14506,7 +14506,7 @@ class QuickMenuView(discord.ui.View):
         cost = (lvl + 1) * 50000
         embed = discord.Embed(title="💪 PHÒNG GYM", color=discord.Color.orange())
         embed.add_field(name="Level hiện tại", value=f"**Lv{lvl}** (+{lvl*5}% ATK Duel)", inline=False)
-        embed.add_field(name="Nâng cấp", value=f"Lv{lvl+1}: **{cost:,} 💰** — `k gym nangcap`", inline=False)
+        embed.add_field(name="Nâng cấp", value=f"Lv{lvl+1}: **{cost:,} <:Money_kyo:1528673432613552188>** — `k gym nangcap`", inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @discord.ui.button(label="🏆 Top", style=discord.ButtonStyle.secondary, row=1)
