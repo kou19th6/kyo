@@ -1645,11 +1645,16 @@ def hand_value(hand):
         aces -= 1
     return total
 
-def draw_card():
-    return random.choice(['A','2','3','4','5','6','7','8','9','10','J','Q','K'])
+CARD_EMOJIS = {
+    'A': '<a:A_Kyo:1528691118806405201>', '2': '<a:2_kyo:1528687191017001050>', '3': '<a:3_kyo:1528691741073477663>',
+    '4': '<a:4_Kyo:1528689630457892998>', '5': '<a:5_Kyo:1528689251729014855>', '6': '<a:6_Kyo:1528690395901595740>',
+    '7': '<a:7_Kyo:1528692302451839046>', '8': '<a:8_kyo:1528688277450915971>', '9': '<a:9_Kyo:1528690796302438460>',
+    '10': '<a:10_Kyo:1528688760642998423>', 'J': '<a:J_Kyo:1528689005468717137>', 'Q': '<a:Q_Kyo:1528689916865675294>',
+    'K': '<a:K_Kyo:1528691447988097064>',
+}
 
 def format_hand(hand):
-    return " | ".join(hand)
+    return " ".join(CARD_EMOJIS.get(c, c) for c in hand)
 
 class _FakeResponse:
     def is_done(self):
