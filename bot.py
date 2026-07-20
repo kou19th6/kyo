@@ -560,11 +560,12 @@ def truncate_field_value(text, limit=1024):
         return text
     return text[:limit - 25].rstrip() + "\n… (còn nữa, quá dài)"
 
-def make_progress_bar(current_value, total_value, bar_length=12):
-    if total_value == 0: return "⬛" * bar_length
-    progress_blocks = int((current_value / total_value) * bar_length)
-    empty_blocks = bar_length - progress_blocks
-    return "🟩" * progress_blocks + "⬛" * empty_blocks
+def make_progress_bar(current_value, total_value, bar_length=14):
+    if total_value <= 0:
+        return "░" * bar_length
+    ratio = max(0, min(1, current_value / total_value))
+    filled = round(ratio * bar_length)
+    return "█" * filled + "░" * (bar_length - filled)
 
 async def check_gamble_conditions(ctx, amount_str):
     user_id = str(ctx.author.id)
@@ -2272,12 +2273,12 @@ class ShopItemSelect(discord.ui.Select):
             user_data["assets"].append(item_info["name"])
             success_message = f"🎉 Đập hộp **{item_info['name']}**!"
         save_user(user_id)
-        add_history(user_id, f"Mua {item_info['name']} (-{item_info['price']:,} 💰)")
+        add_history(user_id, f"Mua {item_info['name']} (-{item_info['price']:,} <:Money_kyo:1528673432613552188>)")
         new_achievements = check_achievement(user_id, user_data)
         ach_text = ""
         if new_achievements: save_user(user_id); ach_text = "\n\n🏅 **THÀNH TÍCH MỚI:** " + ", ".join(new_achievements)
         embed_success = discord.Embed(title="🛍️ GIAO DỊCH HOÀN TẤT!", description=success_message + ach_text, color=discord.Color.green())
-        embed_success.set_footer(text=f"Số dư: {user_data['money']:,} 💰", icon_url=interaction.user.display_avatar.url)
+        embed_success.set_footer(text=f"Số dư: {user_data['money']:,} <:Money_kyo:1528673432613552188>", icon_url=interaction.user.display_avatar.url)
         await interaction.response.edit_message(embed=embed_success, view=None)
 
 class ShopCategoryMenu(discord.ui.View):
@@ -8105,7 +8106,7 @@ def build_daichien_main_embed():
             df  = comp.get("def_level",  1)
             top_str += (
                 f"{icon} **{comp['name']}** {scandal}\n"
-                f"   💰 {comp.get('treasury',0):,} | ⚔️Lv{atk} 🛡️Lv{df} | 🌟{rep}/100\n"
+                f"   <:Money_kyo:1528673432613552188> {comp.get('treasury',0):,} | ⚔️Lv{atk} 🛡️Lv{df} | 🌟{rep}/100\n"
             )
         embed.add_field(name="🏆 BXH CÔNG TY", value=top_str or "Chưa có", inline=False)
     return embed
