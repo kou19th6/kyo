@@ -3422,17 +3422,6 @@ class BankHubView(discord.ui.View):
         if ud.get("loan_amount", 0) > 0:
             embed.add_field(name="⚠️ Đang nợ", value=f"**{ud['loan_amount']:,} 💰**", inline=False)
         await interaction.response.edit_message(embed=embed, view=self)
-# =====================================================================
-# HỆ THỐNG NGÂN HÀNG
-# =====================================================================
-@bot.group(invoke_without_command=True, aliases=['nganhang', 'nh'])
-async def bank(ctx):
-    user_data = load_user(ctx.author.id)
-    embed = discord.Embed(title="🏦 NGÂN HÀNG TRUNG ƯƠNG", description="📥 `k bank gui <số / all>` | 📤 `k bank rut <số / all>` | 📈 `k bank laisuat`", color=discord.Color.blue())
-    embed.add_field(name="💳 Ví", value=f"**{user_data.get('money', 0):,} 💰**", inline=True)
-    embed.add_field(name="🏦 Két sắt", value=f"**{user_data.get('bank', 0):,} 💰**", inline=True)
-    if user_data.get("loan_amount", 0) > 0:
-        embed.add_field(name="⚠️ Đang nợ", value=f"**{user_data['loan_amount']:,} 💰** | `k tranno`", inline=False)
 @bot.group(invoke_without_command=True, aliases=['nganhang', 'nh'])
 async def bank(ctx):
     user_data = load_user(ctx.author.id)
