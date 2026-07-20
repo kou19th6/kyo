@@ -6639,25 +6639,73 @@ async def vietlott(ctx, so: int, amount: str):
         add_history(user_id, f"Trượt Vietlott -{bet:,}")
         await msg.edit(embed=discord.Embed(description=f"💀 **TRẬT!** Kết quả: **{kq:02d}**. Mất **{bet:,} <:Money_kyo:1528673432613552188>**.", color=discord.Color.red()))
 
+# ═══════════════════════════════════════════════════════════
+# 🪙 TUNG ĐỒNG XU — Bản đẹp, có animation lật xu
+# ═══════════════════════════════════════════════════════════
+
+COIN_EMOJI_SPIN = "<a:coin_roll_kyo:1528697535550455849>"       # 👉 thay bằng emoji động của bạn, vd: "<a:coin_spin:123456789>"
+COIN_EMOJI_HEADS = "<:coin_kyo:1528697459658719312>"      # 👉 thay bằng emoji mặt Ngửa custom
+COIN_EMOJI_TAILS = "<:coin_kyo:1528697459658719312>"      # 👉 thay bằng emoji mặt Sấp custom
+
 @bot.command()
 async def coin(ctx, amount: str):
     user_data, bet = await check_gamble_conditions(ctx, amount)
-    if not user_data: return
-    user_id = str(ctx.author.id); user_data["money"] -= bet; save_user(user_id); gamble_cooldowns[user_id] = datetime.now()
-    msg = await ctx.reply(embed=discord.Embed(description=f"🪙 Tung **{bet:,} <:Money_kyo:1528673432613552188>**...", color=discord.Color.gold()), mention_author=False)
-    await asyncio.sleep(2)
-    if random.randint(1,100) <= 48:
-        user_data["money"] += bet*2; save_user(user_id); add_history(user_id, f"Tung xu Thắng +{bet:,}")
-        qm = update_quest_progress(user_id, "gamble")
-        result = f"🪙 **NGỬA!** +**{bet*2:,} <:Money_kyo:1528673432613552188>**!"
-        if qm: result += f"\n\n{qm}"
-        await msg.edit(embed=discord.Embed(description=result, color=discord.Color.green()))
+    if not user_data:
+        return
+
+    user_id = str(ctx.author.id)
+    user_data["money"] -= bet
+    save_user(user_id)
+    gamble_cooldowns[user_id] = datetime.now()
+
+    embed = discord.Embed(
+        title=f"{COIN_EMOJI_SPIN} TUNG ĐỒNG XU",
+        description=f"💰 Cược: **{bet:,}**\n\n{COIN_EMOJI_SPIN} Đồng xu đang xoay trên không...",
+        color=discord.Color.gold()
+    )
+    embed.set_footer(text=f"{ctx.author.display_name} đang thử vận may...")
+    msg = await ctx.reply(embed=embed, mention_author=False)
+
+    # Hiệu ứng xoay xu — đổi mặt liên tục vài lần trước khi ra kết quả
+    spin_frames = [COIN_EMOJI_HEADS, COIN_EMOJI_TAILS, COIN_EMOJI_HEADS, COIN_EMOJI_TAILS]
+    for frame in spin_frames:
+        embed.description = f"💰 Cược: **{bet:,}**\n\n{frame} Đồng xu đang xoay..."
+        await msg.edit(embed=embed)
+        await asyncio.sleep(0.45)
+
+    win = random.randint(1, 100) <= 48
+    result_side = COIN_EMOJI_HEADS if win else COIN_EMOJI_TAILS
+    side_name = "NGỬA" if win else "SẤP"
+
+    qm = update_quest_progress(user_id, "gamble")
+
+    if win:
+        payout = bet * 2
+        user_data["money"] += payout
+        save_user(user_id)
+        add_history(user_id, f"Tung xu Thắng +{bet:,}")
+        embed.color = discord.Color.green()
+        embed.title = f"{result_side} ĐỒNG XU RA MẶT {side_name}!"
+        embed.description = (
+            f"{result_side} Chúc mừng, đồng xu đứng về phía bạn!\n\n"
+            f"💵 Cược: **{bet:,} 💰**\n"
+            f"🎉 Nhận về: **+{payout:,} 💰**"
+        )
     else:
-        add_history(user_id, f"Tung xu Thua -{bet:,}")
-        qm = update_quest_progress(user_id, "gamble")
-        result = f"🪙 **SẤP!** Mất **{bet:,} <:Money_kyo:1528673432613552188>**."
-        if qm: result += f"\n\n{qm}"
-        await msg.edit(embed=discord.Embed(description=result, color=discord.Color.red()))
+        embed.color = discord.Color.red()
+        embed.title = f"{result_side} ĐỒNG XU RA MẶT {side_name}!"
+        embed.description = (
+            f"{result_side} Vận may chưa mỉm cười lần này...\n\n"
+            f"💵 Cược: **{bet:,} 💰**\n"
+            f"💀 Mất: **-{bet:,} 💰**"
+        )
+
+    if qm:
+        embed.description += f"\n\n{qm}"
+
+    embed.add_field(name="💳 Số dư ví", value=f"**{user_data['money']:,} 💰**", inline=False)
+    embed.set_footer(text=f"{ctx.author.display_name} • k coin <số/all> để chơi tiếp")
+    await msg.edit(embed=embed)
 
 @bot.command()
 async def taixiu(ctx, choice: str, amount: str):
