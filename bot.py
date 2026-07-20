@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import pymongo 
 import math
 import os
+import hashlib
 import google.generativeai as genai
 
 # =====================================================================
@@ -872,6 +873,18 @@ def get_next_15min_timestamp():
     next_update = next_update.replace(second=0, microsecond=0)
     return int(next_update.timestamp())
 
+def get_user_company_stock_code(user_id):
+    """Trả về (mã_CK, company_doc) nếu công ty của user đã IPO, ngược lại (None, None)."""
+    ud = load_user(user_id)
+    comp_id = ud.get("company")
+    if not comp_id:
+        return None, None
+    comp = load_company(comp_id)
+    if not comp or not comp.get("is_ipo"):
+        return None, None
+    code = comp["name"][:4].upper()
+    return code, comp
+
 def get_all_stocks():
     all_stocks = {}
     for code, info in STANDARD_STOCKS.items():
@@ -1002,19 +1015,50 @@ class ChungKhoanHubView(discord.ui.View):
     async def btn_sell(self, interaction, button):
         await interaction.response.send_modal(CKSellModal())
 
+    @discord.ui.button(label="Công Ty Tôi", emoji="🏢", style=discord.ButtonStyle.success, row=0)
+    async def btn_mycompany(self, interaction, button):
+        my_code, my_comp = get_user_company_stock_code(str(self.author.id))
+        if not my_code:
+            return await interaction.response.send_message("⚠️ Bạn chưa có công ty đã IPO! Dùng `k cty ipo`.", ephemeral=True)
+        cur = get_stock_price(my_code)
+        chg = get_price_change_pct(my_code)
+        trend = "🟢" if chg > 0 else "🔴" if chg < 0 else "⚪"
+        embed = discord.Embed(title=f"🏢 {my_comp['name']} ({my_code})", color=discord.Color.gold())
+        embed.add_field(name="Giá hiện tại", value=f"{trend} **{cur:,} <:Money_kyo:1528673432613552188>** ({chg:+.2f}%)", inline=False)
+        embed.add_field(
+            name="Giao dịch 100 CP",
+            value=f"Mua: **{get_stock_buy_price(my_code,100):,}** | Bán: **{get_stock_sell_price(my_code,100):,}**",
+            inline=False
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     @discord.ui.button(label="Portfolio", emoji="💼", style=discord.ButtonStyle.primary, row=0)
     async def btn_port(self, interaction, button):
-        ud = load_user(str(self.author.id))
+        uid = str(self.author.id)
+        ud = load_user(uid)
         stocks = ud.get("stocks", {})
         if not stocks:
             return await interaction.response.send_message("📭 Bạn chưa có cổ phiếu nào.", ephemeral=True)
-        lines = []
+
+        my_code, _ = get_user_company_stock_code(uid)
+        company_lines, other_lines = [], []
         total = 0
         for code, qty in stocks.items():
-            val = get_stock_sell_price(code, qty) * qty
+            if qty <= 0:
+                continue
+            sell_p = get_stock_sell_price(code, qty)
+            avg_buy = ud.get("stock_buy_prices", {}).get(code, sell_p)
+            val = sell_p * qty
+            pnl = (sell_p - avg_buy) * qty
             total += val
-            lines.append(f"**{code}** {qty:,}CP — {val:,} <:Money_kyo:1528673432613552188>")
-        embed = discord.Embed(title="💼 Portfolio", description="\n".join(lines), color=discord.Color.blue())
+            line = f"**{code}** {qty:,}CP — {val:,} <:Money_kyo:1528673432613552188> (P&L {pnl:+,})"
+            (company_lines if (my_code and code == my_code) else other_lines).append(line)
+
+        embed = discord.Embed(title="💼 Portfolio", color=discord.Color.blue())
+        if company_lines:
+            embed.add_field(name="🏢 Cổ Phiếu Công Ty Bạn", value="\n".join(company_lines), inline=False)
+        if other_lines:
+            embed.add_field(name="📈 Cổ Phiếu Khác", value=truncate_field_value("\n".join(other_lines)), inline=False)
         embed.set_footer(text=f"Tổng: {total:,} <:Money_kyo:1528673432613552188>")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -1029,10 +1073,10 @@ class ChungKhoanHubView(discord.ui.View):
 
     @discord.ui.button(label="Làm mới", emoji="🔄", style=discord.ButtonStyle.secondary, row=1)
     async def btn_refresh(self, interaction, button):
-        await interaction.response.edit_message(embed=build_ck_hub_embed(), view=self)
+        await interaction.response.edit_message(embed=build_ck_hub_embed(str(self.author.id)), view=self)
 
 
-def build_ck_hub_embed():
+def build_ck_hub_embed(user_id=None):
     embed = discord.Embed(
         title="📈 SÀN GIAO DỊCH CHỨNG KHOÁN",
         description=(
@@ -1041,6 +1085,38 @@ def build_ck_hub_embed():
         ),
         color=discord.Color.blue()
     )
+
+    if user_id:
+        my_code, my_comp = get_user_company_stock_code(user_id)
+        if my_code:
+            cur = get_stock_price(my_code)
+            chg = get_price_change_pct(my_code)
+            trend = "🟢" if chg > 0 else "🔴" if chg < 0 else "⚪"
+            embed.add_field(
+                name=f"🏢 CỔ PHIẾU CÔNG TY BẠN — {my_comp['name']} ({my_code})",
+                value=f"{trend} Giá: **{cur:,}** ({chg:+.2f}%)",
+                inline=False
+            )
+
+        ud = load_user(user_id)
+        stocks = ud.get("stocks", {})
+        if stocks:
+            lines, total_val = [], 0
+            for code, qty in stocks.items():
+                if qty <= 0:
+                    continue
+                sell_p = get_stock_sell_price(code, qty)
+                val = sell_p * qty
+                total_val += val
+                lines.append(f"**{code}** {qty:,}CP — {val:,} <:Money_kyo:1528673432613552188>")
+            embed.add_field(
+                name=f"💼 CỔ PHIẾU BẠN ĐANG SỞ HỮU (Tổng: {total_val:,} <:Money_kyo:1528673432613552188>)",
+                value=truncate_field_value("\n".join(lines)),
+                inline=False
+            )
+        else:
+            embed.add_field(name="💼 CỔ PHIẾU BẠN ĐANG SỞ HỮU", value="📭 Chưa có.", inline=False)
+
     for code in list(STANDARD_STOCKS.keys())[:6]:
         cur = get_stock_price(code)
         chg = get_price_change_pct(code)
@@ -1057,7 +1133,7 @@ async def chungkhoan(ctx):
     all_stocks = get_all_stocks()
     base_rate = get_base_interest_rate()
     embed = discord.Embed(
-        title="📈 SÀN GIAO DỊCH CHỨNG KHOÁN v3",
+        title="📈 SÀN GIAO DỊCH CHỨNG KHOÁN",
         description=(
             f"⏱️ Cập nhật mỗi **15 phút** | Tiếp theo: <t:{get_next_15min_timestamp()}:R>\n"
             f"💸 Phí: Spread **{STOCK_SPREAD*100:.2f}%** + Thuế bán **{STOCK_TAX_RATE*100:.1f}%** + **trượt giá theo khối lượng**\n"
@@ -1067,6 +1143,45 @@ async def chungkhoan(ctx):
         ),
         color=discord.Color.blue()
     )
+    user_id = str(ctx.author.id)
+
+    # 🏢 Cổ phiếu công ty của bạn (nếu đã IPO)
+    my_code, my_comp = get_user_company_stock_code(user_id)
+    if my_code:
+        cur = get_stock_price(my_code)
+        chg = get_price_change_pct(my_code)
+        trend = "🟢" if chg > 0 else "🔴" if chg < 0 else "⚪"
+        embed.add_field(
+            name=f"🏢 CỔ PHIẾU CÔNG TY BẠN — {my_comp['name']} ({my_code})",
+            value=(
+                f"{trend} Giá: **{cur:,}** ({chg:+.2f}%)\n"
+                f"Mua(100cp): {get_stock_buy_price(my_code,100):,} | Bán(100cp): {get_stock_sell_price(my_code,100):,}"
+            ),
+            inline=False
+        )
+
+    # 💼 Cổ phiếu bạn đang sở hữu
+    ud = load_user(user_id)
+    stocks = ud.get("stocks", {})
+    if stocks:
+        lines, total_val = [], 0
+        for code, qty in stocks.items():
+            if qty <= 0:
+                continue
+            sell_p = get_stock_sell_price(code, qty)
+            avg_buy = ud.get("stock_buy_prices", {}).get(code, sell_p)
+            val = sell_p * qty
+            pnl = (sell_p - avg_buy) * qty
+            total_val += val
+            pnl_icon = "🟢" if pnl >= 0 else "🔴"
+            lines.append(f"{pnl_icon} **{code}** {qty:,}CP — {val:,} <:Money_kyo:1528673432613552188> (P&L {pnl:+,})")
+        embed.add_field(
+            name=f"💼 CỔ PHIẾU BẠN ĐANG SỞ HỮU (Tổng: {total_val:,} <:Money_kyo:1528673432613552188>)",
+            value=truncate_field_value("\n".join(lines)),
+            inline=False
+        )
+    else:
+        embed.add_field(name="💼 CỔ PHIẾU BẠN ĐANG SỞ HỮU", value="📭 Chưa sở hữu cổ phiếu nào.", inline=False)
     sector_lines = []
     for sec, name in SECTOR_NAMES.items():
         idx = get_sector_index(sec)
