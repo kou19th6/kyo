@@ -14726,6 +14726,294 @@ async def bangdieukhien(ctx):
     await ctx.reply(embed=embed, view=QuickMenuView(ctx.author), mention_author=False)
 
 # =====================================================================
+# 🃏 BLACKJACK PVP — Đấu bạn bè / Ghép ngẫu nhiên, CƯỢC KHÔNG GIỚI HẠN
+# =====================================================================
+
+bj_matchmaking_queue = []   # [{"user_id":, "author":, "bet":, "channel":, "message":}]
+BJ_MATCH_TIMEOUT = 90       # giây chờ ghép trận trước khi tự hủy & hoàn tiền
+
+
+class PvPBlackjackView(discord.ui.View):
+    """
+    Bàn Blackjack 2 người. Mỗi người tự chơi lượt của mình (Hit/Stand/Double),
+    xong cả 2 lượt thì so với dealer chung để định thắng — người thắng ăn trọn pot.
+    """
+    def __init__(self, p1, p2, bet1, bet2, channel):
+        super().__init__(timeout=120)
+        self.players = [p1, p2]
+        self.bets = {p1.id: bet1, p2.id: bet2}
+        self.hands = {p1.id: [draw_card(), draw_card()], p2.id: [draw_card(), draw_card()]}
+        self.done = {p1.id: False, p2.id: False}
+        self.doubled = {p1.id: False, p2.id: False}
+        self.dealer_hand = [draw_card(), draw_card()]
+        self.turn_idx = 0
+        self.channel = channel
+        self.finished = False
+        self.message = None
+
+    @property
+    def current_player(self):
+        return self.players[self.turn_idx]
+
+    def make_embed(self, reveal_dealer=False):
+        embed = discord.Embed(title="🃏 BLACKJACK PVP — CƯỢC KHÔNG GIỚI HẠN", color=discord.Color.dark_green())
+        for p in self.players:
+            h = self.hands[p.id]
+            v = hand_value(h)
+            if p.id == self.current_player.id and not self.done[p.id] and not self.finished:
+                status = "👉 Đến lượt"
+            elif self.done[p.id]:
+                status = "✅ Xong"
+            else:
+                status = "⏳ Chờ"
+            embed.add_field(
+                name=f"{p.display_name} ({v}) {status}",
+                value=f"{format_hand(h)}\n💰 Cược: **{self.bets[p.id]:,} <:Money_kyo:1528673432613552188>**",
+                inline=False
+            )
+        dealer_display = format_hand(self.dealer_hand) if reveal_dealer else f"{self.dealer_hand[0]} | ?"
+        embed.add_field(name="🏦 Nhà Cái", value=dealer_display, inline=False)
+        return embed
+
+    async def advance_turn_or_finish(self, interaction):
+        if all(self.done.values()):
+            await self.resolve(interaction)
+            return
+        for i, p in enumerate(self.players):
+            if not self.done[p.id]:
+                self.turn_idx = i
+                break
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    async def resolve(self, interaction):
+        self.finished = True
+        self.clear_items()
+        while hand_value(self.dealer_hand) < 17:
+            self.dealer_hand.append(draw_card())
+        dealer_v = hand_value(self.dealer_hand)
+
+        scores = {}
+        for p in self.players:
+            v = hand_value(self.hands[p.id])
+            if v > 21:
+                scores[p.id] = -1          # bust luôn thua
+            elif dealer_v > 21 or v > dealer_v:
+                scores[p.id] = v           # thắng dealer
+            elif v == dealer_v:
+                scores[p.id] = v - 0.5     # push với dealer, xếp dưới người thắng thật
+            else:
+                scores[p.id] = -1          # thua dealer
+
+        p1, p2 = self.players
+        s1, s2 = scores[p1.id], scores[p2.id]
+        total_pot = self.bets[p1.id] + self.bets[p2.id]
+
+        embed = self.make_embed(reveal_dealer=True)
+
+        if s1 == s2:
+            for p in self.players:
+                ud = load_user(p.id); ud["money"] += self.bets[p.id]; save_user(p.id)
+            desc = "🤝 HÒA! Tiền cược được hoàn lại cho cả hai."
+            color = discord.Color.blue()
+        else:
+            winner, loser = (p1, p2) if s1 > s2 else (p2, p1)
+            ud = load_user(winner.id); ud["money"] += total_pot; save_user(winner.id)
+            add_history(winner.id, f"Thắng Blackjack PvP vs {loser.display_name} (+{total_pot:,})")
+            add_history(loser.id, f"Thua Blackjack PvP vs {winner.display_name} (-{self.bets[loser.id]:,})")
+            desc = f"🏆 **{winner.display_name}** thắng! Ẵm trọn **{total_pot:,} <:Money_kyo:1528673432613552188>**!"
+            color = discord.Color.gold()
+
+        embed.add_field(name="Kết quả", value=desc, inline=False)
+        embed.color = color
+        if interaction.response.is_done():
+            await interaction.message.edit(embed=embed, view=self)
+        else:
+            await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="🃏 Rút Bài", style=discord.ButtonStyle.primary)
+    async def hit(self, interaction: discord.Interaction, button):
+        if interaction.user.id != self.current_player.id or self.finished:
+            return await interaction.response.send_message("Chưa tới lượt bạn!", ephemeral=True)
+        p = self.current_player
+        self.hands[p.id].append(draw_card())
+        if hand_value(self.hands[p.id]) >= 21:
+            self.done[p.id] = True
+            await self.advance_turn_or_finish(interaction)
+        else:
+            await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="✋ Dừng", style=discord.ButtonStyle.secondary)
+    async def stand(self, interaction: discord.Interaction, button):
+        if interaction.user.id != self.current_player.id or self.finished:
+            return await interaction.response.send_message("Chưa tới lượt bạn!", ephemeral=True)
+        self.done[self.current_player.id] = True
+        await self.advance_turn_or_finish(interaction)
+
+    @discord.ui.button(label="💰 Gấp Đôi", style=discord.ButtonStyle.success)
+    async def double(self, interaction: discord.Interaction, button):
+        p = self.current_player
+        if interaction.user.id != p.id or self.finished or self.doubled[p.id]:
+            return await interaction.response.send_message("Không thể Double lúc này!", ephemeral=True)
+        if len(self.hands[p.id]) != 2:
+            return await interaction.response.send_message("Chỉ Double khi có đúng 2 bài!", ephemeral=True)
+        ud = load_user(p.id)
+        if ud.get("money", 0) < self.bets[p.id]:
+            return await interaction.response.send_message("Không đủ tiền để gấp đôi!", ephemeral=True)
+        ud["money"] -= self.bets[p.id]; save_user(p.id)
+        self.bets[p.id] *= 2
+        self.doubled[p.id] = True
+        self.hands[p.id].append(draw_card())
+        self.done[p.id] = True
+        await self.advance_turn_or_finish(interaction)
+
+    async def on_timeout(self):
+        if self.finished:
+            return
+        self.finished = True
+        for p in self.players:
+            if not self.done.get(p.id, True):
+                ud = load_user(p.id); ud["money"] += self.bets[p.id]; save_user(p.id)
+        try:
+            await self.message.edit(
+                embed=discord.Embed(description="⏳ Hết giờ! Tiền cược được hoàn lại cho người chưa xong lượt.", color=discord.Color.dark_grey()),
+                view=None
+            )
+        except Exception:
+            pass
+
+
+class BJDuelAccept(discord.ui.View):
+    def __init__(self, challenger, target, bet):
+        super().__init__(timeout=60)
+        self.challenger = challenger
+        self.target = target
+        self.bet = bet
+        self.resolved = False
+
+    @discord.ui.button(label="🃏 Nhận Kèo!", style=discord.ButtonStyle.danger)
+    async def accept(self, interaction, button):
+        if interaction.user.id != self.target.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        if self.resolved:
+            return
+        cd = load_user(self.challenger.id); td = load_user(self.target.id)
+        if cd.get("money", 0) < self.bet or td.get("money", 0) < self.bet:
+            return await interaction.response.send_message("Một trong hai người không đủ tiền!", ephemeral=True)
+        self.resolved = True
+        cd["money"] -= self.bet; td["money"] -= self.bet
+        save_user(self.challenger.id); save_user(self.target.id)
+
+        game = PvPBlackjackView(self.challenger, self.target, self.bet, self.bet, interaction.channel)
+        embed = game.make_embed()
+        embed.description = f"⚔️ {self.challenger.mention} 🆚 {self.target.mention} | Cược: **{self.bet:,} <:Money_kyo:1528673432613552188> mỗi người**"
+        await interaction.response.edit_message(embed=embed, view=game)
+        game.message = interaction.message
+        self.stop()
+
+    @discord.ui.button(label="🏳️ Từ Chối", style=discord.ButtonStyle.secondary)
+    async def decline(self, interaction, button):
+        if interaction.user.id != self.target.id:
+            return await interaction.response.send_message("Không phải bạn!", ephemeral=True)
+        await interaction.response.edit_message(
+            embed=discord.Embed(description="🏳️ Đã từ chối kèo Blackjack.", color=discord.Color.dark_grey()), view=None
+        )
+        self.stop()
+
+
+@bot.command(aliases=['bjfriend', 'bjvs', 'bjthachdau'])
+async def bjduel(ctx, member: discord.Member, amount: str):
+    """Thách đấu bạn bè chơi Blackjack PvP — cược không giới hạn mức tối đa."""
+    if member.bot or member.id == ctx.author.id:
+        return await ctx.reply("⚠️ Không thể tự đấu với bản thân hoặc bot!", mention_author=False)
+
+    ud = load_user(ctx.author.id)
+    try:
+        bet = ud.get("money", 0) if amount.lower() == "all" else int(amount)
+    except ValueError:
+        return await ctx.reply("⚠️ Nhập số tiền hoặc `all`!", mention_author=False)
+    if bet <= 0 or bet > ud.get("money", 0):
+        return await ctx.reply(f"⚠️ Bạn chỉ có **{ud.get('money',0):,} <:Money_kyo:1528673432613552188>**!", mention_author=False)
+
+    embed = discord.Embed(
+        title="🃏 THÁCH ĐẤU BLACKJACK PVP",
+        description=(
+            f"{ctx.author.mention} thách đấu {member.mention}!\n"
+            f"💰 Cược: **{bet:,} <:Money_kyo:1528673432613552188> mỗi người** (không giới hạn mức cược)"
+        ),
+        color=discord.Color.dark_green()
+    )
+    await ctx.send(f"{member.mention}", embed=embed, view=BJDuelAccept(ctx.author, member, bet))
+
+
+@bot.command(aliases=['bjqueue', 'bjrandom', 'bjonline'])
+async def bjmatch(ctx, amount: str):
+    """Vào hàng chờ để tự động ghép với người khác đang tìm trận Blackjack PvP. Cược không giới hạn."""
+    uid = ctx.author.id
+    if any(e["user_id"] == uid for e in bj_matchmaking_queue):
+        return await ctx.reply("⚠️ Bạn đang trong hàng chờ ghép trận rồi!", mention_author=False)
+
+    ud = load_user(uid)
+    try:
+        bet = ud.get("money", 0) if amount.lower() == "all" else int(amount)
+    except ValueError:
+        return await ctx.reply("⚠️ Nhập số tiền hoặc `all`!", mention_author=False)
+    if bet <= 0 or bet > ud.get("money", 0):
+        return await ctx.reply(f"⚠️ Bạn chỉ có **{ud.get('money',0):,} <:Money_kyo:1528673432613552188>**!", mention_author=False)
+
+    # Trừ tiền trước, giữ escrow trong hàng chờ để không double-spend khi ghép
+    ud["money"] -= bet
+    save_user(uid)
+
+    entry = {"user_id": uid, "author": ctx.author, "bet": bet, "channel": ctx.channel, "message": None}
+
+    opponent = next((e for e in bj_matchmaking_queue if e["user_id"] != uid), None)
+    if opponent:
+        bj_matchmaking_queue.remove(opponent)
+        p1, p2 = opponent["author"], ctx.author
+        bet1, bet2 = opponent["bet"], entry["bet"]
+
+        game = PvPBlackjackView(p1, p2, bet1, bet2, ctx.channel)
+        embed = game.make_embed()
+        embed.description = f"🎲 Đã ghép trận! {p1.mention} 🆚 {p2.mention} | Không giới hạn cược"
+        msg = await ctx.send(f"{p1.mention} {p2.mention}", embed=embed, view=game)
+        game.message = msg
+
+        if opponent.get("message"):
+            try:
+                await opponent["message"].edit(embed=discord.Embed(description=f"✅ Đã ghép trận với {p2.mention}!", color=discord.Color.green()))
+            except Exception:
+                pass
+        return
+
+    bj_matchmaking_queue.append(entry)
+    msg = await ctx.reply(
+        embed=discord.Embed(
+            description=(
+                f"🔎 Đang tìm đối thủ... Cược: **{bet:,} <:Money_kyo:1528673432613552188>**\n"
+                f"⏳ Tự hủy & hoàn tiền sau **{BJ_MATCH_TIMEOUT}s** nếu không ghép được."
+            ),
+            color=discord.Color.blue()
+        ), mention_author=False
+    )
+    entry["message"] = msg
+
+    async def timeout_check():
+        await asyncio.sleep(BJ_MATCH_TIMEOUT)
+        if entry in bj_matchmaking_queue:
+            bj_matchmaking_queue.remove(entry)
+            refund_ud = load_user(uid)
+            refund_ud["money"] += bet
+            save_user(uid)
+            try:
+                await entry["message"].edit(embed=discord.Embed(
+                    description="⏳ Không tìm được đối thủ, đã hoàn tiền cược.", color=discord.Color.dark_grey()
+                ))
+            except Exception:
+                pass
+
+    asyncio.create_task(timeout_check())
+
+# =====================================================================
 # KHỞI ĐỘNG
 # =====================================================================
 from monopoly import setup_monopoly
