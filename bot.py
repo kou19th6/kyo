@@ -7241,17 +7241,35 @@ def build_rank_embed(target, user_data):
         inline=False
     )
 
-    money_lines = f"<:Money_kyo:1528673432613552188> Ví: **{money:,}**\n🏦 NH: **{bank_bal:,}**"
+    # ── Tài sản: dồn hết vào 1 field full-width, không dùng inline nữa
+    # để tránh Discord xếp lệch cột trên màn hình điện thoại
+    money_lines = f"<:Money_kyo:1528673432613552188> Ví: **{money:,}**\n🏦 Ngân hàng: **{bank_bal:,}**"
     if stock_val > 0:
-        money_lines += f"\n📈 CK: **{stock_val:,}**"
+        money_lines += f"\n📈 Chứng khoán: **{stock_val:,}**"
     if kc > 0:
-        money_lines += f"\n💎 KC: **{kc:,}**"
-    embed.add_field(name="💳 Tài Sản", value=money_lines, inline=True)
+        money_lines += f"\n💎 Kim Cương: **{kc:,}**"
+    embed.add_field(name="💳 Tài Sản", value=money_lines, inline=False)
 
+    # ── Trạng thái hôn nhân
+    spouse_id = user_data.get("spouse")
+    if spouse_id:
+        spouse_user = bot.get_user(int(spouse_id))
+        if not spouse_user:
+            try:
+                spouse_user = ctx_guild_member_fallback = None
+            except Exception:
+                spouse_user = None
+        spouse_name = spouse_user.name if spouse_user else f"người dùng #{spouse_id[-4:]}"
+        marry_line = f"💍 Đã kết hôn với **{spouse_name}**"
+    else:
+        marry_line = "💔 Độc thân"
+    embed.add_field(name="❤️ Hôn Nhân", value=marry_line, inline=False)
+
+    # ── Thông tin khác
     misc_lines = f"🔥 Streak: **{user_data.get('streak',0)}** ngày\n💪 Gym: **Lv{user_data.get('gym_level',0)}**"
     if user_data.get("loan_amount", 0) > 0:
         misc_lines += f"\n⚠️ Nợ: **{user_data['loan_amount']:,}**"
-    embed.add_field(name="📋 Khác", value=misc_lines, inline=True)
+    embed.add_field(name="📋 Khác", value=misc_lines, inline=False)
 
     embed.add_field(name="\u200b", value=f"**💎 TỔNG TÀI SẢN: {total:,} <:Money_kyo:1528673432613552188>**", inline=False)
 
