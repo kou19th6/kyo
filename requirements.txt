@@ -2,5 +2,6 @@ discord.py
 Flask
 pymongo
 Pillow
+aiohttp
 google-genai
 google-generativeai
