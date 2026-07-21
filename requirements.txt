@@ -1,5 +1,6 @@
 discord.py
 Flask
 pymongo
+Pillow
 google-genai
 google-generativeai
