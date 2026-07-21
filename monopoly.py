@@ -59,6 +59,7 @@ from discord.ext import commands, tasks
 import random
 import asyncio
 import io
+import os
 import re
 from datetime import datetime
 
@@ -86,33 +87,33 @@ MONO_FREEPARK_IDX  = 20
 MONEY_EMOJI = "<:Money_kyo:1528673432613552188>"
 
 GROUP_COLORS = {
-    "brown":     (149, 90, 61),
-    "lightblue": (117, 200, 240),
-    "pink":      (232, 87, 165),
-    "orange":    (250, 140, 40),
-    "red":       (226, 63, 63),
-    "yellow":    (248, 202, 30),
-    "green":     (46, 160, 90),
-    "blue":      (40, 95, 210),
-    "railroad":  (60, 65, 78),
-    "utility":   (120, 130, 145),
+    "brown":     (136, 82, 59),
+    "lightblue": (98, 189, 237),
+    "pink":      (224, 74, 150),
+    "orange":    (245, 141, 51),
+    "red":       (224, 63, 63),
+    "yellow":    (240, 189, 32),
+    "green":     (42, 157, 97),
+    "blue":      (42, 99, 199),
+    "railroad":  (55, 61, 74),
+    "utility":   (108, 123, 140),
 }
 GROUP_VN_NAMES = {
     "brown": "Nâu", "lightblue": "Xanh Nhạt", "pink": "Hồng", "orange": "Cam",
     "red": "Đỏ", "yellow": "Vàng", "green": "Xanh Lá", "blue": "Xanh Dương",
     "railroad": "Nhà Ga", "utility": "Tiện Ích",
 }
-BOARD_BG = (246, 240, 224)
-CENTER_BG = (255, 253, 247)
+BOARD_BG = (238, 231, 214)
+CENTER_BG = (252, 249, 242)
 PLAYER_COLORS = [
-    (233, 69, 96), (52, 152, 219), (39, 174, 96),
-    (241, 178, 27), (155, 89, 182), (26, 188, 156),
+    (230, 66, 92), (44, 130, 201), (35, 158, 112),
+    (232, 160, 32), (146, 87, 199), (26, 173, 158),
 ]
 CORNER_STYLES = {
-    0:  {"bg": (46, 160, 90),  "label": "XUẤT PHÁT", "sub": "+200.000"},
-    10: {"bg": (235, 140, 52), "label": "NHÀ TÙ",     "sub": "Thăm quan"},
-    20: {"bg": (52, 143, 214), "label": "CÔNG VIÊN",  "sub": "Tự Do"},
-    30: {"bg": (214, 58, 58),  "label": "ĐI TÙ",      "sub": "Bị Bắt!"},
+    0:  {"bg": (35, 138, 82),  "label": "XUẤT PHÁT", "sub": "+200.000"},
+    10: {"bg": (222, 128, 45), "label": "NHÀ TÙ",     "sub": "Thăm quan"},
+    20: {"bg": (44, 122, 194), "label": "CÔNG VIÊN",  "sub": "Tự Do"},
+    30: {"bg": (196, 51, 51),  "label": "ĐI TÙ",      "sub": "Bị Bắt!"},
 }
 
 _AVATAR_CACHE = {}
@@ -228,32 +229,70 @@ CHANCE_CARDS = [
 # =====================================================================
 _FONT_CACHE = {}
 
-# Poppins (nếu máy có font Google Fonts) cho chữ đẹp/tròn/dễ đọc hơn,
-# tự động rơi về DejaVu Sans (luôn có sẵn) nếu không tìm thấy.
-_POPPINS_MAP = {
-    "Regular": "/usr/share/fonts/truetype/google-fonts/Poppins-Regular.ttf",
-    "Medium": "/usr/share/fonts/truetype/google-fonts/Poppins-Medium.ttf",
-    "SemiBold": "/usr/share/fonts/truetype/google-fonts/Poppins-SemiBold.ttf",
-    "Bold": "/usr/share/fonts/truetype/google-fonts/Poppins-Bold.ttf",
+# 🇻🇳 FONT ĐI KÈM MODULE — không phụ thuộc font cài sẵn trên server nữa.
+# Trước đây module tìm font trong /usr/share/fonts/... — nếu server không
+# cài Poppins/Noto (rất hay gặp trên VPS trống), Pillow sẽ âm thầm rơi về
+# ImageFont.load_default(), một font bitmap CHỈ CÓ KÝ TỰ ASCII → mọi chữ có
+# dấu tiếng Việt (ư, ơ, đ, ệ...) bị vẽ thành ô vuông/lỗi như trong ảnh lỗi.
+# Cách khắc phục triệt để: ĐÓNG GÓI SẴN font hỗ trợ đầy đủ tiếng Việt ngay
+# cạnh file này, nên chạy trên bất kỳ server nào cũng ra chữ đúng 100%.
+#
+# → Nhớ copy cả thư mục "mono_fonts/" cùng chỗ với monopoly.py khi deploy!
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mono_fonts")
+
+# Be Vietnam Pro — font chữ hỗ trợ tiếng Việt đầy đủ dấu, rõ ràng, dễ đọc
+# ở cỡ nhỏ (dùng cho tên ô, giá tiền, bảng thông tin...).
+_BUNDLED_FONTS = {
+    "Regular":  os.path.join(FONT_DIR, "BeVietnamPro-Regular.ttf"),
+    "Medium":   os.path.join(FONT_DIR, "BeVietnamPro-Medium.ttf"),
+    "SemiBold": os.path.join(FONT_DIR, "BeVietnamPro-SemiBold.ttf"),
+    "Bold":     os.path.join(FONT_DIR, "BeVietnamPro-Bold.ttf"),
+    "ExtraBold": os.path.join(FONT_DIR, "BeVietnamPro-ExtraBold.ttf"),
+    # Font chữ to, có cá tính, chỉ dùng riêng cho logo "CỜ TỶ PHÚ" ở giữa bàn.
+    "Title":    os.path.join(FONT_DIR, "YoungTypeface-BoldDisplay.otf"),
 }
-_DEJAVU_MAP = {
-    "Regular": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "Medium": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "SemiBold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    "Bold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+
+# Nếu vì lý do gì đó thư mục mono_fonts/ bị thiếu, vẫn cố tìm font hệ thống
+# hỗ trợ tiếng Việt trước khi chấp nhận rơi về font mặc định (méo chữ).
+_SYSTEM_FALLBACKS = {
+    "Regular": [
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ],
+    "Medium": [
+        "/usr/share/fonts/truetype/noto/NotoSans-Medium.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ],
+    "SemiBold": [
+        "/usr/share/fonts/truetype/noto/NotoSans-SemiBold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ],
+    "Bold": [
+        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ],
+    "ExtraBold": [
+        "/usr/share/fonts/truetype/noto/NotoSans-ExtraBold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ],
+    "Title": [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ],
 }
+
+_font_warned = False
 
 
 def _load_font(size, weight="Regular"):
+    global _font_warned
     size = max(int(size), 8)
     key = (size, weight)
     if key in _FONT_CACHE:
         return _FONT_CACHE[key]
-    candidates = [
-        _POPPINS_MAP.get(weight, _POPPINS_MAP["Regular"]),
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if weight in ("Bold", "SemiBold") else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        _DEJAVU_MAP.get(weight, _DEJAVU_MAP["Regular"]),
-    ]
+
+    candidates = [_BUNDLED_FONTS.get(weight, _BUNDLED_FONTS["Regular"])]
+    candidates += _SYSTEM_FALLBACKS.get(weight, _SYSTEM_FALLBACKS["Regular"])
+
     font = None
     for path in candidates:
         try:
@@ -263,6 +302,13 @@ def _load_font(size, weight="Regular"):
             continue
     if font is None:
         font = ImageFont.load_default()
+        if not _font_warned:
+            _font_warned = True
+            print(
+                "[MONO] ⚠️ Không tìm thấy font trong 'mono_fonts/' cạnh monopoly.py! "
+                "Chữ tiếng Việt sẽ bị lỗi (ô vuông). Hãy copy thư mục mono_fonts/ "
+                "đi kèm cùng chỗ với monopoly.py."
+            )
     _FONT_CACHE[key] = font
     return font
 
@@ -372,7 +418,7 @@ def render_board_image(game, avatars=None, highlight_id=None):
     f_price = _load_font(CELL * 0.11, "Bold")
     f_corner_label = _load_font(CELL * 0.185, "Bold")
     f_corner_sub = _load_font(CELL * 0.115, "Medium")
-    f_title = _load_font(CELL * 0.95, "Bold")
+    f_title = _load_font(CELL * 0.95, "Title")
     f_tagline = _load_font(CELL * 0.16, "Medium")
     f_legend_name = _load_font(CELL * 0.155, "SemiBold")
     f_legend_money = _load_font(CELL * 0.13, "Medium")
