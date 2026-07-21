@@ -3,7 +3,9 @@
 # =====================================================================
 # CÁCH CÀI ĐẶT:
 # 1) Đặt file này (monopoly.py) cùng thư mục với bot.py.
-# 2) Trong bot.py, ngay sau đoạn bạn setup custom_commands (chỗ có dòng
+# 2) Cài thêm thư viện vẽ ảnh (bắt buộc cho bản này):
+#        pip install Pillow
+# 3) Trong bot.py, ngay sau đoạn bạn setup custom_commands (chỗ có dòng
 #    `from custom_commands import setup_custom_commands` /
 #    `setup_custom_commands(bot, db)`), thêm 2 dòng:
 #
@@ -25,13 +27,27 @@
 # - 2 chế độ: `pvp` (chơi với người) và `bot` (chơi với máy — AI tự roll,
 #   tự mua đất, tự xây nhà mỗi khi tới lượt).
 # - Hỗ trợ nhiều người tham gia cùng lúc (tối đa 6 người/bàn).
+# - 🖼️ MỚI: Bàn cờ được VẼ THÀNH ẢNH giống bàn cờ ngoài đời (hình vuông,
+#   40 ô quanh viền, quân cờ màu cho từng người). Sau mỗi lượt đi:
+#     • Ảnh bàn cờ CHUNG được cập nhật trong tin nhắn ở kênh.
+#     • Người vừa đi được gửi THÊM 1 ảnh bàn cờ RIÊNG (ephemeral, chỉ họ
+#       thấy) kèm thông tin vị trí/túi tiền của chính họ cho dễ theo dõi.
 # =====================================================================
 
 import discord
 from discord.ext import commands, tasks
 import random
 import asyncio
+import io
+import re
 from datetime import datetime
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    PIL_OK = True
+except ImportError:
+    PIL_OK = False
+    print("[MONO] ⚠️ Chưa cài Pillow! Chạy: pip install Pillow  (ảnh bàn cờ sẽ không hoạt động)")
 
 MONO_START_MONEY   = 1_500_000
 MONO_GO_SALARY     = 200_000
@@ -42,6 +58,39 @@ MONO_GOTOJAIL_IDX  = 30
 MONO_FREEPARK_IDX  = 20
 
 MONEY_EMOJI = "<:Money_kyo:1528673432613552188>"
+
+GROUP_COLORS = {
+    "brown":     (139, 69, 19),
+    "lightblue": (135, 206, 235),
+    "pink":      (255, 105, 180),
+    "orange":    (255, 165, 0),
+    "red":       (220, 20, 60),
+    "yellow":    (255, 199, 0),
+    "green":     (34, 139, 34),
+    "blue":      (30, 60, 200),
+    "railroad":  (60, 60, 60),
+    "utility":   (120, 120, 120),
+}
+PLAYER_COLORS = [
+    (231, 76, 60), (52, 152, 219), (46, 204, 113),
+    (241, 196, 15), (155, 89, 182), (26, 188, 156),
+]
+
+EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F000-\U0001FFFF"
+    "\U00002600-\U000027BF"
+    "\U0001F1E6-\U0001F1FF"
+    "\U00002190-\U000021FF"
+    "\U0000FE00-\U0000FE0F"
+    "\U00002B00-\U00002BFF"
+    "]+",
+    flags=re.UNICODE,
+)
+
+
+def _strip_emoji(s):
+    return EMOJI_PATTERN.sub("", s).strip()
 
 
 def _m(n):
@@ -120,6 +169,193 @@ CHANCE_CARDS = [
     {"text": "🎫 Nhận thẻ **Miễn Tù** — giữ để dùng khi cần!", "type": "get_out_card"},
     {"text": "🔧 Bảo trì nhà cửa! Trả **{v}** cho mỗi căn nhà, **x3** cho mỗi khách sạn bạn sở hữu", "type": "house_repair", "value": 20_000},
 ]
+
+
+# =====================================================================
+# 🖼️ VẼ ẢNH BÀN CỜ (giống bàn cờ Tỷ Phú ngoài đời — hình vuông, 40 ô quanh viền)
+# =====================================================================
+_FONT_CACHE = {}
+
+
+def _load_font(size, bold=False):
+    key = (size, bold)
+    if key in _FONT_CACHE:
+        return _FONT_CACHE[key]
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf",
+    ]
+    font = None
+    for path in candidates:
+        try:
+            font = ImageFont.truetype(path, size)
+            break
+        except Exception:
+            continue
+    if font is None:
+        font = ImageFont.load_default()
+    _FONT_CACHE[key] = font
+    return font
+
+
+def _cell_rect(i, cell):
+    """Trả về (x0,y0,x1,y1) của ô thứ i trên lưới 11x11 (giống layout bàn cờ Tỷ Phú thật)."""
+    if i <= 10:
+        col, row = 10 - i, 10
+    elif i <= 20:
+        col, row = 0, 20 - i
+    elif i <= 30:
+        col, row = i - 20, 0
+    else:
+        col, row = 10, i - 30
+    x0, y0 = col * cell, row * cell
+    return x0, y0, x0 + cell, y0 + cell
+
+
+def _wrap(text, max_chars=9):
+    words = text.split(" ")
+    lines, cur = [], ""
+    for w in words:
+        trial = (cur + " " + w).strip()
+        if len(trial) <= max_chars:
+            cur = trial
+        else:
+            if cur:
+                lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines[:3]
+
+
+def render_board_image(game, highlight_id=None):
+    """Vẽ toàn bộ bàn cờ ra 1 ảnh PNG (BytesIO). highlight_id: id người chơi cần
+    khoanh vùng nổi bật (dùng cho ảnh riêng gửi ephemeral)."""
+    if not PIL_OK:
+        return None
+
+    SIZE = 950
+    CELL = SIZE // 11
+    img = Image.new("RGB", (SIZE, SIZE), (238, 246, 236))
+    draw = ImageDraw.Draw(img)
+    f_tiny = _load_font(11)
+    f_small = _load_font(12, bold=True)
+    f_title = _load_font(20, bold=True)
+    f_mid = _load_font(13, bold=True)
+
+    # tâm bàn cờ
+    draw.rectangle([CELL, CELL, SIZE - CELL, SIZE - CELL], fill=(223, 240, 216), outline=(40, 40, 40), width=3)
+    draw.text((SIZE // 2, SIZE // 2 - 10), "CỜ TỶ PHÚ", font=f_title, fill=(44, 62, 80), anchor="mm")
+
+    cur_idx = game["turn_index"] % len(game["players"]) if game.get("players") else -1
+    cur_id = game["players"][cur_idx]["id"] if cur_idx >= 0 else None
+
+    for i in range(40):
+        tile = BOARD[i]
+        x0, y0, x1, y1 = _cell_rect(i, CELL)
+        is_corner = i in (0, 10, 20, 30)
+
+        bg = (255, 255, 255)
+        draw.rectangle([x0, y0, x1, y1], outline=(30, 30, 30), width=1, fill=bg)
+
+        band_color = None
+        if tile["type"] in OWNABLE_TYPES:
+            band_color = GROUP_COLORS.get(tile["group"], (150, 150, 150))
+        elif tile["type"] == "go":
+            band_color = (198, 40, 40)
+        elif tile["type"] == "jail":
+            band_color = (100, 100, 100)
+        elif tile["type"] == "free_parking":
+            band_color = (39, 174, 96)
+        elif tile["type"] == "go_to_jail":
+            band_color = (198, 40, 40)
+        elif tile["type"] == "chance":
+            band_color = (243, 156, 18)
+        elif tile["type"] == "tax":
+            band_color = (142, 68, 173)
+
+        if band_color and not is_corner:
+            band_h = 16 if (i <= 10 or (21 <= i <= 30)) else None
+            # dải màu luôn nằm ở mép hướng vào tâm bàn cờ
+            if i <= 10:  # hàng dưới -> dải màu ở trên ô
+                draw.rectangle([x0, y0, x1, y0 + 14], fill=band_color)
+            elif i <= 20:  # cột trái -> dải màu ở bên phải ô
+                draw.rectangle([x1 - 14, y0, x1, y1], fill=band_color)
+            elif i <= 30:  # hàng trên -> dải màu ở dưới ô
+                draw.rectangle([x0, y1 - 14, x1, y1], fill=band_color)
+            else:  # cột phải -> dải màu ở bên trái ô
+                draw.rectangle([x0, y0, x0 + 14, y1], fill=band_color)
+        elif is_corner and band_color:
+            draw.rectangle([x0, y0, x1, y1], fill=tuple(min(255, c + 60) for c in band_color))
+
+        # tên ô
+        clean_name = _strip_emoji(tile["name"]) or tile["name"]
+        lines = _wrap(clean_name, 8 if not is_corner else 10)
+        ty = (y0 + y1) // 2 - (len(lines) * 6)
+        if tile["type"] in OWNABLE_TYPES and not is_corner:
+            ty = y0 + 24
+        for ln in lines:
+            draw.text(((x0 + x1) // 2, ty), ln, font=f_tiny, fill=(20, 20, 20), anchor="mm")
+            ty += 11
+
+        # giá
+        if tile["type"] in OWNABLE_TYPES:
+            draw.text(((x0 + x1) // 2, y1 - 16), f"{tile['price']//1000}k", font=f_tiny, fill=(60, 60, 60), anchor="mm")
+
+        # chủ sở hữu + nhà/khách sạn
+        prop = game.get("properties", {}).get(str(i))
+        if prop and prop.get("owner"):
+            owner_p = next((p for p in game["players"] if p["id"] == prop["owner"]), None)
+            if owner_p:
+                oc_idx = game["players"].index(owner_p) % len(PLAYER_COLORS)
+                oc = PLAYER_COLORS[oc_idx]
+                draw.rectangle([x0 + 2, y0 + 2, x0 + 10, y0 + 10], fill=oc, outline=(0, 0, 0))
+                houses = prop.get("houses", 0)
+                if houses == 5:
+                    draw.rectangle([x1 - 26, y1 - 30, x1 - 4, y1 - 20], fill=(200, 30, 30))
+                    draw.text((x1 - 15, y1 - 25), "H", font=f_tiny, fill=(255, 255, 255), anchor="mm")
+                elif houses > 0:
+                    for h in range(houses):
+                        hx = x1 - 8 - h * 8
+                        draw.rectangle([hx - 3, y1 - 28, hx + 3, y1 - 22], fill=(0, 150, 0))
+
+        # viền đỏ cho ô đang có lượt hiện tại (tuỳ chọn nhẹ, chỉ viền quân cờ ở dưới)
+
+    # quân cờ người chơi
+    for idx, p in enumerate(game.get("players", [])):
+        if p.get("bankrupt"):
+            continue
+        x0, y0, x1, y1 = _cell_rect(p["position"], CELL)
+        same = [pp for pp in game["players"] if not pp.get("bankrupt") and pp["position"] == p["position"]]
+        n = len(same)
+        pos_in_group = same.index(p)
+        cx = (x0 + x1) // 2
+        cy = (y0 + y1) // 2
+        if n > 1:
+            spread = min(CELL // 2 - 12, 16)
+            cx += int(((pos_in_group / max(n - 1, 1)) - 0.5) * 2 * spread)
+        color = PLAYER_COLORS[idx % len(PLAYER_COLORS)]
+        r = 11 if p["id"] == cur_id else 9
+        outline_c = (255, 215, 0) if p["id"] == cur_id else (0, 0, 0)
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color, outline=outline_c, width=2 if p["id"] == cur_id else 1)
+        if highlight_id and p["id"] == highlight_id:
+            draw.ellipse([cx - r - 4, cy - r - 4, cx + r + 4, cy + r + 4], outline=(255, 0, 0), width=2)
+
+    # bảng chú thích người chơi ở giữa bàn cờ
+    legend_y = SIZE // 2 + 20
+    for idx, p in enumerate(game.get("players", [])):
+        color = PLAYER_COLORS[idx % len(PLAYER_COLORS)]
+        lx = SIZE // 2 - 140 + (idx % 2) * 150
+        ly = legend_y + (idx // 2) * 24
+        draw.ellipse([lx, ly, lx + 14, ly + 14], fill=color, outline=(0, 0, 0))
+        status = "💀" if p.get("bankrupt") else _m(p["money"])
+        draw.text((lx + 20, ly + 7), f"{p['name'][:12]}: {status}", font=f_mid, fill=(30, 30, 30), anchor="lm")
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
 
 
 # =====================================================================
@@ -446,18 +682,69 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
         embed.set_footer(text=f"Bàn cờ vĩnh viễn tại kênh này | Chế độ: {'🤖 Bot' if game['mode']=='bot' else '👥 PvP'}")
         return embed
 
+    # ── HELPERS ẢNH BÀN CỜ (chung + riêng) ────────────────────────────
+    def _board_file(game, highlight_id=None, filename="board.png"):
+        if not PIL_OK:
+            return None
+        buf = render_board_image(game, highlight_id=highlight_id)
+        if buf is None:
+            return None
+        return discord.File(buf, filename=filename)
+
+    async def edit_with_board(interaction, game, view):
+        """Cập nhật tin nhắn CHUNG trong kênh kèm ảnh bàn cờ mới nhất."""
+        embed = build_game_embed(game)
+        file = _board_file(game, filename="board.png")
+        if file:
+            embed.set_image(url="attachment://board.png")
+            await interaction.response.edit_message(embed=embed, view=view, attachments=[file])
+        else:
+            await interaction.response.edit_message(embed=embed, view=view)
+
+    async def send_personal_board(interaction, game, player):
+        """Gửi ẢNH BÀN CỜ RIÊNG (ephemeral) cho người vừa đi, kèm thông tin của họ."""
+        if player.get("is_bot"):
+            return
+        file = _board_file(game, highlight_id=player["id"], filename="board_private.png")
+        if not file:
+            return
+        embed = discord.Embed(
+            title=f"🎲 Bàn cờ của bạn — {player['name']}",
+            color=discord.Color.blurple(),
+        )
+        embed.add_field(name="📍 Vị trí", value=BOARD[player['position']]['name'], inline=True)
+        embed.add_field(name="💰 Túi tiền", value=f"{_m(player['money'])}{MONEY_EMOJI}", inline=True)
+        n_props = sum(1 for v in game["properties"].values() if v.get("owner") == player["id"])
+        embed.add_field(name="🏠 Số đất sở hữu", value=str(n_props), inline=True)
+        embed.set_image(url="attachment://board_private.png")
+        try:
+            await interaction.followup.send(embed=embed, file=file, ephemeral=True)
+        except Exception as e:
+            print(f"[MONO] send_personal_board error: {e}")
+
     async def refresh_message(channel, game):
         embed = build_game_embed(game) if game["status"] != "waiting" else build_lobby_embed(game)
         view = MonopolyLobbyView() if game["status"] == "waiting" else MonopolyGameView()
+        file = None
+        if game["status"] != "waiting":
+            file = _board_file(game, filename="board.png")
+            if file:
+                embed.set_image(url="attachment://board.png")
         try:
             if game.get("message_id"):
                 try:
                     msg = await channel.fetch_message(int(game["message_id"]))
-                    await msg.edit(embed=embed, view=view)
+                    if file:
+                        await msg.edit(embed=embed, view=view, attachments=[file])
+                    else:
+                        await msg.edit(embed=embed, view=view)
                     return
                 except (discord.NotFound, discord.HTTPException):
                     pass
-            msg = await channel.send(embed=embed, view=view)
+            if file:
+                msg = await channel.send(embed=embed, view=view, file=file)
+            else:
+                msg = await channel.send(embed=embed, view=view)
             game["message_id"] = msg.id
             save_game(game)
         except Exception as e:
@@ -606,7 +893,7 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                 game["status"] = "playing"
                 add_log(game, "🚦 Ván chơi bắt đầu! Chúc may mắn!")
                 save_game(game)
-                await interaction.response.edit_message(embed=build_game_embed(game), view=MonopolyGameView())
+                await edit_with_board(interaction, game, MonopolyGameView())
                 await maybe_trigger_bot_turn(interaction.channel, game)
 
         @discord.ui.button(label="Hủy Bàn", emoji="🗑️", style=discord.ButtonStyle.danger, custom_id="mono_cancel_lobby")
@@ -648,7 +935,8 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                 do_roll(game, cur)
                 check_winner(game)
                 save_game(game)
-                await interaction.response.edit_message(embed=build_game_embed(game), view=self)
+                await edit_with_board(interaction, game, self)
+                await send_personal_board(interaction, game, cur)
                 if game["status"] == "playing":
                     await maybe_trigger_bot_turn(interaction.channel, game)
 
@@ -664,7 +952,7 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                 if not do_buy(game, cur):
                     return await interaction.response.send_message("⚠️ Không có gì để mua hoặc không đủ tiền!", ephemeral=True)
                 save_game(game)
-                await interaction.response.edit_message(embed=build_game_embed(game), view=self)
+                await edit_with_board(interaction, game, self)
 
         @discord.ui.button(label="Trả Tù", emoji="💳", style=discord.ButtonStyle.secondary, custom_id="mono_pay_jail", row=0)
         async def btn_pay_jail(self, interaction: discord.Interaction, button):
@@ -684,7 +972,7 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                 cur["jail_turns"] = 0
                 add_log(game, f"💳 **{cur['name']}** trả {_m(MONO_JAIL_FINE)}{MONEY_EMOJI} ra tù.")
                 save_game(game)
-                await interaction.response.edit_message(embed=build_game_embed(game), view=self)
+                await edit_with_board(interaction, game, self)
 
         @discord.ui.button(label="Xây Nhà", emoji="🏠", style=discord.ButtonStyle.success, custom_id="mono_build", row=1)
         async def btn_build(self, interaction: discord.Interaction, button):
@@ -730,6 +1018,7 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                     add_log(g2, f"🏠 **{p2['name']}** xây nhà tại **{tile['name']}** (cấp {prop['houses']})")
                     save_game(g2)
                     await inter2.response.send_message(f"✅ Đã xây nhà tại **{tile['name']}**!", ephemeral=True)
+                    await refresh_message(inter2.channel, g2)
 
             select.callback = on_select
             v = discord.ui.View(timeout=60)
@@ -750,7 +1039,7 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                 if not check_winner(game):
                     advance_turn(game)
                 save_game(game)
-                await interaction.response.edit_message(embed=build_game_embed(game), view=self)
+                await edit_with_board(interaction, game, self)
                 if game["status"] == "playing":
                     await maybe_trigger_bot_turn(interaction.channel, game)
 
@@ -782,7 +1071,7 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                     if not check_winner(game) and is_cur:
                         advance_turn(game)
                     save_game(game)
-                    await interaction.response.edit_message(embed=build_game_embed(game), view=self)
+                    await edit_with_board(interaction, game, self)
                     if game["status"] == "playing":
                         await maybe_trigger_bot_turn(interaction.channel, game)
 
@@ -795,7 +1084,7 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                 new_g = new_game(interaction.channel.id, interaction.guild.id, interaction.user.id, interaction.user.display_name, game["mode"])
                 new_g["message_id"] = game.get("message_id")
                 save_game(new_g)
-                await interaction.response.edit_message(embed=build_lobby_embed(new_g), view=MonopolyLobbyView())
+                await interaction.response.edit_message(embed=build_lobby_embed(new_g), view=MonopolyLobbyView(), attachments=[])
 
     async def maybe_trigger_bot_turn(channel, game):
         """Nếu tới lượt bot, cho bot chơi ngay (loop nhỏ, không cần đợi task nền)."""
@@ -841,7 +1130,13 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
         if game["status"] == "waiting":
             await ctx.reply(embed=build_lobby_embed(game), view=MonopolyLobbyView(), mention_author=False)
         else:
-            await ctx.reply(embed=build_game_embed(game), view=MonopolyGameView(), mention_author=False)
+            embed = build_game_embed(game)
+            file = _board_file(game, filename="board.png")
+            if file:
+                embed.set_image(url="attachment://board.png")
+                await ctx.reply(embed=embed, view=MonopolyGameView(), file=file, mention_author=False)
+            else:
+                await ctx.reply(embed=embed, view=MonopolyGameView(), mention_author=False)
 
     @tybphu.command(name="tao", aliases=["create", "new"])
     async def tybphu_tao(ctx, mode: str = "pvp"):
@@ -886,6 +1181,8 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                 "🚨 Dính \"Đi Tù\" hoặc đổ đôi 3 lần liên tiếp → vào tù. Ra tù bằng cách trả 50.000, đổ đôi, hoặc dùng thẻ Miễn Tù.\n"
                 "💀 Hết tiền (âm) → phá sản, loại khỏi ván. Người cuối cùng còn trụ lại → **THẮNG CUỘC**!\n\n"
                 "🤖 Chế độ đấu Bot: máy tự động roll/mua/xây khi tới lượt.\n"
+                "🖼️ Sau mỗi lượt đi, bàn cờ CHUNG trong kênh sẽ cập nhật ảnh, và bạn còn được gửi RIÊNG "
+                "1 ảnh bàn cờ (chỉ mình bạn thấy) khoanh vùng đỏ đúng vị trí quân cờ của bạn.\n"
                 "♾️ Bàn cờ không bao giờ hết hạn — chơi xong bấm **Chơi Lại** để bắt đầu ván mới ngay tại đây!"
             ),
             color=discord.Color.blue()
