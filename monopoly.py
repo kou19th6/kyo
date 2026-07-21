@@ -4,7 +4,12 @@
 # CÁCH CÀI ĐẶT:
 # 1) Đặt file này (monopoly.py) cùng thư mục với bot.py.
 # 2) Cài thêm thư viện vẽ ảnh (bắt buộc cho bản này):
-#        pip install Pillow
+#        pip install Pillow aiohttp
+#    (Nếu muốn đẹp hơn nữa, cài thêm font Poppins:
+#        apt-get install fonts-google-noto fonts-open-sans
+#     Module tự động dùng Poppins nếu máy có sẵn, nếu không sẽ dùng
+#     DejaVu Sans (luôn có sẵn trên hầu hết server Linux) nên KHÔNG BẮT
+#     BUỘC phải cài thêm gì, mọi thứ vẫn chạy đẹp bằng font mặc định.)
 # 3) Trong bot.py, ngay sau đoạn bạn setup custom_commands (chỗ có dòng
 #    `from custom_commands import setup_custom_commands` /
 #    `setup_custom_commands(bot, db)`), thêm 2 dòng:
@@ -15,23 +20,38 @@
 #    (load_user / save_user / add_history là các hàm ĐÃ CÓ SẴN trong bot.py
 #     của bạn — truyền vào để khi thắng ván Cờ Tỷ Phú, người chơi được
 #     thưởng thêm <:Money_kyo:1528673432613552188> vào ví thật. Nếu không
-#     truyền, minigame vẫn chạy bình thường, chỉ là không có thưởng thật.)
+#     truyền, minigame vẫn chạy bình thường, chỉ là không có thưởng thật.
+#     ⚠️ LƯU Ý: nếu hàm save_user(user_id, data) của bạn có tham số khác,
+#     hãy sửa lại đúng 1 dòng trong hàm check_winner() bên dưới, tìm
+#     chỗ có ghi "SỬA DÒNG NÀY CHO KHỚP VỚI save_user CỦA BẠN".)
 #
-# ĐẶC ĐIỂM:
+# ĐẶC ĐIỂM (bản nâng cấp giao diện + tính năng):
 # - Mỗi kênh Discord có TỐI ĐA 1 bàn cờ đang hoạt động (lưu trong Mongo,
 #   collection "monopoly_games", key = channel_id).
 # - Bàn cờ KHÔNG BAO GIỜ HẾT HẠN: dùng discord.ui.View(timeout=None) với
-#   custom_id CỐ ĐỊNH (không nhúng ID vào custom_id), đăng ký 1 lần duy
-#   nhất bằng bot.add_view() lúc bot khởi động (on_ready). Nhờ vậy nút
-#   bấm hoạt động vĩnh viễn, kể cả sau khi bot restart, khỏi cần gia hạn.
-# - 2 chế độ: `pvp` (chơi với người) và `bot` (chơi với máy — AI tự roll,
-#   tự mua đất, tự xây nhà mỗi khi tới lượt).
-# - Hỗ trợ nhiều người tham gia cùng lúc (tối đa 6 người/bàn).
-# - 🖼️ MỚI: Bàn cờ được VẼ THÀNH ẢNH giống bàn cờ ngoài đời (hình vuông,
-#   40 ô quanh viền, quân cờ màu cho từng người). Sau mỗi lượt đi:
-#     • Ảnh bàn cờ CHUNG được cập nhật trong tin nhắn ở kênh.
-#     • Người vừa đi được gửi THÊM 1 ảnh bàn cờ RIÊNG (ephemeral, chỉ họ
-#       thấy) kèm thông tin vị trí/túi tiền của chính họ cho dễ theo dõi.
+#   custom_id CỐ ĐỊNH, đăng ký 1 lần duy nhất bằng bot.add_view() lúc
+#   bot khởi động (on_ready). Nút bấm hoạt động vĩnh viễn kể cả sau khi
+#   bot restart.
+# - 2 chế độ: `pvp` (chơi với người) và `bot` (chơi với máy).
+# - Hỗ trợ tối đa 6 người/bàn.
+# - 🖼️ BÀN CỜ ĐƯỢC VẼ LẠI HOÀN TOÀN (v2):
+#     • Layout mỗi ô: dải màu (nhóm màu / loại ô) ở trên, tên ô được
+#       tự động NGẮT DÒNG & THU NHỎ FONT vừa khít ô (không còn tràn,
+#       không còn icon đè chữ), giá tiền rõ ràng ở góc dưới.
+#     • Icon từng loại ô (❓ cơ hội, $ thuế, tàu, điện, nước) được vẽ
+#       gọn trong dải màu, không chồng lên tên ô.
+#     • Khu trung tâm hiển thị danh sách người chơi dạng THẺ BÀI đẹp,
+#       có avatar, tiền, trạng thái tù/lượt hiện tại.
+#     • Nhà/khách sạn hiển thị icon nhỏ gọn ở góc ô, viền màu quanh ô
+#       thể hiện chủ sở hữu.
+# - 🔎 TÍNH NĂNG MỚI — "Vị Trí Của Tôi": bấm nút 📍 bất cứ lúc nào để
+#   xem ảnh ZOOM cận cảnh vào đúng ô bạn đang đứng, kèm thông tin chi
+#   tiết (giá, tiền thuê theo số nhà, chủ sở hữu, số tiền bạn có...).
+# - 📋 TÍNH NĂNG MỚI — "Tài Sản Của Tôi": xem danh sách toàn bộ đất bạn
+#   đang sở hữu, số nhà đã xây, tiền thuê hiện tại mỗi ô, tổng giá trị.
+# - 🏆 TÍNH NĂNG MỚI — "Bảng Xếp Hạng": so tài sản ròng (tiền mặt + giá
+#   trị bất động sản) giữa tất cả người chơi trong bàn.
+# - Vẫn giữ ảnh bàn cờ RIÊNG (ephemeral) gửi cho người vừa đi mỗi lượt.
 # =====================================================================
 
 import discord
@@ -66,28 +86,33 @@ MONO_FREEPARK_IDX  = 20
 MONEY_EMOJI = "<:Money_kyo:1528673432613552188>"
 
 GROUP_COLORS = {
-    "brown":     (150, 105, 60),
-    "lightblue": (133, 208, 245),
-    "pink":      (238, 96, 176),
-    "orange":    (255, 152, 40),
-    "red":       (232, 58, 58),
-    "yellow":    (250, 210, 30),
-    "green":     (52, 168, 90),
-    "blue":      (42, 92, 220),
-    "railroad":  (70, 70, 80),
-    "utility":   (140, 140, 150),
+    "brown":     (149, 90, 61),
+    "lightblue": (117, 200, 240),
+    "pink":      (232, 87, 165),
+    "orange":    (250, 140, 40),
+    "red":       (226, 63, 63),
+    "yellow":    (248, 202, 30),
+    "green":     (46, 160, 90),
+    "blue":      (40, 95, 210),
+    "railroad":  (60, 65, 78),
+    "utility":   (120, 130, 145),
 }
-BOARD_BG = (255, 249, 236)
-CENTER_BG = (255, 255, 255)
+GROUP_VN_NAMES = {
+    "brown": "Nâu", "lightblue": "Xanh Nhạt", "pink": "Hồng", "orange": "Cam",
+    "red": "Đỏ", "yellow": "Vàng", "green": "Xanh Lá", "blue": "Xanh Dương",
+    "railroad": "Nhà Ga", "utility": "Tiện Ích",
+}
+BOARD_BG = (246, 240, 224)
+CENTER_BG = (255, 253, 247)
 PLAYER_COLORS = [
-    (231, 76, 60), (52, 152, 219), (46, 204, 113),
-    (241, 196, 15), (155, 89, 182), (26, 188, 156),
+    (233, 69, 96), (52, 152, 219), (39, 174, 96),
+    (241, 178, 27), (155, 89, 182), (26, 188, 156),
 ]
 CORNER_STYLES = {
-    0:  {"bg": (58, 173, 97),  "label": "XUẤT\nPHÁT",   "sub": "+200k"},
-    10: {"bg": (240, 152, 55), "label": "NHÀ TÙ",       "sub": "Thăm quan"},
-    20: {"bg": (75, 165, 220), "label": "CÔNG VIÊN",    "sub": "Tự do"},
-    30: {"bg": (224, 64, 64),  "label": "ĐI TÙ",        "sub": "!!!"},
+    0:  {"bg": (46, 160, 90),  "label": "XUẤT PHÁT", "sub": "+200.000"},
+    10: {"bg": (235, 140, 52), "label": "NHÀ TÙ",     "sub": "Thăm quan"},
+    20: {"bg": (52, 143, 214), "label": "CÔNG VIÊN",  "sub": "Tự Do"},
+    30: {"bg": (214, 58, 58),  "label": "ĐI TÙ",      "sub": "Bị Bắt!"},
 }
 
 _AVATAR_CACHE = {}
@@ -119,22 +144,6 @@ async def _get_avatar_image(url):
         print(f"[MONO] avatar fetch error: {e}")
         return None
 
-EMOJI_PATTERN = re.compile(
-    "["
-    "\U0001F000-\U0001FFFF"
-    "\U00002600-\U000027BF"
-    "\U0001F1E6-\U0001F1FF"
-    "\U00002190-\U000021FF"
-    "\U0000FE00-\U0000FE0F"
-    "\U00002B00-\U00002BFF"
-    "]+",
-    flags=re.UNICODE,
-)
-
-
-def _strip_emoji(s):
-    return EMOJI_PATTERN.sub("", s).strip()
-
 
 def _m(n):
     return f"{n:,}".replace(",", ".")
@@ -143,21 +152,21 @@ def _m(n):
 # ── DỮ LIỆU BÀN CỜ (40 Ô, LẤY THEO TỈ LỆ CỜ TỶ PHÚ CỔ ĐIỂN) ───────────
 def _build_board():
     board = [None] * 40
-    board[0]  = {"name": "🚀 Xuất Phát", "type": "go"}
-    board[10] = {"name": "🚔 Nhà Tù (Thăm Quan)", "type": "jail"}
-    board[20] = {"name": "🅿️ Công Viên Tự Do", "type": "free_parking"}
-    board[30] = {"name": "🚨 Đi Tù!", "type": "go_to_jail"}
+    board[0]  = {"name": "Xuất Phát", "type": "go"}
+    board[10] = {"name": "Nhà Tù (Thăm Quan)", "type": "jail"}
+    board[20] = {"name": "Công Viên Tự Do", "type": "free_parking"}
+    board[30] = {"name": "Đi Tù!", "type": "go_to_jail"}
 
     for i in (2, 7, 17, 22, 36):
-        board[i] = {"name": "❓ Cơ Hội", "type": "chance"}
-    board[4]  = {"name": "🧾 Thuế Thu Nhập", "type": "tax", "amount": 200_000}
-    board[33] = {"name": "🧾 Thuế Tài Sản", "type": "tax", "amount": 100_000}
-    board[38] = {"name": "🧾 Thuế Xa Xỉ", "type": "tax", "amount": 75_000}
+        board[i] = {"name": "Cơ Hội", "type": "chance"}
+    board[4]  = {"name": "Thuế Thu Nhập", "type": "tax", "amount": 200_000}
+    board[33] = {"name": "Thuế Tài Sản", "type": "tax", "amount": 100_000}
+    board[38] = {"name": "Thuế Xa Xỉ", "type": "tax", "amount": 75_000}
 
-    for i, name in [(5, "🚉 Ga Sài Gòn"), (15, "🚉 Ga Hà Nội"), (25, "🚉 Ga Đà Nẵng"), (35, "🚉 Ga Nha Trang")]:
+    for i, name in [(5, "Ga Sài Gòn"), (15, "Ga Hà Nội"), (25, "Ga Đà Nẵng"), (35, "Ga Nha Trang")]:
         board[i] = {"name": name, "type": "railroad", "price": 200_000, "group": "railroad"}
 
-    for i, name in [(12, "⚡ Cty Điện Lực"), (28, "🚰 Cty Cấp Nước")]:
+    for i, name in [(12, "Cty Điện Lực"), (28, "Cty Cấp Nước")]:
         board[i] = {"name": name, "type": "utility", "price": 150_000, "group": "utility"}
 
     props = [
@@ -215,19 +224,35 @@ CHANCE_CARDS = [
 
 
 # =====================================================================
-# 🖼️ VẼ ẢNH BÀN CỜ (giống bàn cờ Tỷ Phú ngoài đời — hình vuông, 40 ô quanh viền)
+# 🖼️ VẼ ẢNH BÀN CỜ (v2 — layout gọn, không chồng chữ/icon, tự co giãn)
 # =====================================================================
 _FONT_CACHE = {}
 
+# Poppins (nếu máy có font Google Fonts) cho chữ đẹp/tròn/dễ đọc hơn,
+# tự động rơi về DejaVu Sans (luôn có sẵn) nếu không tìm thấy.
+_POPPINS_MAP = {
+    "Regular": "/usr/share/fonts/truetype/google-fonts/Poppins-Regular.ttf",
+    "Medium": "/usr/share/fonts/truetype/google-fonts/Poppins-Medium.ttf",
+    "SemiBold": "/usr/share/fonts/truetype/google-fonts/Poppins-SemiBold.ttf",
+    "Bold": "/usr/share/fonts/truetype/google-fonts/Poppins-Bold.ttf",
+}
+_DEJAVU_MAP = {
+    "Regular": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "Medium": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "SemiBold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "Bold": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+}
 
-def _load_font(size, bold=False):
-    key = (size, bold)
+
+def _load_font(size, weight="Regular"):
+    size = max(int(size), 8)
+    key = (size, weight)
     if key in _FONT_CACHE:
         return _FONT_CACHE[key]
     candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf",
+        _POPPINS_MAP.get(weight, _POPPINS_MAP["Regular"]),
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if weight in ("Bold", "SemiBold") else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        _DEJAVU_MAP.get(weight, _DEJAVU_MAP["Regular"]),
     ]
     font = None
     for path in candidates:
@@ -242,8 +267,36 @@ def _load_font(size, bold=False):
     return font
 
 
+def _text_w(draw, text, font):
+    b = draw.textbbox((0, 0), text, font=font)
+    return b[2] - b[0]
+
+
+def _wrap_px(draw, text, font, max_w, max_lines=3):
+    """Ngắt dòng theo ĐỘ RỘNG PIXEL thực tế (không theo số ký tự) để không
+    bao giờ bị tràn/chữ dính nhau, kể cả với font có độ rộng ký tự khác nhau."""
+    words = text.split(" ")
+    lines, cur = [], ""
+    for w in words:
+        trial = (cur + " " + w).strip()
+        if _text_w(draw, trial, font) <= max_w or not cur:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = w
+        if len(lines) >= max_lines:
+            break
+    if cur and len(lines) < max_lines:
+        lines.append(cur)
+    if lines and _text_w(draw, lines[-1], font) > max_w:
+        while lines[-1] and _text_w(draw, lines[-1] + "…", font) > max_w:
+            lines[-1] = lines[-1][:-1]
+        lines[-1] = lines[-1] + "…"
+    return lines
+
+
 def _cell_rect(i, cell):
-    """Trả về (x0,y0,x1,y1) của ô thứ i trên lưới 11x11 (giống layout bàn cờ Tỷ Phú thật)."""
+    """Trả về (x0,y0,x1,y1) của ô thứ i trên lưới 11x11 (layout bàn cờ Tỷ Phú thật)."""
     if i <= 10:
         col, row = 10 - i, 10
     elif i <= 20:
@@ -256,232 +309,260 @@ def _cell_rect(i, cell):
     return x0, y0, x0 + cell, y0 + cell
 
 
-def _wrap(text, max_chars=9):
-    words = text.split(" ")
-    lines, cur = [], ""
-    for w in words:
-        trial = (cur + " " + w).strip()
-        if len(trial) <= max_chars:
-            cur = trial
-        else:
-            if cur:
-                lines.append(cur)
-            cur = w
-    if cur:
-        lines.append(cur)
-    return lines[:3]
+def _rrect(draw, box, radius, fill=None, outline=None, width=1):
+    draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
 
 
-def _draw_dice(base_img, cx, cy, size, angle, color=(255, 255, 255)):
-    """Vẽ 1 viên xúc xắc trang trí (icon tự vẽ, không sao chép artwork nào)."""
-    d = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    dd = ImageDraw.Draw(d)
-    dd.rounded_rectangle([2, 2, size - 2, size - 2], radius=size // 6, fill=color, outline=(30, 30, 30), width=3)
-    m = size // 2
-    off = size // 4
-    for dx, dy in [(-off, -off), (off, -off), (0, 0), (-off, off), (off, off)]:
-        r = max(2, size // 12)
-        dd.ellipse([m + dx - r, m + dy - r, m + dx + r, m + dy + r], fill=(40, 40, 40))
-    d = d.rotate(angle, expand=True, resample=Image.BICUBIC)
-    base_img.paste(d, (cx - d.width // 2, cy - d.height // 2), d)
+def _draw_tile_icon(draw, cx, cy, r, kind):
+    """Icon nhỏ tự vẽ bằng hình học/emoji đơn giản (không sao chép artwork nào),
+    luôn nằm gọn trong dải màu phía trên ô, KHÔNG đè lên tên ô bên dưới."""
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(255, 255, 255, 240))
+    if kind == "chance":
+        draw.text((cx, cy - r * 0.05), "?", font=_load_font(r * 1.5, "Bold"), fill=(235, 140, 30), anchor="mm")
+    elif kind == "tax":
+        draw.text((cx, cy - r * 0.05), "$", font=_load_font(r * 1.3, "Bold"), fill=(140, 70, 190), anchor="mm")
+    elif kind == "railroad":
+        bw, bh = r * 1.15, r * 0.75
+        draw.rounded_rectangle([cx - bw / 2, cy - bh / 2 - r * 0.12, cx + bw / 2, cy + bh / 2 - r * 0.12],
+                                radius=max(2, r * 0.12), fill=(55, 60, 70))
+        wr = max(2, r * 0.18)
+        draw.ellipse([cx - bw / 2 + wr, cy + bh / 2 - wr * 1.6 - r * 0.12, cx - bw / 2 + wr * 3, cy + bh / 2 + wr * 0.4 - r * 0.12], fill=(25, 25, 25))
+        draw.ellipse([cx + bw / 2 - wr * 3, cy + bh / 2 - wr * 1.6 - r * 0.12, cx + bw / 2 - wr, cy + bh / 2 + wr * 0.4 - r * 0.12], fill=(25, 25, 25))
+    elif kind == "utility_power":
+        draw.text((cx, cy - r * 0.05), "⚡", font=_load_font(r * 1.3, "Bold"), fill=(230, 180, 20), anchor="mm")
+    elif kind == "utility_water":
+        draw.ellipse([cx - r * 0.55, cy - r * 0.3, cx + r * 0.55, cy + r * 0.5], fill=(70, 150, 220))
+        draw.polygon([(cx - r * 0.32, cy - r * 0.25), (cx + r * 0.32, cy - r * 0.25), (cx, cy - r * 0.75)], fill=(70, 150, 220))
 
 
-def _draw_avatar_or_dot(img, draw, cx, cy, r, color, avatar_img, is_current, letter=""):
-    ring = (255, 205, 0) if is_current else (25, 25, 25)
-    ring_w = 3 if is_current else 2
+def _draw_token(base_img, draw, cx, cy, r, color, avatar_img, is_current, letter):
+    """Vẽ quân cờ (avatar tròn hoặc chấm màu có chữ cái đầu tên)."""
+    draw.ellipse([cx - r - 3, cy - r - 1, cx + r + 3, cy + r + 5], fill=(0, 0, 0, 55))  # bóng đổ nhẹ
+    ring = (255, 205, 0) if is_current else (255, 255, 255)
+    ring_w = max(3, int(r * 0.22))
     if avatar_img is not None:
         size = r * 2
         av = avatar_img.resize((size, size), Image.LANCZOS)
         mask = Image.new("L", (size, size), 0)
         ImageDraw.Draw(mask).ellipse((0, 0, size, size), fill=255)
-        img.paste(av, (cx - r, cy - r), mask)
+        base_img.paste(av, (cx - r, cy - r), mask)
         draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=ring, width=ring_w)
     else:
         draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color, outline=ring, width=ring_w)
-        if letter:
-            draw.text((cx, cy), letter, font=_load_font(max(10, r), bold=True), fill=(255, 255, 255), anchor="mm")
+        draw.text((cx, cy), letter, font=_load_font(max(10, int(r * 0.9)), "Bold"), fill=(255, 255, 255), anchor="mm")
 
 
 def render_board_image(game, avatars=None, highlight_id=None):
-    """Vẽ toàn bộ bàn cờ ra 1 ảnh PNG (BytesIO), phong cách bàn cờ Tỷ Phú thật:
-    góc bo tròn, 4 góc bàn nổi bật màu riêng, quân cờ là AVATAR người chơi.
-    avatars: dict {player_id: PIL.Image RGBA} (tuỳ chọn).
-    highlight_id: id người chơi cần khoanh viền đỏ nổi bật (ảnh riêng ephemeral)."""
+    """Vẽ toàn bộ bàn cờ ra 1 ảnh PNG (BytesIO). Layout được thiết kế lại
+    hoàn toàn (v2): mỗi ô có dải màu + icon RIÊNG BIỆT phía trên, tên ô tự
+    NGẮT DÒNG & THU NHỎ FONT để luôn vừa khít, giá tiền/nhà cửa không bao
+    giờ chồng lên tên ô. avatars: dict {player_id: PIL.Image RGBA}.
+    highlight_id: id người chơi cần khoanh viền đỏ nổi bật."""
     if not PIL_OK:
         return None
     avatars = avatars or {}
 
-    SIZE = 1000
+    SIZE = 1400
     CELL = SIZE // 11
+    SIZE = CELL * 11
     img = Image.new("RGB", (SIZE, SIZE), BOARD_BG)
-    draw = ImageDraw.Draw(img)
-    f_tiny = _load_font(12)
-    f_price = _load_font(11, bold=True)
-    f_corner = _load_font(15, bold=True)
-    f_corner_sub = _load_font(11, bold=True)
-    f_title = _load_font(46, bold=True)
-    f_tagline = _load_font(15, bold=True)
-    f_legend = _load_font(15, bold=True)
+    draw = ImageDraw.Draw(img, "RGBA")
 
-    # khung ngoài + khu trung tâm bo góc
-    draw.rounded_rectangle([6, 6, SIZE - 6, SIZE - 6], radius=18, outline=(30, 30, 30), width=4, fill=BOARD_BG)
-    draw.rounded_rectangle([CELL + 6, CELL + 6, SIZE - CELL - 6, SIZE - CELL - 6],
-                            radius=22, fill=CENTER_BG, outline=(210, 200, 180), width=2)
+    f_name = _load_font(CELL * 0.115, "SemiBold")
+    f_price = _load_font(CELL * 0.11, "Bold")
+    f_corner_label = _load_font(CELL * 0.185, "Bold")
+    f_corner_sub = _load_font(CELL * 0.115, "Medium")
+    f_title = _load_font(CELL * 0.95, "Bold")
+    f_tagline = _load_font(CELL * 0.16, "Medium")
+    f_legend_name = _load_font(CELL * 0.155, "SemiBold")
+    f_legend_money = _load_font(CELL * 0.13, "Medium")
+
+    draw.rounded_rectangle([4, 4, SIZE - 4, SIZE - 4], radius=24, outline=(40, 35, 25), width=5, fill=BOARD_BG)
+    draw.rounded_rectangle([CELL + 4, CELL + 4, SIZE - CELL - 4, SIZE - CELL - 4],
+                            radius=28, fill=CENTER_BG, outline=(220, 208, 180), width=2)
 
     cur_idx = game["turn_index"] % len(game["players"]) if game.get("players") else -1
     cur_id = game["players"][cur_idx]["id"] if cur_idx >= 0 else None
 
-    # ── vẽ 40 ô ────────────────────────────────────────────────────
+    BAND_FRAC = 0.30
+
     for i in range(40):
         tile = BOARD[i]
         x0, y0, x1, y1 = _cell_rect(i, CELL)
+        pad = 4
+        bx0, by0, bx1, by1 = x0 + pad, y0 + pad, x1 - pad, y1 - pad
         is_corner = i in (0, 10, 20, 30)
-        pad = 3
 
         if is_corner:
             style = CORNER_STYLES[i]
-            draw.rounded_rectangle([x0 + pad, y0 + pad, x1 - pad, y1 - pad], radius=14,
-                                    fill=style["bg"], outline=(25, 25, 25), width=2)
-            cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+            _rrect(draw, [bx0, by0, bx1, by1], 16, fill=style["bg"], outline=(35, 30, 25), width=2)
+            cx = (bx0 + bx1) // 2
+            icon_r = CELL * 0.16
+            icon_cy = by0 + (by1 - by0) * 0.30
             if i == 0:
-                pts = [(cx - 16, cy - 4), (cx + 6, cy - 4), (cx + 6, cy - 14), (cx + 20, cy + 4),
-                       (cx + 6, cy + 22), (cx + 6, cy + 12), (cx - 16, cy + 12)]
-                draw.polygon(pts, fill=(255, 255, 255))
+                w = icon_r * 0.9
+                draw.polygon([(cx, icon_cy - w), (cx + w, icon_cy + w * 0.3), (cx + w * 0.4, icon_cy + w * 0.3),
+                              (cx + w * 0.4, icon_cy + w), (cx - w * 0.4, icon_cy + w), (cx - w * 0.4, icon_cy + w * 0.3),
+                              (cx - w, icon_cy + w * 0.3)], fill=(255, 255, 255))
             elif i == 10:
-                draw.rounded_rectangle([cx - 18, cy - 16, cx + 18, cy + 14], radius=6, fill=(255, 255, 255, 200), outline=(0, 0, 0))
-                for bx in range(cx - 12, cx + 13, 6):
-                    draw.line([(bx, cy - 14), (bx, cy + 12)], fill=(60, 60, 60), width=3)
+                draw.rounded_rectangle([cx - icon_r, icon_cy - icon_r * 0.6, cx + icon_r, icon_cy + icon_r * 0.7],
+                                        radius=4, fill=(255, 255, 255))
+                step = max(4, icon_r * 0.4)
+                bxo = cx - icon_r * 0.6
+                while bxo <= cx + icon_r * 0.6:
+                    draw.line([(bxo, icon_cy - icon_r * 0.5), (bxo, icon_cy + icon_r * 0.6)], fill=style["bg"], width=3)
+                    bxo += step
             elif i == 20:
-                draw.ellipse([cx - 18, cy - 20, cx + 18, cy + 4], fill=(255, 255, 255))
-                draw.text((cx, cy - 9), "P", font=_load_font(20, bold=True), fill=style["bg"], anchor="mm")
-                draw.line([(cx, cy + 4), (cx, cy + 18)], fill=(255, 255, 255), width=4)
+                draw.ellipse([cx - icon_r, icon_cy - icon_r, cx + icon_r, icon_cy + icon_r], fill=(255, 255, 255))
+                draw.text((cx, icon_cy), "P", font=_load_font(icon_r * 1.3, "Bold"), fill=style["bg"], anchor="mm")
             elif i == 30:
-                draw.ellipse([cx - 16, cy - 20, cx - 2, cy - 6], fill=(255, 60, 60), outline=(255, 255, 255), width=2)
-                draw.ellipse([cx + 2, cy - 20, cx + 16, cy - 6], fill=(60, 90, 255), outline=(255, 255, 255), width=2)
-                draw.text((cx, cy + 12), "!", font=_load_font(22, bold=True), fill=(255, 255, 255), anchor="mm")
-            draw.text((cx, y1 - pad - 30), style["label"], font=f_corner, fill=(255, 255, 255), align="center", anchor="mm")
-            draw.text((cx, y1 - pad - 12), style["sub"], font=f_corner_sub, fill=(255, 255, 255), anchor="mm")
+                draw.ellipse([cx - icon_r, icon_cy - icon_r, cx + icon_r, icon_cy + icon_r], fill=(255, 255, 255))
+                draw.text((cx, icon_cy), "!", font=_load_font(icon_r * 1.5, "Bold"), fill=style["bg"], anchor="mm")
+
+            label_y = by0 + (by1 - by0) * 0.62
+            sub_y = by0 + (by1 - by0) * 0.85
+            lbl_lines = [style["label"]]
+            if _text_w(draw, lbl_lines[0], f_corner_label) > (bx1 - bx0 - 10):
+                lbl_lines = _wrap_px(draw, lbl_lines[0], f_corner_label, bx1 - bx0 - 10, 2)
+            ly = label_y - (len(lbl_lines) - 1) * (f_corner_label.size * 0.55)
+            for ln in lbl_lines:
+                draw.text((cx, ly), ln, font=f_corner_label, fill=(255, 255, 255), anchor="mm")
+                ly += f_corner_label.size * 1.05
+            draw.text((cx, sub_y), style["sub"], font=f_corner_sub, fill=(255, 255, 255, 235), anchor="mm")
             continue
 
         # ô thường: nền trắng bo góc
-        draw.rounded_rectangle([x0 + pad, y0 + pad, x1 - pad, y1 - pad], radius=8,
-                                fill=(255, 255, 255), outline=(60, 60, 60), width=1)
+        _rrect(draw, [bx0, by0, bx1, by1], 10, fill=(255, 255, 255), outline=(70, 65, 60), width=1)
 
         band_color = None
-        icon_fg = (255, 255, 255)
+        icon_kind = None
         if tile["type"] in OWNABLE_TYPES:
             band_color = GROUP_COLORS.get(tile["group"], (150, 150, 150))
+            if tile["type"] == "railroad":
+                icon_kind = "railroad"
+            elif tile["type"] == "utility":
+                icon_kind = "utility_power" if "Điện" in tile["name"] else "utility_water"
         elif tile["type"] == "chance":
-            band_color = (250, 165, 45)
+            band_color = (240, 155, 40)
+            icon_kind = "chance"
         elif tile["type"] == "tax":
-            band_color = (150, 90, 200)
+            band_color = (150, 95, 195)
+            icon_kind = "tax"
 
-        # dải màu hướng vào tâm bàn cờ (bo góc ngoài theo hướng ô)
+        band_h = (by1 - by0) * BAND_FRAC
+        content_top = by0
         if band_color:
-            bw = 16
-            if i <= 10:
-                draw.rectangle([x0 + pad, y0 + pad, x1 - pad, y0 + bw], fill=band_color)
-                draw.rounded_rectangle([x0 + pad, y0 + pad, x1 - pad, y0 + bw + 8], radius=8, fill=band_color)
-                draw.rectangle([x0 + pad, y0 + bw - 6, x1 - pad, y0 + bw], fill=band_color)
-            elif i <= 20:
-                draw.rectangle([x1 - bw, y0 + pad, x1 - pad, y1 - pad], fill=band_color)
-                draw.rounded_rectangle([x1 - bw - 8, y0 + pad, x1 - pad, y1 - pad], radius=8, fill=band_color)
-                draw.rectangle([x1 - bw, y0 + pad, x1 - bw + 6, y1 - pad], fill=band_color)
-            elif i <= 30:
-                draw.rectangle([x0 + pad, y1 - bw, x1 - pad, y1 - pad], fill=band_color)
-                draw.rounded_rectangle([x0 + pad, y1 - bw - 8, x1 - pad, y1 - pad], radius=8, fill=band_color)
-                draw.rectangle([x0 + pad, y1 - bw, x1 - pad, y1 - bw + 6], fill=band_color)
-            else:
-                draw.rectangle([x0 + pad, y0 + pad, x0 + bw, y1 - pad], fill=band_color)
-                draw.rounded_rectangle([x0 + pad, y0 + pad, x0 + bw + 8, y1 - pad], radius=8, fill=band_color)
-                draw.rectangle([x0 + bw - 6, y0 + pad, x0 + bw, y1 - pad], fill=band_color)
+            _rrect(draw, [bx0, by0, bx1, by0 + band_h], 10, fill=band_color)
+            draw.rectangle([bx0, by0 + band_h - 10, bx1, by0 + band_h], fill=band_color)
+            content_top = by0 + band_h
+            if icon_kind:
+                _draw_tile_icon(draw, (bx0 + bx1) // 2, by0 + band_h / 2, max(9, band_h * 0.32), icon_kind)
 
-        cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
-        if tile["type"] == "chance":
-            draw.ellipse([cx - 13, cy - 22, cx + 13, cy + 4], fill=(250, 165, 45))
-            draw.text((cx, cy - 9), "?", font=_load_font(18, bold=True), fill=(255, 255, 255), anchor="mm")
-        elif tile["type"] == "tax":
-            draw.ellipse([cx - 13, cy - 22, cx + 13, cy + 4], fill=(150, 90, 200))
-            draw.text((cx, cy - 9), "$", font=_load_font(16, bold=True), fill=(255, 255, 255), anchor="mm")
-        elif tile["type"] == "railroad":
-            draw.rounded_rectangle([cx - 15, cy - 20, cx + 15, cy - 2], radius=4, fill=(70, 70, 80))
-            draw.ellipse([cx - 12, cy - 6, cx - 4, cy + 2], fill=(30, 30, 30))
-            draw.ellipse([cx + 4, cy - 6, cx + 12, cy + 2], fill=(30, 30, 30))
-        elif tile["type"] == "utility":
-            if "Điện" in tile["name"]:
-                draw.polygon([(cx - 5, cy - 20), (cx + 6, cy - 20), (cx - 2, cy - 6), (cx + 7, cy - 6),
-                              (cx - 6, cy + 6), (cx - 2, cy - 10), (cx - 9, cy - 10)], fill=(240, 200, 20))
-            else:
-                draw.ellipse([cx - 10, cy - 8, cx + 10, cy + 6], fill=(90, 180, 235))
-                draw.polygon([(cx - 6, cy - 20), (cx + 6, cy - 20), (cx, cy - 8)], fill=(90, 180, 235))
+        content_bottom = by1 - (14 if tile["type"] in OWNABLE_TYPES else 6)
+        avail_w = (bx1 - bx0) - 10
+        name_font = f_name
+        lines = _wrap_px(draw, tile["name"], name_font, avail_w, 3)
+        line_h = name_font.size * 1.08
+        total_h = line_h * len(lines)
+        area_h = content_bottom - content_top
+        while total_h > area_h and name_font.size > 10:
+            name_font = _load_font(name_font.size - 1, "SemiBold")
+            lines = _wrap_px(draw, tile["name"], name_font, avail_w, 3)
+            line_h = name_font.size * 1.08
+            total_h = line_h * len(lines)
 
-        # tên ô
-        clean_name = _strip_emoji(tile["name"]) or tile["name"]
-        lines = _wrap(clean_name, 8)
-        base_y = y0 + 30 if tile["type"] in OWNABLE_TYPES else y0 + 8
-        ty = base_y
+        ty = content_top + (area_h - total_h) / 2 + line_h / 2
+        cxm = (bx0 + bx1) // 2
         for ln in lines:
-            draw.text((cx, ty), ln, font=f_tiny, fill=(25, 25, 25), anchor="mm")
-            ty += 12
+            draw.text((cxm, ty), ln, font=name_font, fill=(35, 32, 28), anchor="mm")
+            ty += line_h
 
-        # giá
         if tile["type"] in OWNABLE_TYPES:
-            draw.text((cx, y1 - 12), f"{tile['price']//1000}k", font=f_price, fill=(70, 70, 70), anchor="mm")
+            draw.text((bx0 + 8, by1 - 8), f"{tile['price'] // 1000}k", font=f_price, fill=(90, 85, 78), anchor="lm")
 
-        # chủ sở hữu (viền màu quanh ô) + nhà/khách sạn (icon mái nhà nhỏ)
+        # chủ sở hữu (viền màu quanh ô) + nhà/khách sạn (góc dưới-phải, không đè giá)
         prop = game.get("properties", {}).get(str(i))
         if prop and prop.get("owner"):
             owner_p = next((p for p in game["players"] if p["id"] == prop["owner"]), None)
             if owner_p:
                 oc_idx = game["players"].index(owner_p) % len(PLAYER_COLORS)
                 oc = PLAYER_COLORS[oc_idx]
-                draw.rounded_rectangle([x0 + pad, y0 + pad, x1 - pad, y1 - pad], radius=8, outline=oc, width=3)
+                draw.rounded_rectangle([bx0, by0, bx1, by1], radius=10, outline=oc, width=4)
                 houses = prop.get("houses", 0)
                 if houses == 5:
-                    draw.rounded_rectangle([x1 - 30, y0 + 4, x1 - 6, y0 + 18], radius=3, fill=(210, 30, 30))
-                    draw.text(((x1 - 18), y0 + 11), "H", font=_load_font(10, bold=True), fill=(255, 255, 255), anchor="mm")
+                    hb_w, hb_h = CELL * 0.19, CELL * 0.115
+                    draw.rounded_rectangle([bx1 - hb_w - 6, by1 - hb_h - 6, bx1 - 6, by1 - 6], radius=3, fill=(214, 40, 40))
+                    draw.text(((bx1 - hb_w / 2 - 6), by1 - hb_h / 2 - 6), "H", font=_load_font(CELL * 0.08, "Bold"), fill=(255, 255, 255), anchor="mm")
                 elif houses > 0:
                     for h in range(houses):
-                        hx = x1 - 10 - h * 9
-                        draw.polygon([(hx - 4, y0 + 12), (hx, y0 + 5), (hx + 4, y0 + 12)], fill=(30, 150, 60))
-                        draw.rectangle([hx - 3, y0 + 12, hx + 3, y0 + 16], fill=(30, 150, 60))
+                        hx = bx1 - 10 - h * (CELL * 0.078)
+                        hy = by1 - 8
+                        hs = CELL * 0.045
+                        draw.polygon([(hx - hs, hy - hs * 1.2), (hx, hy - hs * 2.4), (hx + hs, hy - hs * 1.2)], fill=(35, 150, 70))
+                        draw.rectangle([hx - hs, hy - hs * 1.2, hx + hs, hy], fill=(35, 150, 70))
 
-    # ── khu trung tâm: tiêu đề + xúc xắc trang trí + chú thích người chơi ──
+    # ── khu trung tâm: tiêu đề + quỹ công viên + thẻ bài người chơi ──
     cxm, cym = SIZE // 2, SIZE // 2
-    title_img = Image.new("RGBA", (620, 130), (0, 0, 0, 0))
+    center_w = SIZE - 2 * CELL
+
+    title_txt = "CỜ TỶ PHÚ"
+    tb = draw.textbbox((0, 0), title_txt, font=f_title)
+    tw, th = tb[2] - tb[0], tb[3] - tb[1]
+    title_img = Image.new("RGBA", (int(tw + 60), int(th + 60)), (0, 0, 0, 0))
     td = ImageDraw.Draw(title_img)
-    td.text((310, 65), "CỜ TỶ PHÚ", font=f_title, fill=(214, 40, 40, 255),
-             anchor="mm", stroke_width=5, stroke_fill=(255, 255, 255, 255))
-    title_img = title_img.rotate(-6, expand=True, resample=Image.BICUBIC)
-    img.paste(title_img, (cxm - title_img.width // 2, cym - 150 - title_img.height // 2), title_img)
-    draw.text((cxm, cym - 78), "— Ai giàu nhất sẽ thắng —", font=f_tagline, fill=(120, 100, 60), anchor="mm")
-    _draw_dice(img, cxm - 210, cym - 55, 56, 12, color=(255, 255, 255))
-    _draw_dice(img, cxm + 210, cym - 55, 56, -14, color=(255, 255, 255))
+    td.text((title_img.width // 2, title_img.height // 2), title_txt, font=f_title, fill=(212, 40, 40, 255),
+             anchor="mm", stroke_width=max(3, int(CELL // 24)), stroke_fill=(255, 255, 255, 255))
+    title_img = title_img.rotate(-4, expand=True, resample=Image.BICUBIC)
+    title_y = CELL + int(CELL * 0.9)
+    img.paste(title_img, (cxm - title_img.width // 2, title_y - title_img.height // 2), title_img)
+    tagline_y = title_y + int(title_img.height * 0.42)
+    draw.text((cxm, tagline_y), "— Ai giàu nhất sẽ thắng —", font=f_tagline, fill=(150, 120, 60), anchor="mm")
 
     if game.get("pot", 0) > 0:
-        draw.text((cxm, cym - 22), f"🅿 Quỹ Công Viên: {_m(game['pot'])}", font=f_tagline, fill=(30, 130, 70), anchor="mm")
+        pot_y = tagline_y + int(CELL * 0.5)
+        draw.rounded_rectangle([cxm - CELL * 1.35, pot_y - CELL * 0.22, cxm + CELL * 1.35, pot_y + CELL * 0.22],
+                                radius=14, fill=(235, 245, 235), outline=(60, 150, 90), width=2)
+        draw.text((cxm, pot_y), f"🅿 Quỹ Công Viên: {_m(game['pot'])}", font=f_tagline, fill=(35, 120, 60), anchor="mm")
+        legend_top = pot_y + CELL * 0.55
+    else:
+        legend_top = tagline_y + int(CELL * 0.35)
 
-    legend_top = cym + 10
     alive = [p for p in game.get("players", []) if not p.get("bankrupt")]
     dead = [p for p in game.get("players", []) if p.get("bankrupt")]
-    for row, p in enumerate(alive):
+    n_cols = 2 if len(alive) > 1 else 1
+    card_w = center_w * 0.42
+    card_h = CELL * 0.62
+    gap_x = center_w * 0.06
+    total_row_w = n_cols * card_w + (n_cols - 1) * gap_x
+    start_x = cxm - total_row_w / 2
+
+    for idx_a, p in enumerate(alive):
         idx = game["players"].index(p)
         color = PLAYER_COLORS[idx % len(PLAYER_COLORS)]
-        col = row % 2
-        r_ = row // 2
-        lx = cxm - 220 + col * 260
-        ly = legend_top + r_ * 46
+        col = idx_a % n_cols
+        row_n = idx_a // n_cols
+        lx = start_x + col * (card_w + gap_x)
+        ly = legend_top + row_n * (card_h + CELL * 0.14)
+        is_cur = p["id"] == cur_id
+        card_fill = (255, 250, 225) if is_cur else (250, 250, 248)
+        card_outline = (235, 175, 30) if is_cur else (215, 210, 200)
+        draw.rounded_rectangle([lx, ly, lx + card_w, ly + card_h], radius=14, fill=card_fill,
+                                outline=card_outline, width=3 if is_cur else 2)
+        av_r = int(card_h * 0.34)
+        av_cx, av_cy = int(lx + av_r + 10), int(ly + card_h / 2)
         av = avatars.get(p["id"])
-        _draw_avatar_or_dot(img, draw, lx + 18, ly + 18, 18, color, av, p["id"] == cur_id,
-                             letter=((_strip_emoji(p["name"])[:1] or "?").upper()))
-        turn_mark = " 👑" if p["id"] == cur_id else ""
+        _draw_token(img, draw, av_cx, av_cy, av_r, color, av, is_cur, (p["name"][:1] or "?").upper())
+        turn_mark = " 👑" if is_cur else ""
         jail_mark = " ⛓" if p.get("in_jail") else ""
-        name_line = _strip_emoji(p["name"])[:14] + turn_mark
-        draw.text((lx + 42, ly + 8), name_line, font=f_legend, fill=(30, 30, 30), anchor="lm")
-        draw.text((lx + 42, ly + 26), f"{_m(p['money'])}{jail_mark}", font=f_tiny, fill=(70, 70, 70), anchor="lm")
+        name_line = p["name"][:16] + turn_mark
+        tx = av_cx + av_r + 14
+        draw.text((tx, av_cy - card_h * 0.16), name_line, font=f_legend_name, fill=(40, 35, 30), anchor="lm")
+        draw.text((tx, av_cy + card_h * 0.16), f"{_m(p['money'])}{jail_mark}", font=f_legend_money, fill=(90, 85, 78), anchor="lm")
+
     if dead:
-        dy = legend_top + ((len(alive) + 1) // 2) * 46 + 6
-        draw.text((cxm, dy), "💀 " + ", ".join(_strip_emoji(p["name"]) for p in dead), font=f_tiny, fill=(150, 40, 40), anchor="mm")
+        n_rows = (len(alive) + n_cols - 1) // n_cols if alive else 0
+        dy = legend_top + n_rows * (card_h + CELL * 0.14) + CELL * 0.2
+        draw.text((cxm, dy), "💀 Phá sản: " + ", ".join(p["name"] for p in dead), font=f_legend_money, fill=(160, 50, 50), anchor="mm")
 
     # ── quân cờ trên các ô (avatar người chơi) ──────────────────────
     for idx, p in enumerate(game.get("players", [])):
@@ -492,20 +573,116 @@ def render_board_image(game, avatars=None, highlight_id=None):
         n = len(same)
         pos_in_group = same.index(p)
         cx = (x0 + x1) // 2
-        cy = (y0 + y1) // 2
+        cy = (y0 + y1) // 2 + int(CELL * 0.14)
         if n > 1:
-            spread = min(CELL // 2 - 14, 18)
+            spread = min(CELL // 2 - 16, 20)
             cx += int(((pos_in_group / max(n - 1, 1)) - 0.5) * 2 * spread)
         color = PLAYER_COLORS[idx % len(PLAYER_COLORS)]
         av = avatars.get(p["id"])
-        r = 15 if p["id"] == cur_id else 13
-        _draw_avatar_or_dot(img, draw, cx, cy, r, color, av, p["id"] == cur_id,
-                             letter=((_strip_emoji(p["name"])[:1] or "?").upper()))
+        r = int(CELL * 0.15) if p["id"] == cur_id else int(CELL * 0.13)
+        _draw_token(img, draw, cx, cy, r, color, av, p["id"] == cur_id, (p["name"][:1] or "?").upper())
         if highlight_id and p["id"] == highlight_id:
-            draw.ellipse([cx - r - 5, cy - r - 5, cx + r + 5, cy + r + 5], outline=(255, 20, 20), width=3)
+            draw.ellipse([cx - r - 6, cy - r - 6, cx + r + 6, cy + r + 6], outline=(255, 20, 20), width=4)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def render_zoom_image(game, player, avatars=None):
+    """🔎 Vẽ ảnh ZOOM cận cảnh vào đúng ô người chơi đang đứng, kèm bảng
+    thông tin chi tiết về ô đó (giá, tiền thuê theo số nhà, chủ sở hữu...)
+    ghép ngay bên dưới. Dùng cho nút '📍 Vị Trí Của Tôi'."""
+    if not PIL_OK:
+        return None
+    avatars = avatars or {}
+    SIZE = 1400
+    CELL = SIZE // 11
+    SIZE = CELL * 11
+    board_buf = render_board_image(game, avatars=avatars, highlight_id=player["id"])
+    if board_buf is None:
+        return None
+    board_img = Image.open(board_buf).convert("RGB")
+
+    pos = player["position"]
+    x0, y0, x1, y1 = _cell_rect(pos, CELL)
+    margin = int(CELL * 1.3)
+    cx0 = max(0, x0 - margin)
+    cy0 = max(0, y0 - margin)
+    cx1 = min(SIZE, x1 + margin)
+    cy1 = min(SIZE, y1 + margin)
+    crop = board_img.crop((cx0, cy0, cx1, cy1))
+    scale = min(3.0, 1000 / max(crop.width, crop.height))
+    crop = crop.resize((max(1, int(crop.width * scale)), max(1, int(crop.height * scale))), Image.LANCZOS)
+
+    tile = BOARD[pos]
+    prop = game.get("properties", {}).get(str(pos))
+    panel_w = crop.width
+    panel_h = 320
+    panel = Image.new("RGB", (panel_w, panel_h), (255, 253, 247))
+    pd = ImageDraw.Draw(panel)
+    pd.rectangle([0, 0, panel_w, panel_h], outline=(215, 205, 180), width=2)
+
+    f_h1 = _load_font(38, "Bold")
+    f_h2 = _load_font(24, "SemiBold")
+    f_body = _load_font(22, "Medium")
+    f_small = _load_font(19, "Medium")
+
+    pad = 26
+    ty = pad
+    pd.text((pad, ty), f"📍 {tile['name']}", font=f_h1, fill=(30, 30, 30))
+    ty += 50
+
+    if tile["type"] in OWNABLE_TYPES:
+        owner_id = prop.get("owner") if prop else None
+        owner_p = next((p for p in game["players"] if p["id"] == owner_id), None) if owner_id else None
+        if owner_p:
+            pd.text((pad, ty), f"🏷️ Chủ sở hữu: {owner_p['name']}", font=f_h2, fill=(50, 100, 50))
+        else:
+            pd.text((pad, ty), f"🏷️ Chưa có chủ — giá {_m(tile['price'])}{'' }", font=f_h2, fill=(180, 100, 20))
+        ty += 36
+
+        if tile["type"] == "property":
+            houses = prop.get("houses", 0) if prop else 0
+            rent = tile["rent"][houses]
+            house_word = "Khách sạn" if houses == 5 else f"{houses} nhà"
+            pd.text((pad, ty), f"🏠 {house_word}  •  💰 Thuê hiện tại: {_m(rent)}", font=f_body, fill=(60, 55, 50))
+            ty += 34
+            rent_line = "  ".join(f"{h}n:{_m(v)}" for h, v in zip(["0", "1", "2", "3", "4", "KS"], tile["rent"]))
+            pd.text((pad, ty), rent_line, font=f_small, fill=(120, 112, 100))
+            ty += 30
+            pd.text((pad, ty), f"🔨 Giá xây nhà: {_m(tile['house_cost'])} / căn", font=f_small, fill=(120, 112, 100))
+        elif tile["type"] == "railroad":
+            pd.text((pad, ty), "🚉 Tiền thuê tăng theo số nhà ga cùng chủ sở hữu (25k / 50k / 100k / 200k)", font=f_small, fill=(120, 112, 100))
+        elif tile["type"] == "utility":
+            pd.text((pad, ty), "🏭 Tiền thuê = tổng xúc xắc × (4k nếu sở hữu 1 cái, 10k nếu sở hữu cả 2)", font=f_small, fill=(120, 112, 100))
+    elif tile["type"] == "tax":
+        pd.text((pad, ty), f"🧾 Thuế phải nộp: {_m(tile['amount'])}", font=f_h2, fill=(120, 60, 160))
+    elif tile["type"] == "chance":
+        pd.text((pad, ty), "❓ Ô sự kiện ngẫu nhiên — có thể được thưởng hoặc bị phạt!", font=f_body, fill=(200, 120, 30))
+    elif tile["type"] == "go":
+        pd.text((pad, ty), f"🚀 Mỗi lần đi qua/dừng tại đây, nhận {_m(MONO_GO_SALARY)}", font=f_body, fill=(40, 130, 70))
+    elif tile["type"] == "jail":
+        pd.text((pad, ty), "🚔 Chỉ là thăm quan nếu không bị bắt vào tù ở lượt trước", font=f_body, fill=(90, 85, 78))
+    elif tile["type"] == "free_parking":
+        pot = game.get("pot", 0)
+        pd.text((pad, ty), f"🅿️ Quỹ hiện tại: {_m(pot)} — ai dừng ở đây sẽ nhận trọn quỹ!", font=f_body, fill=(40, 130, 70))
+    elif tile["type"] == "go_to_jail":
+        pd.text((pad, ty), "🚨 Dừng ở đây sẽ bị bắt vào tù ngay lập tức!", font=f_body, fill=(200, 50, 50))
+    ty += 44
+
+    pd.line([(pad, ty), (panel_w - pad, ty)], fill=(225, 218, 200), width=2)
+    ty += 18
+    pd.text((pad, ty), f"👤 {player['name']}   •   💰 {_m(player['money'])}{'  •  ⛓ Đang ở tù' if player.get('in_jail') else ''}",
+             font=f_body, fill=(35, 32, 28))
+
+    final_img = Image.new("RGB", (panel_w, crop.height + panel_h), (255, 253, 247))
+    final_img.paste(crop, (0, 0))
+    final_img.paste(panel, (0, crop.height))
+
+    buf = io.BytesIO()
+    final_img.save(buf, format="PNG")
     buf.seek(0)
     return buf
 
@@ -594,7 +771,7 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
         idxs = GROUP_INDICES.get(group, [])
         return all(game["properties"].get(str(i), {}).get("owner") == owner_id for i in idxs)
 
-    def calc_rent(game, tile_idx, dice_sum):
+    def calc_rent(game, tile_idx, dice_sum=7):
         tile = BOARD[tile_idx]
         prop = game["properties"].get(str(tile_idx))
         if not prop or not prop.get("owner"):
@@ -614,6 +791,22 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
             mult = 10_000 if owned >= 2 else 4_000
             return dice_sum * mult
         return 0
+
+    def property_value(game, idx):
+        """Ước tính giá trị 1 ô đất (giá gốc + tiền đã đầu tư xây nhà) — dùng cho Bảng Xếp Hạng."""
+        tile = BOARD[idx]
+        prop = game["properties"].get(str(idx), {})
+        val = tile.get("price", 0)
+        if tile["type"] == "property":
+            val += prop.get("houses", 0) * tile.get("house_cost", 0)
+        return val
+
+    def net_worth(game, player):
+        total = player["money"]
+        for idx_str, prop in game["properties"].items():
+            if prop.get("owner") == player["id"]:
+                total += property_value(game, int(idx_str))
+        return total
 
     def ensure_property_slots(game):
         for i, t in enumerate(BOARD):
@@ -751,7 +944,13 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                         reward = 300_000 if len(human_players) >= 2 else 150_000
                         ud = load_user(winner["id"])
                         ud["money"] = ud.get("money", 0) + reward
-                        save_user(winner["id"])
+                        # SỬA DÒNG NÀY CHO KHỚP VỚI save_user CỦA BẠN:
+                        # (nhiều bot.py định nghĩa save_user(user_id, data) — nếu của bạn
+                        #  chỉ nhận 1 tham số (tự lưu theo user đang load), xoá "ud" đi)
+                        try:
+                            save_user(winner["id"], ud)
+                        except TypeError:
+                            save_user(winner["id"])
                         if add_history:
                             add_history(winner["id"], f"Thắng Cờ Tỷ Phú (+{reward:,} {MONEY_EMOJI})")
                         game["log"][0] += f" (+{_m(reward)}{MONEY_EMOJI} thưởng thật!)"
@@ -832,7 +1031,72 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
 
         log_text = "\n".join(game.get("log", [])[:6]) or "..."
         embed.add_field(name="📜 Diễn Biến", value=log_text[:1000], inline=False)
-        embed.set_footer(text=f"Bàn cờ vĩnh viễn tại kênh này | Chế độ: {'🤖 Bot' if game['mode']=='bot' else '👥 PvP'}")
+        embed.set_footer(text=(
+            f"Bàn cờ vĩnh viễn tại kênh này | Chế độ: {'🤖 Bot' if game['mode']=='bot' else '👥 PvP'} | "
+            f"📍 Vị Trí • 📋 Tài Sản • 🏆 Xếp Hạng — bấm để xem chi tiết!"
+        ))
+        return embed
+
+    def build_my_properties_embed(game, player):
+        owned = [(int(idx), prop) for idx, prop in game["properties"].items() if prop.get("owner") == player["id"]]
+        embed = discord.Embed(
+            title=f"📋 Tài Sản Của {player['name']}",
+            color=discord.Color.green()
+        )
+        if not owned:
+            embed.description = "Bạn chưa sở hữu ô đất nào cả. Hãy đi vòng quanh bàn cờ và mua đất nhé!"
+            embed.add_field(name="💰 Tiền mặt", value=f"{_m(player['money'])}{MONEY_EMOJI}", inline=True)
+            return embed
+
+        owned.sort(key=lambda x: x[0])
+        by_group = {}
+        for idx, prop in owned:
+            tile = BOARD[idx]
+            group = tile.get("group", tile["type"])
+            by_group.setdefault(group, []).append((idx, tile, prop))
+
+        total_value = 0
+        for group, items in by_group.items():
+            group_label = GROUP_VN_NAMES.get(group, group)
+            full = owns_full_group(game, player["id"], group) if group not in ("railroad", "utility") else False
+            lines = []
+            for idx, tile, prop in items:
+                total_value += property_value(game, idx)
+                if tile["type"] == "property":
+                    houses = prop.get("houses", 0)
+                    house_str = "🏨 Khách sạn" if houses == 5 else (f"🏠×{houses}" if houses else "trống")
+                    rent = calc_rent(game, idx)
+                    lines.append(f"**{tile['name']}** — {house_str} — thuê hiện tại: {_m(rent)}")
+                elif tile["type"] == "railroad":
+                    rent = calc_rent(game, idx)
+                    lines.append(f"**{tile['name']}** — thuê hiện tại: {_m(rent)}")
+                else:
+                    lines.append(f"**{tile['name']}** — thuê phụ thuộc xúc xắc (x4k/x10k)")
+            title = f"{group_label}" + (" ✅ (đủ bộ)" if full else "")
+            embed.add_field(name=title, value="\n".join(lines), inline=False)
+
+        embed.add_field(name="💰 Tiền mặt", value=f"{_m(player['money'])}{MONEY_EMOJI}", inline=True)
+        embed.add_field(name="🏘️ Tổng giá trị BĐS", value=f"{_m(total_value)}{MONEY_EMOJI}", inline=True)
+        embed.add_field(name="💎 Tổng tài sản ròng", value=f"{_m(player['money'] + total_value)}{MONEY_EMOJI}", inline=True)
+        return embed
+
+    def build_leaderboard_embed(game):
+        ranked = sorted(active_players(game), key=lambda p: net_worth(game, p), reverse=True)
+        bankrupt = [p for p in game["players"] if p["bankrupt"]]
+        medals = ["🥇", "🥈", "🥉", "🏅", "🏅", "🏅"]
+        lines = []
+        for i, p in enumerate(ranked):
+            n_props = sum(1 for v in game["properties"].values() if v.get("owner") == p["id"])
+            worth = net_worth(game, p)
+            lines.append(f"{medals[i] if i < len(medals) else '▫️'} **{p['name']}** — {_m(worth)}{MONEY_EMOJI} tổng tài sản (💵{_m(p['money'])} + 🏠{n_props} đất)")
+        for p in bankrupt:
+            lines.append(f"💀 ~~{p['name']}~~ — Phá sản")
+        embed = discord.Embed(
+            title="🏆 BẢNG XẾP HẠNG TÀI SẢN RÒNG",
+            description="\n".join(lines) if lines else "Chưa có ai chơi.",
+            color=discord.Color.gold()
+        )
+        embed.set_footer(text="Tài sản ròng = Tiền mặt + Giá trị đất (giá gốc + tiền đã xây nhà)")
         return embed
 
     # ── HELPERS ẢNH BÀN CỜ (chung + riêng) ────────────────────────────
@@ -852,6 +1116,15 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
             return None
         avatars = await _gather_avatars(game)
         buf = render_board_image(game, avatars=avatars, highlight_id=highlight_id)
+        if buf is None:
+            return None
+        return discord.File(buf, filename=filename)
+
+    async def _zoom_file(game, player, filename="zoom.png"):
+        if not PIL_OK:
+            return None
+        avatars = await _gather_avatars(game)
+        buf = render_zoom_image(game, player, avatars=avatars)
         if buf is None:
             return None
         return discord.File(buf, filename=filename)
@@ -983,7 +1256,6 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                 bot_p["jail_turns"] = 0
                 add_log(game, f"🤖 **{bot_p['name']}** trả tiền ra tù.")
         do_roll(game, bot_p)
-        # nếu được roll thêm (đôi) thì roll tiếp luôn (giới hạn phòng loop vô hạn)
         safety = 0
         while not game["has_rolled"] and safety < 5:
             do_roll(game, bot_p)
@@ -992,13 +1264,11 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
         if game.get("pending_buy") is not None:
             idx = game["pending_buy"]
             tile = BOARD[idx]
-            # Bot giữ lại tối thiểu 200k, mua nếu dư dả
             if bot_p["money"] - tile["price"] >= 200_000:
                 do_buy(game, bot_p)
             else:
                 game["pending_buy"] = None
 
-        # Bot thử xây nhà ngẫu nhiên trên nhóm đã sở hữu trọn nếu dư tiền nhiều
         if bot_p["money"] >= 500_000:
             for group, idxs in GROUP_INDICES.items():
                 if group in ("railroad", "utility"):
@@ -1085,6 +1355,7 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
             cur = current_player(game)
             return (not cur["is_bot"]) and cur["id"] == str(user_id)
 
+        # ── HÀNG 1: hành động chính trong lượt ──────────────────────
         @discord.ui.button(label="Đổ Xúc Xắc", emoji="🎲", style=discord.ButtonStyle.success, custom_id="mono_roll", row=0)
         async def btn_roll(self, interaction: discord.Interaction, button):
             async with get_lock(interaction.channel.id):
@@ -1140,6 +1411,25 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                 save_game(game)
                 await edit_with_board(interaction, game, self)
 
+        @discord.ui.button(label="Kết Thúc Lượt", emoji="⏭️", style=discord.ButtonStyle.secondary, custom_id="mono_end_turn", row=0)
+        async def btn_end_turn(self, interaction: discord.Interaction, button):
+            async with get_lock(interaction.channel.id):
+                game = load_game(interaction.channel.id)
+                if not game or game["status"] != "playing":
+                    return await interaction.response.send_message("⚠️ Ván chơi không hợp lệ!", ephemeral=True)
+                if not self._check_turn(game, interaction.user.id):
+                    return await interaction.response.send_message("⚠️ Chưa tới lượt bạn!", ephemeral=True)
+                if not game.get("has_rolled"):
+                    return await interaction.response.send_message("⚠️ Bạn cần đổ xúc xắc trước!", ephemeral=True)
+                game["pending_buy"] = None
+                if not check_winner(game):
+                    advance_turn(game)
+                save_game(game)
+                await edit_with_board(interaction, game, self)
+                if game["status"] == "playing":
+                    await maybe_trigger_bot_turn(interaction.channel, game)
+
+        # ── HÀNG 2: quản lý tài sản & rời bàn ────────────────────────
         @discord.ui.button(label="Xây Nhà", emoji="🏠", style=discord.ButtonStyle.success, custom_id="mono_build", row=1)
         async def btn_build(self, interaction: discord.Interaction, button):
             game = load_game(interaction.channel.id)
@@ -1191,24 +1481,6 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
             v.add_item(select)
             await interaction.response.send_message("Chọn ô đất để xây nhà:", view=v, ephemeral=True)
 
-        @discord.ui.button(label="Kết Thúc Lượt", emoji="⏭️", style=discord.ButtonStyle.secondary, custom_id="mono_end_turn", row=1)
-        async def btn_end_turn(self, interaction: discord.Interaction, button):
-            async with get_lock(interaction.channel.id):
-                game = load_game(interaction.channel.id)
-                if not game or game["status"] != "playing":
-                    return await interaction.response.send_message("⚠️ Ván chơi không hợp lệ!", ephemeral=True)
-                if not self._check_turn(game, interaction.user.id):
-                    return await interaction.response.send_message("⚠️ Chưa tới lượt bạn!", ephemeral=True)
-                if not game.get("has_rolled"):
-                    return await interaction.response.send_message("⚠️ Bạn cần đổ xúc xắc trước!", ephemeral=True)
-                game["pending_buy"] = None
-                if not check_winner(game):
-                    advance_turn(game)
-                save_game(game)
-                await edit_with_board(interaction, game, self)
-                if game["status"] == "playing":
-                    await maybe_trigger_bot_turn(interaction.channel, game)
-
         @discord.ui.button(label="Rời Bàn", emoji="🚪", style=discord.ButtonStyle.danger, custom_id="mono_leave", row=1)
         async def btn_leave(self, interaction: discord.Interaction, button):
             async with get_lock(interaction.channel.id):
@@ -1241,7 +1513,47 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                     if game["status"] == "playing":
                         await maybe_trigger_bot_turn(interaction.channel, game)
 
-        @discord.ui.button(label="Chơi Lại", emoji="🔄", style=discord.ButtonStyle.success, custom_id="mono_replay", row=2)
+        # ── HÀNG 3: thông tin / tiện ích (xem được bất cứ lúc nào) ───
+        @discord.ui.button(label="Vị Trí Của Tôi", emoji="📍", style=discord.ButtonStyle.primary, custom_id="mono_myloc", row=2)
+        async def btn_my_location(self, interaction: discord.Interaction, button):
+            game = load_game(interaction.channel.id)
+            if not game or game["status"] not in ("playing", "finished"):
+                return await interaction.response.send_message("⚠️ Ván chơi chưa bắt đầu!", ephemeral=True)
+            p = get_player(game, interaction.user.id)
+            if not p:
+                return await interaction.response.send_message("⚠️ Bạn không trong ván này!", ephemeral=True)
+            await interaction.response.defer(ephemeral=True, thinking=True)
+            file = await _zoom_file(game, p, filename="zoom.png")
+            if not file:
+                return await interaction.followup.send("⚠️ Không thể tạo ảnh lúc này, thử lại sau!", ephemeral=True)
+            embed = discord.Embed(
+                title=f"📍 Vị trí hiện tại — {p['name']}",
+                description=f"Bạn đang ở ô **{BOARD[p['position']]['name']}** (ô số {p['position']}).",
+                color=discord.Color.blurple()
+            )
+            embed.set_image(url="attachment://zoom.png")
+            await interaction.followup.send(embed=embed, file=file, ephemeral=True)
+
+        @discord.ui.button(label="Tài Sản Của Tôi", emoji="📋", style=discord.ButtonStyle.secondary, custom_id="mono_myprops", row=2)
+        async def btn_my_properties(self, interaction: discord.Interaction, button):
+            game = load_game(interaction.channel.id)
+            if not game or game["status"] not in ("playing", "finished"):
+                return await interaction.response.send_message("⚠️ Ván chơi chưa bắt đầu!", ephemeral=True)
+            p = get_player(game, interaction.user.id)
+            if not p:
+                return await interaction.response.send_message("⚠️ Bạn không trong ván này!", ephemeral=True)
+            embed = build_my_properties_embed(game, p)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        @discord.ui.button(label="Bảng Xếp Hạng", emoji="🏆", style=discord.ButtonStyle.secondary, custom_id="mono_leaderboard", row=2)
+        async def btn_leaderboard(self, interaction: discord.Interaction, button):
+            game = load_game(interaction.channel.id)
+            if not game or game["status"] not in ("playing", "finished"):
+                return await interaction.response.send_message("⚠️ Ván chơi chưa bắt đầu!", ephemeral=True)
+            embed = build_leaderboard_embed(game)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        @discord.ui.button(label="Chơi Lại", emoji="🔄", style=discord.ButtonStyle.success, custom_id="mono_replay", row=3)
         async def btn_replay(self, interaction: discord.Interaction, button):
             async with get_lock(interaction.channel.id):
                 game = load_game(interaction.channel.id)
@@ -1264,8 +1576,6 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
         await refresh_message(channel, game)
 
     # ── ĐĂNG KÝ VIEW VĨNH VIỄN (chạy 1 lần lúc bot sẵn sàng) ──────────
-    # Dùng bot.listen thay vì bot.loop.create_task, vì lúc setup_monopoly()
-    # được gọi (trước bot.run()), bot.loop CHƯA tồn tại -> AttributeError.
     _monopoly_views_registered = {"done": False}
 
     @bot.listen('on_ready')
@@ -1275,7 +1585,7 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
         _monopoly_views_registered["done"] = True
         bot.add_view(MonopolyLobbyView())
         bot.add_view(MonopolyGameView())
-        print(">>> [MONOPOLY] Đã đăng ký View vĩnh viễn cho Cờ Tỷ Phú.")
+        print(">>> [MONOPOLY] Đã đăng ký View vĩnh viễn cho Cờ Tỷ Phú (giao diện v2).")
 
     # ── COMMANDS ───────────────────────────────────────────────────────
     @bot.group(invoke_without_command=True, aliases=['monopoly', 'cotyphu', 'cty_phu'])
@@ -1335,6 +1645,25 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
         delete_game(ctx.channel.id)
         await ctx.reply(embed=discord.Embed(description="🗑️ Đã hủy bàn cờ tại kênh này.", color=discord.Color.dark_grey()), mention_author=False)
 
+    @tybphu.command(name="taisan", aliases=["properties", "myprops"])
+    async def tybphu_taisan(ctx):
+        """Xem nhanh tài sản của bạn bằng lệnh gõ (không cần bấm nút)."""
+        game = load_game(ctx.channel.id)
+        if not game or game["status"] not in ("playing", "finished"):
+            return await ctx.reply("⚠️ Chưa có ván nào đang diễn ra ở kênh này!", mention_author=False)
+        p = get_player(game, ctx.author.id)
+        if not p:
+            return await ctx.reply("⚠️ Bạn không trong ván này!", mention_author=False)
+        await ctx.reply(embed=build_my_properties_embed(game, p), mention_author=False)
+
+    @tybphu.command(name="bxh", aliases=["leaderboard", "rank"])
+    async def tybphu_bxh(ctx):
+        """Xem nhanh bảng xếp hạng bằng lệnh gõ (không cần bấm nút)."""
+        game = load_game(ctx.channel.id)
+        if not game or game["status"] not in ("playing", "finished"):
+            return await ctx.reply("⚠️ Chưa có ván nào đang diễn ra ở kênh này!", mention_author=False)
+        await ctx.reply(embed=build_leaderboard_embed(game), mention_author=False)
+
     @tybphu.command(name="luat", aliases=["rules", "help"])
     async def tybphu_luat(ctx):
         embed = discord.Embed(
@@ -1351,6 +1680,10 @@ def setup_monopoly(bot, db, load_user=None, save_user=None, add_history=None):
                 "🤖 Chế độ đấu Bot: máy tự động roll/mua/xây khi tới lượt.\n"
                 "🖼️ Sau mỗi lượt đi, bàn cờ CHUNG trong kênh sẽ cập nhật ảnh, và bạn còn được gửi RIÊNG "
                 "1 ảnh bàn cờ (chỉ mình bạn thấy) khoanh vùng đỏ đúng vị trí quân cờ của bạn.\n"
+                "📍 Bấm **Vị Trí Của Tôi** bất cứ lúc nào để xem ảnh ZOOM cận cảnh ô bạn đang đứng kèm "
+                "thông tin chi tiết (giá, tiền thuê, chủ sở hữu...).\n"
+                "📋 Bấm **Tài Sản Của Tôi** để xem toàn bộ đất bạn sở hữu, số nhà đã xây, tiền thuê hiện tại.\n"
+                "🏆 Bấm **Bảng Xếp Hạng** để so tài sản ròng (tiền mặt + giá trị BĐS) với người khác.\n"
                 "♾️ Bàn cờ không bao giờ hết hạn — chơi xong bấm **Chơi Lại** để bắt đầu ván mới ngay tại đây!"
             ),
             color=discord.Color.blue()
